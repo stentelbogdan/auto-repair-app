@@ -25,7 +25,7 @@ type RepairRequest = {
 type RepairOffer = {
   id: string;
   request_id: string;
-  workshop_id: string;
+  workshop_user_id: string;
   workshop_name: string;
   price: number | string;
   days: number | string;
@@ -36,6 +36,10 @@ type RepairOffer = {
 };
 
 type FilterKey = "all" | "pending" | "won" | "lost";
+
+type DerivedOffer = RepairOffer & {
+  derivedStatus: "pending" | "won" | "lost";
+};
 
 export default function WorkshopMyOffersPage() {
   const router = useRouter();
@@ -90,7 +94,7 @@ export default function WorkshopMyOffersPage() {
           .select(`
             id,
             request_id,
-            workshop_id,
+            workshop_user_id,
             workshop_name,
             price,
             days,
@@ -110,7 +114,7 @@ export default function WorkshopMyOffersPage() {
               accepted_offer_id
             )
           `)
-          .eq("workshop_id", authData.user.id)
+          .eq("workshop_user_id", authData.user.id)
           .order("created_at", { ascending: false });
 
         if (!isMounted) return;
@@ -118,8 +122,37 @@ export default function WorkshopMyOffersPage() {
         if (error) {
           setError(error.message || "Failed to load offers.");
           setOffers([]);
+        } else if (!data) {
+          setOffers([]);
         } else {
-          setOffers((data as RepairOffer[]) || []);
+          const mapped: RepairOffer[] = data.map((row: any): RepairOffer => ({
+            id: String(row.id),
+            request_id: String(row.request_id),
+            workshop_user_id: String(row.workshop_user_id),
+            workshop_name: row.workshop_name || "",
+            price: row.price ?? "",
+            days: row.days ?? "",
+            message: row.message || "",
+            status: row.status || "pending",
+            created_at: String(row.created_at),
+            repair_requests: row.repair_requests
+              ? {
+                  id: String(row.repair_requests.id),
+                  car_brand: row.repair_requests.car_brand ?? null,
+                  car_model: row.repair_requests.car_model ?? null,
+                  car_year: row.repair_requests.car_year ?? null,
+                  city: row.repair_requests.city ?? null,
+                  damage_type: row.repair_requests.damage_type ?? null,
+                  description: row.repair_requests.description ?? null,
+                  status: row.repair_requests.status ?? null,
+                  created_at: row.repair_requests.created_at ?? null,
+                  accepted_offer_id:
+                    row.repair_requests.accepted_offer_id ?? null,
+                }
+              : null,
+          }));
+
+          setOffers(mapped);
         }
       } catch (err) {
         console.error("Failed to load workshop offers:", err);
@@ -142,7 +175,7 @@ export default function WorkshopMyOffersPage() {
     };
   }, [router]);
 
-  const normalizedOffers = useMemo(() => {
+  const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers.map((offer) => {
       const requestStatus = offer.repair_requests?.status?.toLowerCase() || "";
       const offerStatus = offer.status?.toLowerCase() || "";
@@ -152,12 +185,16 @@ export default function WorkshopMyOffersPage() {
 
       if (
         offerStatus === "accepted" ||
-        (requestStatus === "matched" && acceptedOfferId === offer.id)
+        (requestStatus === "matched" && acceptedOfferId === offer.id) ||
+        requestStatus === "in_progress" ||
+        requestStatus === "completed"
       ) {
         derivedStatus = "won";
       } else if (
         ["rejected", "declined", "lost"].includes(offerStatus) ||
-        (requestStatus === "matched" && acceptedOfferId && acceptedOfferId !== offer.id)
+        (requestStatus === "matched" &&
+          acceptedOfferId !== null &&
+          acceptedOfferId !== offer.id)
       ) {
         derivedStatus = "lost";
       }
@@ -172,7 +209,8 @@ export default function WorkshopMyOffersPage() {
   const counts = useMemo(() => {
     return {
       all: normalizedOffers.length,
-      pending: normalizedOffers.filter((o) => o.derivedStatus === "pending").length,
+      pending: normalizedOffers.filter((o) => o.derivedStatus === "pending")
+        .length,
       won: normalizedOffers.filter((o) => o.derivedStatus === "won").length,
       lost: normalizedOffers.filter((o) => o.derivedStatus === "lost").length,
     };
@@ -397,11 +435,16 @@ export default function WorkshopMyOffersPage() {
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-white/60">
-                        <span><strong>City:</strong> {request?.city || "-"}</span>
                         <span>
-                          <strong>Damage:</strong> {formatDamageType(request?.damage_type)}
+                          <strong>City:</strong> {request?.city || "-"}
                         </span>
-                        <span><strong>Sent:</strong> {formatDate(offer.created_at)}</span>
+                        <span>
+                          <strong>Damage:</strong>{" "}
+                          {formatDamageType(request?.damage_type)}
+                        </span>
+                        <span>
+                          <strong>Sent:</strong> {formatDate(offer.created_at)}
+                        </span>
                       </div>
 
                       <p className="mt-4 line-clamp-3 text-sm leading-6 text-white/75">
