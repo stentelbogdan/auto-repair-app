@@ -137,29 +137,29 @@ export default function OffersPage() {
         });
       });
 
-      const merged: OfferWithRequest[] = offerRows
-        .map((offer: RepairOfferRow) => {
-          const matchingRequest = requestMap.get(offer.request_id);
+      const merged: OfferWithRequest[] = [];
 
-          if (!matchingRequest) {
-            return null;
-          }
+      offerRows.forEach((offer: RepairOfferRow) => {
+        const matchingRequest = requestMap.get(offer.request_id);
 
-          return {
-            offer: {
-              id: offer.id,
-              requestId: offer.request_id,
-              price: offer.price,
-              days: offer.days,
-              message: offer.message || "",
-              workshopName: offer.workshop_name,
-              createdAt: offer.created_at,
-              status: offer.status,
-            },
-            request: matchingRequest,
-          };
-        })
-        .filter((item): item is OfferWithRequest => item !== null);
+        if (!matchingRequest) {
+          return;
+        }
+
+        merged.push({
+          offer: {
+            id: offer.id,
+            requestId: offer.request_id,
+            price: offer.price,
+            days: offer.days,
+            message: offer.message || "",
+            workshopName: offer.workshop_name,
+            createdAt: offer.created_at,
+            status: offer.status,
+          },
+          request: matchingRequest,
+        });
+      });
 
       setItems(merged);
     } catch (error) {
