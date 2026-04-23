@@ -1,181 +1,106 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { Suspense, useMemo } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-type RepairRequest = {
-  id: string;
-  car_brand: string;
-  car_model: string;
-  car_year: string;
-  city: string;
-  damage_type: string;
-  description: string | null;
-  images: {
-    name: string;
-    dataUrl: string;
-  }[];
-  status: string;
-  created_at: string;
-};
-
-export default function ReviewPage() {
-  const router = useRouter();
+function ReviewContent() {
   const searchParams = useSearchParams();
-  const requestId = searchParams.get("id");
 
-  const [data, setData] = useState<RepairRequest | null>(null);
-  const [loading, setLoading] = useState(true);
+  const carBrand = searchParams.get("carBrand") || "-";
+  const carModel = searchParams.get("carModel") || "-";
+  const carYear = searchParams.get("carYear") || "-";
+  const city = searchParams.get("city") || "-";
+  const damageType = searchParams.get("damageType") || "-";
+  const description = searchParams.get("description") || "";
 
-  useEffect(() => {
-    const loadRequest = async () => {
-      try {
-        const { data: authData } = await supabase.auth.getUser();
+  const images = useMemo(() => {
+    const raw = searchParams.get("images");
+    if (!raw) return [];
 
-        if (!authData.user) {
-          router.push("/login");
-          return;
-        }
-
-        if (!requestId) {
-          router.push("/");
-          return;
-        }
-
-        const { data: request, error } = await supabase
-          .from("repair_requests")
-          .select("*")
-          .eq("id", requestId)
-          .eq("user_id", authData.user.id)
-          .single();
-
-        if (error || !request) {
-          console.error("Failed to load review request:", error);
-          router.push("/");
-          return;
-        }
-
-        setData({
-          id: request.id,
-          car_brand: request.car_brand,
-          car_model: request.car_model,
-          car_year: request.car_year,
-          city: request.city,
-          damage_type: request.damage_type,
-          description: request.description,
-          images: Array.isArray(request.images) ? request.images : [],
-          status: request.status,
-          created_at: request.created_at,
-        });
-      } catch (error) {
-        console.error("Failed to load request:", error);
-        router.push("/");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadRequest();
-  }, [requestId, router]);
-
-  const handleSend = () => {
-    router.push("/success");
-  };
-
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p className="text-white/70">Loading request...</p>
-      </main>
-    );
-  }
-
-  if (!data) {
-    return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p className="text-white/70">Request not found.</p>
-      </main>
-    );
-  }
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, [searchParams]);
 
   return (
-    <main className="min-h-screen bg-black text-white px-6 py-10">
+    <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold">Review your request</h1>
-          <p className="mt-2 text-white/70">
-            Check the details before sending to workshops
-          </p>
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
+              Review request
+            </p>
+            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
+              Check your repair request
+            </h1>
+          </div>
+
+          <Link
+            href="/"
+            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
+          >
+            Back
+          </Link>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="grid gap-4 md:grid-cols-2">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+          <div className="grid gap-6 p-6 md:grid-cols-2">
             <div className="rounded-xl border border-white/10 bg-black/30 p-4">
               <p className="text-sm text-white/50">Car brand</p>
-              <p className="mt-1 text-lg font-semibold">{data.car_brand}</p>
+              <p className="mt-1 text-lg font-semibold">{carBrand}</p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4">
               <p className="text-sm text-white/50">Car model</p>
-              <p className="mt-1 text-lg font-semibold">{data.car_model}</p>
+              <p className="mt-1 text-lg font-semibold">{carModel}</p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4">
               <p className="text-sm text-white/50">Year</p>
-              <p className="mt-1 text-lg font-semibold">{data.car_year}</p>
+              <p className="mt-1 text-lg font-semibold">{carYear}</p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4">
               <p className="text-sm text-white/50">City</p>
-              <p className="mt-1 text-lg font-semibold">{data.city}</p>
+              <p className="mt-1 text-lg font-semibold">{city}</p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4 md:col-span-2">
               <p className="text-sm text-white/50">Damage type</p>
-              <p className="mt-1 text-lg font-semibold">
-                {formatDamageType(data.damage_type)}
-              </p>
+              <p className="mt-1 text-lg font-semibold">{damageType}</p>
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4 md:col-span-2">
               <p className="text-sm text-white/50">Description</p>
-              <p className="mt-1 text-lg font-semibold text-white/90">
-                {data.description || "No description provided"}
+              <p className="mt-1 text-white/85">
+                {description || "No description provided."}
               </p>
             </div>
           </div>
 
-          {data.images.length > 0 && (
-            <div className="mt-6">
-              <p className="mb-3 text-sm text-white/70">Uploaded photos</p>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                {data.images.map((image, index) => (
+          <div className="px-6 pb-6">
+            <p className="mb-3 text-sm text-white/60">Uploaded photos</p>
+
+            {images.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {images.map((image: any, index: number) => (
                   <img
-                    key={`${image.name}-${index}`}
-                    src={image.dataUrl}
-                    alt={`Damage ${index + 1}`}
-                    className="h-36 w-full rounded-lg border border-white/10 object-cover"
+                    key={`${image?.name || "image"}-${index}`}
+                    src={image?.dataUrl || ""}
+                    alt={`Uploaded photo ${index + 1}`}
+                    className="h-64 w-full rounded-xl border border-white/10 object-cover"
                   />
                 ))}
               </div>
-            </div>
-          )}
-
-          <div className="mt-8 flex flex-col gap-3 md:flex-row">
-            <button
-              onClick={() => router.push("/")}
-              className="w-full rounded-lg border border-white/20 px-6 py-3 font-semibold text-white"
-            >
-              Back
-            </button>
-
-            <button
-              onClick={handleSend}
-              className="w-full rounded-lg bg-white px-6 py-3 font-semibold text-black"
-            >
-              Send to workshops
-            </button>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-black/30 p-6 text-white/50">
+                No photos uploaded.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -183,19 +108,18 @@ export default function ReviewPage() {
   );
 }
 
-function formatDamageType(value: string) {
-  switch (value) {
-    case "scratch":
-      return "Scratch";
-    case "dent":
-      return "Dent";
-    case "bumper":
-      return "Bumper damage";
-    case "paint":
-      return "Paint damage";
-    case "cracked_part":
-      return "Cracked part";
-    default:
-      return "Other";
-  }
+export default function ReviewPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-black px-6 py-10 text-white">
+          <div className="mx-auto flex min-h-[60vh] max-w-4xl items-center justify-center">
+            <p className="text-white/70">Loading review...</p>
+          </div>
+        </main>
+      }
+    >
+      <ReviewContent />
+    </Suspense>
+  );
 }
