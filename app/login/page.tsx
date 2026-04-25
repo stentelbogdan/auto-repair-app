@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -17,6 +17,32 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("customer");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+  const checkSession = async () => {
+    const { data } = await supabase.auth.getUser();
+
+    if (!data.user) return;
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single<ProfileRow>();
+
+    const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+    if (roles.includes("admin")) {
+      router.push("/admin");
+    } else if (roles.includes("workshop")) {
+      router.push("/workshops/dashboard");
+    } else {
+      router.push("/post-job");
+    }
+  };
+
+  checkSession();
+}, [router]);
 
   const handleSignUp = async () => {
     if (!email || !password) {
