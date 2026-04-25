@@ -19,30 +19,30 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-  const checkSession = async () => {
-    const { data } = await supabase.auth.getUser();
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getUser();
 
-    if (!data.user) return;
+      if (!data.user) return;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single<ProfileRow>();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single<ProfileRow>();
 
-    const roles = Array.isArray(profile?.role) ? profile.role : [];
+      const roles = Array.isArray(profile?.role) ? profile.role : [];
 
-    if (roles.includes("admin")) {
-      router.push("/admin");
-    } else if (roles.includes("workshop")) {
-      router.push("/workshops/dashboard");
-    } else {
-      router.push("/post-job");
-    }
-  };
+      if (roles.includes("admin")) {
+        router.push("/admin");
+      } else if (roles.includes("workshop")) {
+        router.push("/workshops/dashboard");
+      } else {
+        router.push("/customer/dashboard");
+      }
+    };
 
-  checkSession();
-}, [router]);
+    checkSession();
+  }, [router]);
 
   const handleSignUp = async () => {
     if (!email || !password) {
@@ -66,11 +66,12 @@ export default function LoginPage() {
       const userId = data.user?.id;
 
       if (userId) {
-        const { data: existingProfile, error: fetchProfileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", userId)
-          .maybeSingle<ProfileRow>();
+        const { data: existingProfile, error: fetchProfileError } =
+          await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", userId)
+            .maybeSingle<ProfileRow>();
 
         if (fetchProfileError) {
           alert(fetchProfileError.message);
@@ -96,16 +97,16 @@ export default function LoginPage() {
       }
 
       if (data.session) {
-  alert("Account created and logged in successfully.");
+        alert("Account created and logged in successfully.");
 
-  if (role === "workshop") {
-    router.push("/workshops/dashboard");
-  } else {
-    router.push("/");
-  }
-} else {
-  alert("Account created successfully. You can now log in.");
-}
+        if (role === "workshop") {
+          router.push("/workshops/dashboard");
+        } else {
+          router.push("/customer/dashboard");
+        }
+      } else {
+        alert("Account created successfully. You can now log in.");
+      }
     } catch (err) {
       console.error("Sign up failed:", err);
       alert("Something went wrong during sign up.");
@@ -148,21 +149,21 @@ export default function LoginPage() {
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
 
-if (roles.includes("admin")) {
-  router.push("/admin");
-  return;
-}
+      if (roles.includes("admin")) {
+        router.push("/admin");
+        return;
+      }
 
-if (roles.length > 1) {
-  router.push("/account");
-  return;
-}
+      if (roles.length > 1) {
+        router.push("/account");
+        return;
+      }
 
-if (roles.includes("workshop")) {
-  router.push("/workshops");
-} else {
-  router.push("/post-job");
-}
+      if (roles.includes("workshop")) {
+        router.push("/workshops/dashboard");
+      } else {
+        router.push("/customer/dashboard");
+      }
     } catch (err) {
       console.error("Login failed:", err);
       alert("Something went wrong during login.");
@@ -199,16 +200,22 @@ if (roles.includes("workshop")) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+            </div>
 
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              placeholder="Enter password"
-              className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 outline-none focus:border-white/40"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div>
+              <label className="mb-2 block text-sm text-white/70">
+                Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="Enter password"
+                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 outline-none focus:border-white/40"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
 
             <div>
               <label className="mb-2 block text-sm text-white/70">

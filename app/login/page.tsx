@@ -37,7 +37,7 @@ export default function LoginPage() {
     } else if (roles.includes("workshop")) {
       router.push("/workshops/dashboard");
     } else {
-      router.push("/post-job");
+      router.push("/customer/dashboard");
     }
   };
 
@@ -101,7 +101,7 @@ export default function LoginPage() {
   if (role === "workshop") {
     router.push("/workshops/dashboard");
   } else {
-    router.push("/post-job");
+    router.push("/customer/dashboard");
   }
 } else {
   alert("Account created successfully. You can now log in.");
@@ -153,16 +153,18 @@ if (roles.includes("admin")) {
   return;
 }
 
-if (roles.length > 1) {
-  router.push("/account");
+if (role === "workshop" && roles.includes("workshop")) {
+  router.push("/workshops/dashboard");
   return;
 }
 
-if (roles.includes("workshop")) {
-  router.push("/workshops");
-} else {
-  router.push("/post-job");
+if (roles.includes("customer")) {
+  router.push("/customer/dashboard");
+  return;
 }
+
+router.push("/customer/dashboard");
+
     } catch (err) {
       console.error("Login failed:", err);
       alert("Something went wrong during login.");

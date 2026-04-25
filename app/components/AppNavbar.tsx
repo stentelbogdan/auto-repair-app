@@ -13,7 +13,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { href: "/", label: "Post a job", roles: ["customer"] },
+  { href: "/customer/dashboard", label: "Dashboard", roles: ["customer"] },
   { href: "/workshops", label: "Find jobs", roles: ["workshop"] },
   { href: "/offers", label: "My offers", roles: ["customer"] },
   { href: "/admin", label: "Admin", roles: ["admin"] },
