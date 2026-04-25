@@ -75,7 +75,7 @@ export default function LoginPage() {
   if (role === "workshop") {
     router.push("/workshops/dashboard");
   } else {
-    router.push("/");
+    router.push("/post-job");
   }
 } else {
   alert("Account created successfully. You can now log in.");
@@ -135,7 +135,7 @@ if (roles.length > 1) {
 if (roles.includes("workshop")) {
   router.push("/workshops");
 } else {
-  router.push("/");
+  router.push("/post-job");
 }
     } catch (err) {
       console.error("Login failed:", err);

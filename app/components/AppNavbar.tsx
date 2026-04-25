@@ -29,6 +29,10 @@ export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
 
+    if (pathname === "/" || pathname === "/login") {
+    return null;
+  }
+
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [roles, setRoles] = useState<string[]>([]);
   const [loggingOut, setLoggingOut] = useState(false);
