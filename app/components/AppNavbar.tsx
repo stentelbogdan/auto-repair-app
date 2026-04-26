@@ -72,13 +72,13 @@ export default function AppNavbar() {
 
           <div className="min-w-0 flex-1 text-center">
             <p className="text-[11px] uppercase tracking-[0.22em] text-orange-400">
-              Customer dashboard
+              Panou client
             </p>
             <h1 className="mt-1 truncate text-base font-bold leading-tight text-white">
               AutoRepair Marketplace
             </h1>
             <p className="mt-1 truncate text-[11px] text-white/50">
-              Manage requests, offers and booked repairs
+              Gestionează daune, oferte și programări
             </p>
           </div>
 
@@ -88,7 +88,7 @@ export default function AppNavbar() {
     disabled={!userEmail || loggingOut}
     className="rounded-full border border-white/20 px-4 py-2 text-xs font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
   >
-    {loggingOut ? "..." : "Logout"}
+    {loggingOut ? "..." : "Ieșire"}
   </button>
 
   <button
