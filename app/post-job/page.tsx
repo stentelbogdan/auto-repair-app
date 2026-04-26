@@ -35,6 +35,75 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+const carBrands = [
+  "Abarth",
+  "Acura",
+  "Alfa Romeo",
+  "Aston Martin",
+  "Audi",
+  "Bentley",
+  "BMW",
+  "Bugatti",
+  "Buick",
+  "BYD",
+  "Cadillac",
+  "Chevrolet",
+  "Chrysler",
+  "Citroën",
+  "Cupra",
+  "Dacia",
+  "Daewoo",
+  "Daihatsu",
+  "Dodge",
+  "DS Automobiles",
+  "Ferrari",
+  "Fiat",
+  "Ford",
+  "Genesis",
+  "GMC",
+  "Honda",
+  "Hummer",
+  "Hyundai",
+  "Infiniti",
+  "Isuzu",
+  "Jaguar",
+  "Jeep",
+  "Kia",
+  "Lada",
+  "Lamborghini",
+  "Lancia",
+  "Land Rover",
+  "Lexus",
+  "Lincoln",
+  "Maserati",
+  "Mazda",
+  "McLaren",
+  "Mercedes-Benz",
+  "MG",
+  "Mini",
+  "Mitsubishi",
+  "Nissan",
+  "Opel",
+  "Peugeot",
+  "Polestar",
+  "Pontiac",
+  "Porsche",
+  "Renault",
+  "Rolls-Royce",
+  "Rover",
+  "Saab",
+  "Seat",
+  "Skoda",
+  "Smart",
+  "SsangYong",
+  "Subaru",
+  "Suzuki",
+  "Tesla",
+  "Toyota",
+  "Volkswagen",
+  "Volvo",
+];
+
 export default function PostJobPage() {
   const router = useRouter();
 
@@ -124,19 +193,27 @@ export default function PostJobPage() {
               <label className="mb-2 block text-sm font-medium text-black/70">
                 Marca mașinii
               </label>
+              
               <input
                 type="text"
+                list="car-brands"
                 value={carBrand}
                 onChange={(e) => setCarBrand(e.target.value)}
                 placeholder="BMW, Audi, VW..."
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-              />
-            </div>
+            />
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                Model
+                <datalist id="car-brands">
+                {carBrands.map((brand) => (
+                <option key={brand} value={brand} />
+            ))}
+        </datalist>
+    </div>
+
+    <div>
+        <label className="mb-2 block text-sm font-medium text-black/70">
+            Model
               </label>
               <input
                 type="text"
