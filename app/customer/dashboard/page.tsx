@@ -9,7 +9,7 @@ export default function CustomerDashboardPage() {
    <main className="h-[calc(100dvh-86px)] overflow-hidden bg-[#101010] px-4 py-2 text-white">
       <div className="mx-auto max-w-5xl">
 
-       <div className="mt-6 grid grid-cols-2 gap-3">
+       <div className="mt-10 grid grid-cols-2 gap-3">
           <button
             onClick={() => router.push("/post-job")}
             className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
