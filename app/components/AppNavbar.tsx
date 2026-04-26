@@ -64,7 +64,7 @@ export default function AppNavbar() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur">
-      <div className="mx-auto max-w-7xl px-4 py-4">
+      <div className="mx-auto max-w-7xl px-4 py-5">
         <div className="flex items-center justify-between gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-sm font-bold text-black">
             AR
@@ -82,13 +82,22 @@ export default function AppNavbar() {
             </p>
           </div>
 
-          <button
-            onClick={handleLogout}
-            disabled={!userEmail || loggingOut}
-            className="shrink-0 rounded-full border border-white/20 px-3 py-2 text-xs font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
-          >
-            {loggingOut ? "..." : "Logout"}
-          </button>
+          <div className="flex flex-col items-center gap-2 shrink-0">
+  <button
+    onClick={handleLogout}
+    disabled={!userEmail || loggingOut}
+    className="rounded-full border border-white/20 px-4 py-2 text-xs font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
+  >
+    {loggingOut ? "..." : "Logout"}
+  </button>
+
+  <button
+    onClick={() => router.push("/account")}
+    className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+  >
+    ⚙
+  </button>
+</div>
         </div>
       </div>
     </nav>
