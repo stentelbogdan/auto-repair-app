@@ -23,15 +23,15 @@ export default function CustomerDashboardPage() {
           </button>
 
           <button
-            onClick={() => router.push("/customer/my-jobs")}
+            onClick={() => router.push("/customer/my-requests")}
             className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
           >
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
-              ✓
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl">
+              📋
             </div>
-            <h2 className="text-base font-bold leading-tight">My jobs</h2>
+            <h2 className="text-base font-bold leading-tight">My Requests</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
-              Booked repairs
+              Posted repair jobs
             </p>
           </button>
 
@@ -49,17 +49,18 @@ export default function CustomerDashboardPage() {
           </button>
 
           <button
-            onClick={() => router.push("/customer/my-requests")}
+            onClick={() => router.push("/customer/my-jobs")}
             className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
           >
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl">
-              📋
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
+              ✓
             </div>
-            <h2 className="text-base font-bold leading-tight">My Requests</h2>
+            <h2 className="text-base font-bold leading-tight">My jobs</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
-              Posted repair jobs
+              Booked repairs
             </p>
           </button>
+
         </div>
       </div>
     </main>
