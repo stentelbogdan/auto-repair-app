@@ -35,7 +35,7 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function Home() {
+export default function PostJobPage() {
   const router = useRouter();
 
   const [files, setFiles] = useState<File[]>([]);
@@ -70,7 +70,7 @@ export default function Home() {
       const { data: authData } = await supabase.auth.getUser();
 
       if (!authData.user) {
-        alert("Please log in first.");
+        alert("Te rugăm să te autentifici mai întâi.");
         router.push("/login");
         return;
       }
@@ -83,150 +83,163 @@ export default function Home() {
       );
 
       const createdRequest = await createRepairRequest({
-  userId: authData.user.id,
-  carBrand,
-  carModel,
-  carYear,
-  city,
-  damageType,
-  description,
-  images: storedImages,
-});
+        userId: authData.user.id,
+        carBrand,
+        carModel,
+        carYear,
+        city,
+        damageType,
+        description,
+        images: storedImages,
+      });
 
-router.push(`/review?id=${createdRequest.id}`);
+      router.push(`/review?id=${createdRequest.id}`);
     } catch (error) {
       console.error("Submit failed:", error);
-      alert("Something went wrong while saving the repair request.");
+      alert("A apărut o problemă la salvarea cererii.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
+    <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-8 text-center">
-          <h1 className="font-bold">Upload your car damage</h1>
-          <p className="mt-3 text-white/70">
-            Get multiple repair offers from trusted workshops and choose the best
-            price.
+        <div className="mb-5">
+          <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
+            Daună nouă
+          </p>
+          <h1 className="mt-2 text-2xl font-bold">Postează dauna</h1>
+          <p className="mt-2 text-sm text-white/55">
+            Încarcă poze, descrie dauna și primești oferte de la service-uri.
           </p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur"
+          className="rounded-[24px] bg-white p-5 text-black shadow-xl"
         >
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm text-white/80">
-                Car brand
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Marca mașinii
               </label>
               <input
                 type="text"
                 value={carBrand}
                 onChange={(e) => setCarBrand(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-white/30"
+                placeholder="BMW, Audi, VW..."
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-white/80">
-                Car model
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Model
               </label>
               <input
                 type="text"
                 value={carModel}
                 onChange={(e) => setCarModel(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-white/30"
+                placeholder="Seria 3, A4, Golf..."
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-white/80">Year</label>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                An fabricație
+              </label>
               <input
                 type="number"
                 value={carYear}
                 onChange={(e) => setCarYear(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-white/30"
+                placeholder="2018"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-white/80">City</label>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Oraș
+              </label>
               <input
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-white/30"
+                placeholder="Iași, București, Cluj..."
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm text-white/80">
-                Damage type
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Tip daună
               </label>
               <select
                 value={damageType}
                 onChange={(e) => setDamageType(e.target.value as DamageType)}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-white/30"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
               >
-                <option value="scratch">Scratch</option>
-                <option value="dent">Dent</option>
-                <option value="bumper">Bumper damage</option>
-                <option value="paint">Paint damage</option>
-                <option value="cracked_part">Cracked part</option>
-                <option value="other">Other</option>
+                <option value="scratch">Zgârietură</option>
+                <option value="dent">Îndoitură</option>
+                <option value="bumper">Bară avariată</option>
+                <option value="paint">Problemă vopsea</option>
+                <option value="cracked_part">Element crăpat</option>
+                <option value="other">Altă daună</option>
               </select>
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm text-white/80">
-                Short description
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Descriere scurtă
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the damage clearly (e.g. front bumper scratched, left door dented)"
+                placeholder="Ex: bara față zgâriată, ușa stângă îndoită, aripa trebuie vopsită..."
                 rows={4}
-                className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 outline-none focus:border-white/30"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
               />
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm text-white/80">
-                Upload photos
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Poze cu dauna
               </label>
               <input
                 type="file"
                 multiple
                 accept="image/*"
                 onChange={handleFileChange}
-                className="block w-full rounded-lg border border-white/10 bg-black/30 px-4 py-3 text-sm"
+                className="block w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm"
               />
             </div>
           </div>
 
           {files.length > 0 && (
-            <div className="mt-4 rounded-lg border border-white/10 bg-black/20 px-4 py-3 text-sm text-white/70">
-              {files.length} photo{files.length > 1 ? "s" : ""} selected
+            <div className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
+              {files.length} poză{files.length > 1 ? "e" : ""} selectată
+              {files.length > 1 ? "e" : ""}
             </div>
           )}
 
           {files.length > 0 && (
             <div className="mt-4">
-              <p className="mb-3 text-sm text-white/70">Photo preview</p>
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <p className="mb-3 text-sm font-medium text-black/60">
+                Previzualizare poze
+              </p>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {previewUrls.map((url, index) => (
                   <img
                     key={index}
                     src={url}
-                    alt={`Preview ${index + 1}`}
-                    className="h-32 w-full rounded-lg border border-white/10 object-cover"
+                    alt={`Poză ${index + 1}`}
+                    className="h-28 w-full rounded-2xl object-cover"
                   />
                 ))}
               </div>
@@ -236,9 +249,9 @@ router.push(`/review?id=${createdRequest.id}`);
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-6 w-full rounded-lg bg-white px-6 py-3 font-semibold text-black transition hover:opacity-90 disabled:opacity-60"
+            className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
           >
-            {isSubmitting ? "Processing..." : "Continue"}
+            {isSubmitting ? "Se salvează..." : "Continuă"}
           </button>
         </form>
       </div>
