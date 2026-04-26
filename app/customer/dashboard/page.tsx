@@ -8,17 +8,6 @@ export default function CustomerDashboardPage() {
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-5 rounded-[24px] bg-black px-5 py-5 shadow-xl">
-          <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-            Customer dashboard
-          </p>
-          <h1 className="mt-2 text-2xl font-bold leading-tight">
-            AutoRepair Marketplace
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-white/55">
-            Manage requests, offers and booked repairs.
-          </p>
-        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <button
