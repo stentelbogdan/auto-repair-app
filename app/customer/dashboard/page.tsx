@@ -16,9 +16,9 @@ export default function CustomerDashboardPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
               +
             </div>
-            <h2 className="text-base font-bold leading-tight">Post job</h2>
+            <h2 className="text-base font-bold leading-tight">Postează</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
-              Upload damage photos
+              Încarcă poze și descriere
             </p>
           </button>
 
@@ -29,9 +29,9 @@ export default function CustomerDashboardPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-xl">
               📋
             </div>
-            <h2 className="text-base font-bold leading-tight">My Requests</h2>
+            <h2 className="text-base font-bold leading-tight">Daune</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
-              Posted repair jobs
+              Toate daunele tale
             </p>
           </button>
 
@@ -42,9 +42,9 @@ export default function CustomerDashboardPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
               €
             </div>
-            <h2 className="text-base font-bold leading-tight">My offers</h2>
+            <h2 className="text-base font-bold leading-tight">Oferte</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
-              Compare prices
+              Compară ofertele primite
             </p>
           </button>
 
@@ -55,9 +55,9 @@ export default function CustomerDashboardPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
               ✓
             </div>
-            <h2 className="text-base font-bold leading-tight">My jobs</h2>
+            <h2 className="text-base font-bold leading-tight">Programări</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
-              Booked repairs
+              Lucrări programate
             </p>
           </button>
 
