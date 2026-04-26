@@ -72,7 +72,7 @@ export default function AppNavbar() {
 
           <div className="min-w-0 flex-1 text-center">
             <p className="text-[11px] uppercase tracking-[0.22em] text-orange-400">
-              Panou client
+              PROFIL CLIENT
             </p>
             <h1 className="mt-1 truncate text-base font-bold leading-tight text-white">
               AutoRepair Marketplace
