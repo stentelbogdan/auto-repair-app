@@ -6,7 +6,7 @@ export default function CustomerDashboardPage() {
   const router = useRouter();
 
   return (
-    <main className="h-[calc(100vh-80px)] overflow-hidden bg-[#101010] px-5 py-4 text-white">
+    <main className="h-[calc(100vh-72px)] overflow-hidden bg-[#101010] px-5 py-4 text-white">
       <div className="mx-auto max-w-5xl">
 
         <div className="grid grid-cols-2 gap-3">
