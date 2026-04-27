@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { Home } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
-import { Suspense } from "react";
 
 export default function ReviewPage() {
   return (
@@ -50,11 +50,7 @@ function ReviewContent() {
   }, [requestId, router]);
 
   if (loading) {
-    return (
-      <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
-        <p className="text-white/60">Se încarcă cererea...</p>
-      </main>
-    );
+    return <ReviewLoading />;
   }
 
   if (!request) return null;
@@ -74,10 +70,12 @@ function ReviewContent() {
           </div>
 
           <button
+            type="button"
             onClick={() => router.push("/customer/dashboard")}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white"
+            aria-label="Înapoi la dashboard"
           >
-            Dashboard
+            <Home size={24} />
           </button>
         </div>
 
@@ -87,7 +85,10 @@ function ReviewContent() {
             <InfoCard label="Model" value={request.car_model} />
             <InfoCard label="An fabricație" value={request.car_year} />
             <InfoCard label="Localitate" value={request.city} />
-            <InfoCard label="Tip daună" value={formatDamageType(request.damage_type)} />
+            <InfoCard
+              label="Tip daună"
+              value={formatDamageType(request.damage_type)}
+            />
             <InfoCard label="Status" value={formatStatus(request.status)} />
           </div>
 
@@ -123,6 +124,7 @@ function ReviewContent() {
 
           <div className="mt-6 flex flex-col gap-3">
             <button
+              type="button"
               onClick={() => router.push("/offers")}
               className="rounded-2xl bg-black px-6 py-4 font-semibold text-white"
             >
@@ -130,6 +132,7 @@ function ReviewContent() {
             </button>
 
             <button
+              type="button"
               onClick={() => router.push("/customer/my-requests")}
               className="rounded-2xl border border-black/10 px-6 py-4 font-semibold text-black"
             >
@@ -150,7 +153,7 @@ function ReviewLoading() {
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function InfoCard({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="rounded-2xl bg-black/[0.04] p-4">
       <p className="text-sm font-medium text-black/50">{label}</p>
