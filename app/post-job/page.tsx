@@ -47,6 +47,7 @@ export default function PostJobPage() {
   const [damageType, setDamageType] = useState<DamageType>("scratch");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const availableModels = carModelsByBrand[carBrand] || [];
 
   const previewUrls = useMemo(() => {
     return files.map((file) => URL.createObjectURL(file));
@@ -127,14 +128,17 @@ export default function PostJobPage() {
               </label>
               
               <input
-                type="text"
-                list="car-brands"
+                 type="text"
+               list="car-brands"
                 value={carBrand}
-                onChange={(e) => setCarBrand(e.target.value)}
+                onChange={(e) => {
+                setCarBrand(e.target.value);
+                setCarModel("");
+                }}
                 placeholder="BMW, Audi, VW..."
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-            />
+                />
 
                 <datalist id="car-brands">
                 {carBrands.map((brand) => (
@@ -144,18 +148,30 @@ export default function PostJobPage() {
     </div>
 
     <div>
-        <label className="mb-2 block text-sm font-medium text-black/70">
-            Model
-              </label>
-              <input
-                type="text"
-                value={carModel}
-                onChange={(e) => setCarModel(e.target.value)}
-                placeholder="Seria 3, A4, Golf..."
-                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
-                required
-              />
-            </div>
+  <label className="mb-2 block text-sm font-medium text-black/70">
+    Model
+  </label>
+
+  <input
+    type="text"
+    list="car-models"
+    value={carModel}
+    onChange={(e) => setCarModel(e.target.value)}
+    placeholder={
+      availableModels.length > 0
+        ? "Alege sau scrie modelul..."
+        : "Seria 3, A4, Golf..."
+    }
+    className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
+    required
+  />
+
+  <datalist id="car-models">
+    {availableModels.map((model) => (
+      <option key={model} value={model} />
+    ))}
+  </datalist>
+</div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
