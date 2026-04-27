@@ -184,12 +184,12 @@ function ReviewContent() {
         const touchEndX = e.changedTouches[0].clientX;
         const difference = touchStartX - touchEndX;
 
-        if (difference > 60 && selectedImageIndex < images.length - 1) {
+        if (difference > 120 && selectedImageIndex < images.length - 1) {
         setSelectedImageIndex(selectedImageIndex + 1);
         setIsZoomed(false);
       }
 
-        if (difference < -60 && selectedImageIndex > 0) {
+        if (difference < -120 && selectedImageIndex > 0) {
         setSelectedImageIndex(selectedImageIndex - 1);
         setIsZoomed(false);
       }
