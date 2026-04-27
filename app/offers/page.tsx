@@ -22,9 +22,10 @@ type RepairRequest = {
   damageType: string;
   description: string;
   images: {
-    name: string;
-    dataUrl: string;
-  }[];
+  name: string;
+  url?: string;
+  dataUrl?: string;
+}[];
   status?: string;
   acceptedOfferId?: string | null;
 };

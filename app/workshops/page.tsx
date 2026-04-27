@@ -18,9 +18,10 @@ type WorkshopRequest = {
   damageType: string;
   description: string;
   images: {
-    name: string;
-    dataUrl: string;
-  }[];
+  name: string;
+  url?: string;
+  dataUrl?: string;
+}[];
   status: string;
   postedAt: string;
 };
