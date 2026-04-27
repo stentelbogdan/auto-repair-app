@@ -1,114 +1,171 @@
-type ReviewPageProps = {
-  searchParams: Promise<{
-    carBrand?: string;
-    carModel?: string;
-    carYear?: string;
-    city?: string;
-    damageType?: string;
-    description?: string;
-    images?: string;
-  }>;
-};
+"use client";
 
-export default async function ReviewPage({ searchParams }: ReviewPageProps) {
-  const params = await searchParams;
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { supabase } from "@/lib/supabase/client";
+import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 
-  const carBrand = params.carBrand || "-";
-  const carModel = params.carModel || "-";
-  const carYear = params.carYear || "-";
-  const city = params.city || "-";
-  const damageType = params.damageType || "-";
-  const description = params.description || "";
+export default function ReviewPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestId = searchParams.get("id");
 
-  let images: Array<{ name?: string; dataUrl?: string }> = [];
+  const [request, setRequest] = useState<RepairRequestRow | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (params.images) {
-    try {
-      const parsed = JSON.parse(params.images);
-      images = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      images = [];
-    }
+  useEffect(() => {
+    const loadRequest = async () => {
+      if (!requestId) {
+        router.push("/customer/dashboard");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("repair_requests")
+        .select("*")
+        .eq("id", requestId)
+        .single<RepairRequestRow>();
+
+      if (error) {
+        console.error("Failed to load request:", error);
+        alert("Nu am putut încărca cererea.");
+        router.push("/customer/dashboard");
+        return;
+      }
+
+      setRequest(data);
+      setLoading(false);
+    };
+
+    loadRequest();
+  }, [requestId, router]);
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
+        <p className="text-white/60">Se încarcă cererea...</p>
+      </main>
+    );
   }
 
+  if (!request) return null;
+
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
+    <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-8 flex items-center justify-between gap-4">
+        <div className="mb-5 flex items-center justify-between gap-4">
           <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Review request
+            <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
+              Verificare daună
             </p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Check your repair request
-            </h1>
+            <h1 className="mt-2 text-2xl font-bold">Cererea ta</h1>
+            <p className="mt-2 text-sm text-white/55">
+              Verifică detaliile înainte să urmărești ofertele primite.
+            </p>
           </div>
 
-          <a
-            href="/"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
+          <button
+            onClick={() => router.push("/customer/dashboard")}
+            className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white"
           >
-            Back
-          </a>
+            Dashboard
+          </button>
         </div>
 
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-          <div className="grid gap-6 p-6 md:grid-cols-2">
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-              <p className="text-sm text-white/50">Car brand</p>
-              <p className="mt-1 text-lg font-semibold">{carBrand}</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-              <p className="text-sm text-white/50">Car model</p>
-              <p className="mt-1 text-lg font-semibold">{carModel}</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-              <p className="text-sm text-white/50">Year</p>
-              <p className="mt-1 text-lg font-semibold">{carYear}</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4">
-              <p className="text-sm text-white/50">City</p>
-              <p className="mt-1 text-lg font-semibold">{city}</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4 md:col-span-2">
-              <p className="text-sm text-white/50">Damage type</p>
-              <p className="mt-1 text-lg font-semibold">{damageType}</p>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/30 p-4 md:col-span-2">
-              <p className="text-sm text-white/50">Description</p>
-              <p className="mt-1 text-white/85">
-                {description || "No description provided."}
-              </p>
-            </div>
+        <div className="rounded-[24px] bg-white p-5 text-black shadow-xl">
+          <div className="grid gap-3 md:grid-cols-2">
+            <InfoCard label="Marcă" value={request.car_brand} />
+            <InfoCard label="Model" value={request.car_model} />
+            <InfoCard label="An fabricație" value={request.car_year} />
+            <InfoCard label="Localitate" value={request.city} />
+            <InfoCard label="Tip daună" value={formatDamageType(request.damage_type)} />
+            <InfoCard label="Status" value={formatStatus(request.status)} />
           </div>
 
-          <div className="px-6 pb-6">
-            <p className="mb-3 text-sm text-white/60">Uploaded photos</p>
+          <div className="mt-4 rounded-2xl bg-black/[0.04] p-4">
+            <p className="text-sm font-medium text-black/50">Descriere</p>
+            <p className="mt-1 text-sm text-black/75">
+              {request.description || "Nu ai adăugat descriere."}
+            </p>
+          </div>
 
-            {images.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {images.map((image, index) => (
+          <div className="mt-5">
+            <p className="mb-3 text-sm font-semibold text-black/60">
+              Poze încărcate
+            </p>
+
+            {request.images?.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                {request.images.map((image, index) => (
                   <img
-                    key={`${image?.name || "image"}-${index}`}
-                    src={image?.dataUrl || ""}
-                    alt={`Uploaded photo ${index + 1}`}
-                    className="h-64 w-full rounded-xl border border-white/10 object-cover"
+                    key={`${image.name}-${index}`}
+                    src={image.dataUrl}
+                    alt={`Poză daună ${index + 1}`}
+                    className="h-32 w-full rounded-2xl object-cover md:h-44"
                   />
                 ))}
               </div>
             ) : (
-              <div className="rounded-xl border border-white/10 bg-black/30 p-6 text-white/50">
-                No photos uploaded.
+              <div className="rounded-2xl bg-black/[0.04] p-5 text-center text-sm text-black/50">
+                Nu ai încărcat poze.
               </div>
             )}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              onClick={() => router.push("/offers")}
+              className="rounded-2xl bg-black px-6 py-4 font-semibold text-white"
+            >
+              Vezi ofertele
+            </button>
+
+            <button
+              onClick={() => router.push("/customer/my-requests")}
+              className="rounded-2xl border border-black/10 px-6 py-4 font-semibold text-black"
+            >
+              Înapoi la daunele mele
+            </button>
           </div>
         </div>
       </div>
     </main>
   );
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-black/[0.04] p-4">
+      <p className="text-sm font-medium text-black/50">{label}</p>
+      <p className="mt-1 font-bold text-black">{value || "-"}</p>
+    </div>
+  );
+}
+
+function formatDamageType(value: string) {
+  switch (value) {
+    case "scratch":
+      return "Zgârietură";
+    case "dent":
+      return "Îndoitură";
+    case "bumper":
+      return "Bară avariată";
+    case "paint":
+      return "Problemă vopsea";
+    case "cracked_part":
+      return "Element crăpat";
+    default:
+      return "Altă daună";
+  }
+}
+
+function formatStatus(value: string) {
+  switch (value) {
+    case "matched":
+      return "Programată";
+    case "open":
+      return "Deschisă";
+    default:
+      return value || "-";
+  }
 }
