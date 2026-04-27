@@ -22,7 +22,6 @@ function ReviewContent() {
   const [request, setRequest] = useState<RepairRequestRow | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadRequest = async () => {
@@ -111,41 +110,20 @@ function ReviewContent() {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
       {request.images.map((image, index) => (
         <button
-          key={`${image.name}-${index}`}
-          type="button"
-          onClick={() => setSelectedImage(image.dataUrl)}
-          className="overflow-hidden rounded-2xl"
+            key={`${image.name}-${index}`}
+            type="button"
+            onClick={() => window.open(image.dataUrl, "_blank")}
+            className="overflow-hidden rounded-2xl"
         >
-          <img
-            src={image.dataUrl}
-            alt={`Poză daună ${index + 1}`}
-            className="h-32 w-full object-cover md:h-44"
-          />
+            <img
+                src={image.dataUrl}
+                alt={`Poză daună ${index + 1}`}
+                className="h-32 w-full object-cover md:h-44"
+            />
         </button>
       ))}
     </div>
 
-    {selectedImage && (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
-        onClick={() => setSelectedImage(null)}
-      >
-        <button
-          type="button"
-          onClick={() => setSelectedImage(null)}
-          className="absolute right-5 top-5 rounded-full bg-white px-4 py-2 font-semibold text-black"
-        >
-          Închide
-        </button>
-
-        <img
-          src={selectedImage}
-          alt="Poză mărită"
-          className="max-h-[90vh] max-w-full rounded-2xl object-contain"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </div>
-    )}
   </>
 ) : (
 
