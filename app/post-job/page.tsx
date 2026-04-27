@@ -17,21 +17,32 @@ type DamageType =
 
 type StoredImage = {
   name: string;
-  dataUrl: string;
+  url?: string;
+  dataUrl?: string;
 };
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+async function uploadRepairImage(file: File, userId: string): Promise<StoredImage> {
+  const fileExt = file.name.split(".").pop() || "jpg";
+  const fileName = `${userId}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}.${fileExt}`;
 
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("Failed to read file"));
-    };
+  const { error } = await supabase.storage
+    .from("repair-images")
+    .upload(fileName, file);
 
-    reader.onerror = () => reject(new Error("File reading failed"));
-    reader.readAsDataURL(file);
-  });
+  if (error) {
+    throw error;
+  }
+
+  const { data } = supabase.storage
+    .from("repair-images")
+    .getPublicUrl(fileName);
+
+  return {
+    name: file.name,
+    url: data.publicUrl,
+  };
 }
 
 export default function PostJobPage() {
@@ -81,10 +92,7 @@ export default function PostJobPage() {
       }
 
       const storedImages: StoredImage[] = await Promise.all(
-        files.map(async (file) => ({
-          name: file.name,
-          dataUrl: await fileToBase64(file),
-        }))
+        files.map((file) => uploadRepairImage(file, authData.user.id))
       );
 
       const createdRequest = await createRepairRequest({

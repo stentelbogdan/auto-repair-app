@@ -10,9 +10,10 @@ export type RepairRequestRow = {
   damage_type: string;
   description: string | null;
   images: {
-    name: string;
-    dataUrl: string;
-  }[];
+  name: string;
+  url?: string;
+  dataUrl?: string;
+}[];
   status: string;
   accepted_offer_id: string | null;
   created_at: string;
@@ -27,9 +28,10 @@ export async function createRepairRequest(input: {
   damageType: string;
   description: string;
   images: {
-    name: string;
-    dataUrl: string;
-  }[];
+  name: string;
+  url?: string;
+  dataUrl?: string;
+}[];
 }) {
   const { data, error } = await supabase
     .from("repair_requests")
@@ -70,7 +72,9 @@ export async function getWorkshopRepairRequests() {
 export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
-    .select("*")
+    .select(
+      "id, user_id, car_brand, car_model, car_year, city, damage_type, description, status, accepted_offer_id, created_at, images"
+    )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
