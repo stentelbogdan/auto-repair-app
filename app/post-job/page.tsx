@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
+import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
 
 type DamageType =
   | "scratch"
@@ -34,75 +35,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
-
-const carBrands = [
-  "Abarth",
-  "Acura",
-  "Alfa Romeo",
-  "Aston Martin",
-  "Audi",
-  "Bentley",
-  "BMW",
-  "Bugatti",
-  "Buick",
-  "BYD",
-  "Cadillac",
-  "Chevrolet",
-  "Chrysler",
-  "Citroën",
-  "Cupra",
-  "Dacia",
-  "Daewoo",
-  "Daihatsu",
-  "Dodge",
-  "DS Automobiles",
-  "Ferrari",
-  "Fiat",
-  "Ford",
-  "Genesis",
-  "GMC",
-  "Honda",
-  "Hummer",
-  "Hyundai",
-  "Infiniti",
-  "Isuzu",
-  "Jaguar",
-  "Jeep",
-  "Kia",
-  "Lada",
-  "Lamborghini",
-  "Lancia",
-  "Land Rover",
-  "Lexus",
-  "Lincoln",
-  "Maserati",
-  "Mazda",
-  "McLaren",
-  "Mercedes-Benz",
-  "MG",
-  "Mini",
-  "Mitsubishi",
-  "Nissan",
-  "Opel",
-  "Peugeot",
-  "Polestar",
-  "Pontiac",
-  "Porsche",
-  "Renault",
-  "Rolls-Royce",
-  "Rover",
-  "Saab",
-  "Seat",
-  "Skoda",
-  "Smart",
-  "SsangYong",
-  "Subaru",
-  "Suzuki",
-  "Tesla",
-  "Toyota",
-  "Volkswagen",
-  "Volvo",
-];
 
 export default function PostJobPage() {
   const router = useRouter();
