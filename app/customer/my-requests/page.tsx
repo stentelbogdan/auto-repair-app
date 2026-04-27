@@ -28,7 +28,7 @@ export default function MyRequestsPage() {
         setRequests(data);
       } catch (error) {
         console.error("Failed to load requests:", error);
-        alert("Could not load your requests.");
+        alert("Nu am putut încărca daunele tale.");
       } finally {
         setLoading(false);
       }
@@ -43,33 +43,33 @@ export default function MyRequestsPage() {
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-              Customer
+              Client
             </p>
-            <h1 className="mt-1 text-2xl font-bold">My Requests</h1>
+            <h1 className="mt-1 text-2xl font-bold">Daunele mele</h1>
           </div>
 
           <button
             onClick={() => router.push("/post-job")}
             className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black"
           >
-            + New
+            + Postează
           </button>
         </div>
 
         {loading ? (
-          <p className="text-white/60">Loading requests...</p>
+          <p className="text-white/60">Se încarcă daunele...</p>
         ) : requests.length === 0 ? (
           <div className="rounded-[22px] bg-white p-6 text-center text-black">
-            <h2 className="text-xl font-bold">No requests yet</h2>
+            <h2 className="text-xl font-bold">Nu ai daune postate</h2>
             <p className="mt-2 text-sm text-black/60">
-              Post your first repair job to receive workshop offers.
+              Postează prima daună ca să primești oferte de la service-uri.
             </p>
 
             <button
               onClick={() => router.push("/post-job")}
               className="mt-5 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white"
             >
-              Post a repair job
+              Postează daună
             </button>
           </div>
         ) : (
@@ -90,7 +90,7 @@ export default function MyRequestsPage() {
                       />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
-                        No photo
+                        Fără poză
                       </div>
                     )}
                   </div>
@@ -107,12 +107,12 @@ export default function MyRequestsPage() {
                       </div>
 
                       <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                        {request.status}
+                        {formatStatus(request.status)}
                       </span>
                     </div>
 
                     <p className="mt-3 line-clamp-2 text-sm text-black/65">
-                      {request.description || "No description provided."}
+                      {request.description || "Nu ai adăugat descriere."}
                     </p>
                   </div>
                 </div>
@@ -123,4 +123,15 @@ export default function MyRequestsPage() {
       </div>
     </main>
   );
+}
+
+function formatStatus(status: string) {
+  switch (status) {
+    case "open":
+      return "Deschisă";
+    case "matched":
+      return "Programată";
+    default:
+      return status || "-";
+  }
 }

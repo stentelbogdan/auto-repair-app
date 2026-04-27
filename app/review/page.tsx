@@ -4,8 +4,17 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
+import { Suspense } from "react";
 
 export default function ReviewPage() {
+  return (
+    <Suspense fallback={<ReviewLoading />}>
+      <ReviewContent />
+    </Suspense>
+  );
+}
+
+function ReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestId = searchParams.get("id");
@@ -129,6 +138,14 @@ export default function ReviewPage() {
           </div>
         </div>
       </div>
+    </main>
+  );
+}
+
+function ReviewLoading() {
+  return (
+    <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
+      <p className="text-white/60">Se încarcă cererea...</p>
     </main>
   );
 }
