@@ -47,6 +47,11 @@ export default function PostJobPage() {
 
   const availableModels = carModelsByBrand[carBrand] || [];
 
+  const years = Array.from(
+  { length: new Date().getFullYear() - 1989 },
+  (_, i) => String(new Date().getFullYear() - i)
+);
+
   const previewUrls = useMemo(() => {
     return files.map((file) => URL.createObjectURL(file));
   }, [files]);
@@ -169,18 +174,25 @@ export default function PostJobPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                An fabricație
-              </label>
-              <input
-                type="number"
+                <label className="mb-2 block text-sm font-medium text-black/70">
+                 An fabricație
+            </label>
+
+            <select
                 value={carYear}
                 onChange={(e) => setCarYear(e.target.value)}
-                placeholder="2018"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-              />
-            </div>
+            >
+            <option value="">Alege anul</option>
+
+                {years.map((year) => (
+            <option key={year} value={year}>
+            {year}
+        </option>
+        ))}
+    </select>
+    </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
