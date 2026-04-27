@@ -24,6 +24,8 @@ function ReviewContent() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null
   );
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   useEffect(() => {
     if (selectedImageIndex === null) return;
@@ -171,42 +173,66 @@ function ReviewContent() {
       </div>
 
       {selectedImageIndex !== null && images[selectedImageIndex] && (
-        <div className="fixed inset-0 z-[9999] bg-black">
-          <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between p-4 text-white">
-            <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">
-              {selectedImageIndex + 1}/{images.length}
-            </span>
+    <div
+        className="fixed inset-0 z-[9999] bg-black"
+        onTouchStart={(e) => {
+        setTouchStartX(e.touches[0].clientX);
+    }}
+        onTouchEnd={(e) => {
+        if (touchStartX === null || isZoomed) return;
 
-            <button
-              type="button"
-              onClick={() => setSelectedImageIndex(null)}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10"
-              aria-label="Închide poza"
-            >
-              <X size={26} />
-            </button>
-          </div>
+        const touchEndX = e.changedTouches[0].clientX;
+        const difference = touchStartX - touchEndX;
 
-          <div className="flex h-full w-full snap-x overflow-x-auto">
-            {images.map((image, index) => {
-              const imageSrc = image.url || image.dataUrl || "";
+        if (difference > 60 && selectedImageIndex < images.length - 1) {
+        setSelectedImageIndex(selectedImageIndex + 1);
+        setIsZoomed(false);
+      }
 
-              return (
-                <div
-                  key={`fullscreen-${image.name}-${index}`}
-                  className="flex h-full min-w-full snap-center items-center justify-center overflow-auto px-3"
-                >
-                  <img
-                    src={imageSrc}
-                    alt={`Poză mărită ${index + 1}`}
-                    className="max-h-[88vh] max-w-full object-contain"
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+        if (difference < -60 && selectedImageIndex > 0) {
+        setSelectedImageIndex(selectedImageIndex - 1);
+        setIsZoomed(false);
+      }
+
+        setTouchStartX(null);
+    }}
+  >
+        <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between p-4 text-white">
+        <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">
+            {selectedImageIndex + 1}/{images.length}
+        </span>
+
+        <button
+            type="button"
+            onClick={() => {
+            setSelectedImageIndex(null);
+            setIsZoomed(false);
+        }}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10"
+            aria-label="Închide poza"
+        >
+            <X size={26} />
+      </button>
+    </div>
+
+    <div
+      className="flex h-full w-full items-center justify-center overflow-hidden px-3"
+      onDoubleClick={() => setIsZoomed((current) => !current)}
+    >
+      <img
+        src={
+          images[selectedImageIndex].url ||
+          images[selectedImageIndex].dataUrl ||
+          ""
+        }
+        alt={`Poză mărită ${selectedImageIndex + 1}`}
+        className={`max-h-[88vh] max-w-full object-contain transition-transform duration-300 ${
+          isZoomed ? "scale-150 cursor-zoom-out" : "scale-100 cursor-zoom-in"
+        }`}
+      />
+    </div>
+  </div>
+)}
     </main>
   );
 }
