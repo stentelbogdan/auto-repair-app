@@ -24,11 +24,8 @@ function fileToBase64(file: File): Promise<string> {
     const reader = new FileReader();
 
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-      } else {
-        reject(new Error("Failed to read file"));
-      }
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Failed to read file"));
     };
 
     reader.onerror = () => reject(new Error("File reading failed"));
@@ -47,6 +44,7 @@ export default function PostJobPage() {
   const [damageType, setDamageType] = useState<DamageType>("scratch");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
   const availableModels = carModelsByBrand[carBrand] || [];
 
   const previewUrls = useMemo(() => {
@@ -60,8 +58,7 @@ export default function PostJobPage() {
   }, [previewUrls]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    setFiles(selectedFiles);
+    setFiles(Array.from(e.target.files || []));
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -126,52 +123,50 @@ export default function PostJobPage() {
               <label className="mb-2 block text-sm font-medium text-black/70">
                 Marca mașinii
               </label>
-              
-              <input
-                 type="text"
-               list="car-brands"
+
+              <select
                 value={carBrand}
                 onChange={(e) => {
-                setCarBrand(e.target.value);
-                setCarModel("");
+                  setCarBrand(e.target.value);
+                  setCarModel("");
                 }}
-                placeholder="BMW, Audi, VW..."
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-                />
-
-                <datalist id="car-brands">
+              >
+                <option value="">Alege marca</option>
                 {carBrands.map((brand) => (
-                <option key={brand} value={brand} />
-            ))}
-        </datalist>
-    </div>
+                  <option key={brand} value={brand}>
+                    {brand}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-    <div>
-  <label className="mb-2 block text-sm font-medium text-black/70">
-    Model
-  </label>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Model
+              </label>
 
-  <input
-    type="text"
-    list="car-models"
-    value={carModel}
-    onChange={(e) => setCarModel(e.target.value)}
-    placeholder={
-      availableModels.length > 0
-        ? "Alege sau scrie modelul..."
-        : "Seria 3, A4, Golf..."
-    }
-    className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
-    required
-  />
+              <select
+                value={carModel}
+                onChange={(e) => setCarModel(e.target.value)}
+                disabled={!carBrand}
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400 disabled:opacity-50"
+                required
+              >
+                <option value="">
+                  {carBrand ? "Alege modelul" : "Alege întâi marca"}
+                </option>
 
-  <datalist id="car-models">
-    {availableModels.map((model) => (
-      <option key={model} value={model} />
-    ))}
-  </datalist>
-</div>
+                {availableModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+
+                <option value="Alt model">Alt model</option>
+              </select>
+            </div>
 
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
