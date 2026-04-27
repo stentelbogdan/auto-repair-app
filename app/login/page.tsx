@@ -19,34 +19,48 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-  const checkSession = async () => {
-    const { data } = await supabase.auth.getUser();
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getUser();
 
-    if (!data.user) return;
+      if (!data.user) return;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", data.user.id)
-      .single<ProfileRow>();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single<ProfileRow>();
 
-    const roles = Array.isArray(profile?.role) ? profile.role : [];
+      const roles = Array.isArray(profile?.role) ? profile.role : [];
 
+      if (roles.includes("admin")) {
+        router.push("/admin");
+      } else if (roles.includes("workshop")) {
+        router.push("/workshops/dashboard");
+      } else {
+        router.push("/customer/dashboard");
+      }
+    };
+
+    checkSession();
+  }, [router]);
+
+  const goToDashboard = (selectedRole: UserRole, roles: string[]) => {
     if (roles.includes("admin")) {
       router.push("/admin");
-    } else if (roles.includes("workshop")) {
-      router.push("/workshops/dashboard");
-    } else {
-      router.push("/customer/dashboard");
+      return;
     }
-  };
 
-  checkSession();
-}, [router]);
+    if (selectedRole === "workshop" && roles.includes("workshop")) {
+      router.push("/workshops/dashboard");
+      return;
+    }
+
+    router.push("/customer/dashboard");
+  };
 
   const handleSignUp = async () => {
     if (!email || !password) {
-      alert("Please enter email and password.");
+      alert("Te rugăm să introduci emailul și parola.");
       return;
     }
 
@@ -66,11 +80,12 @@ export default function LoginPage() {
       const userId = data.user?.id;
 
       if (userId) {
-        const { data: existingProfile, error: fetchProfileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", userId)
-          .maybeSingle<ProfileRow>();
+        const { data: existingProfile, error: fetchProfileError } =
+          await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", userId)
+            .maybeSingle<ProfileRow>();
 
         if (fetchProfileError) {
           alert(fetchProfileError.message);
@@ -93,22 +108,16 @@ export default function LoginPage() {
           alert(profileError.message);
           return;
         }
+
+        if (data.session) {
+          goToDashboard(role, mergedRoles);
+        } else {
+          alert("Cont creat cu succes. Te poți autentifica acum.");
+        }
       }
-
-      if (data.session) {
-  alert("Account created and logged in successfully.");
-
-  if (role === "workshop") {
-    router.push("/workshops/dashboard");
-  } else {
-    router.push("/customer/dashboard");
-  }
-} else {
-  alert("Account created successfully. You can now log in.");
-}
     } catch (err) {
       console.error("Sign up failed:", err);
-      alert("Something went wrong during sign up.");
+      alert("A apărut o problemă la crearea contului.");
     } finally {
       setLoading(false);
     }
@@ -116,7 +125,7 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      alert("Please enter email and password.");
+      alert("Te rugăm să introduci emailul și parola.");
       return;
     }
 
@@ -133,12 +142,10 @@ export default function LoginPage() {
         return;
       }
 
-      const userId = data.user.id;
-
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", userId)
+        .eq("id", data.user.id)
         .single<ProfileRow>();
 
       if (profileError) {
@@ -148,81 +155,77 @@ export default function LoginPage() {
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
 
-if (roles.includes("admin")) {
-  router.push("/admin");
-  return;
-}
-
-if (role === "workshop" && roles.includes("workshop")) {
-  router.push("/workshops/dashboard");
-  return;
-}
-
-if (roles.includes("customer")) {
-  router.push("/customer/dashboard");
-  return;
-}
-
-router.push("/customer/dashboard");
-
+      goToDashboard(role, roles);
     } catch (err) {
       console.error("Login failed:", err);
-      alert("Something went wrong during login.");
+      alert("A apărut o problemă la autentificare.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
-      <div className="mx-auto flex min-h-[70vh] max-w-md items-center justify-center">
-        <div className="w-full rounded-2xl border border-white/10 bg-white/5 p-8">
-          <div className="mb-8">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Access
+    <main className="min-h-screen bg-[#101010] px-4 py-6 text-white">
+      <div className="mx-auto flex min-h-[85vh] max-w-md items-center justify-center">
+        <div className="w-full rounded-[28px] bg-white p-6 text-black shadow-2xl">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white">
+              AR
+            </div>
+
+            <p className="text-xs uppercase tracking-[0.25em] text-orange-500">
+              AutoRepair Marketplace
             </p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Login / Register
-            </h1>
-            <p className="mt-3 text-white/70">
-              Access the marketplace as customer or workshop.
+
+            <h1 className="mt-3 text-2xl font-bold">Autentificare</h1>
+
+            <p className="mt-2 text-sm text-black/55">
+              Intră în cont sau creează un cont nou.
             </p>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="mb-2 block text-sm text-white/70">Email</label>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Email
+              </label>
               <input
                 type="email"
-                placeholder="you@example.com"
-                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 outline-none focus:border-white/40"
+                name="email"
+                autoComplete="email"
+                placeholder="email@exemplu.ro"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-white/70">Password</label>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Parolă
+              </label>
               <input
                 type="password"
-                placeholder="Enter password"
-                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 outline-none focus:border-white/40"
+                name="password"
+                autoComplete="current-password"
+                placeholder="Introdu parola"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm text-white/70">
-                Account type
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Tip cont
               </label>
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full rounded-lg border border-white/20 bg-black px-4 py-3 outline-none focus:border-white/40"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
               >
-                <option value="customer">Customer</option>
-                <option value="workshop">Workshop</option>
+                <option value="customer">Client</option>
+                <option value="workshop">Service auto</option>
               </select>
             </div>
           </div>
@@ -231,17 +234,17 @@ router.push("/customer/dashboard");
             <button
               onClick={handleLogin}
               disabled={loading}
-              className="rounded-lg bg-white py-3 font-semibold text-black transition hover:opacity-90 disabled:opacity-60"
+              className="rounded-2xl bg-black py-4 font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
             >
-              {loading ? "Please wait..." : "Login"}
+              {loading ? "Te rugăm așteaptă..." : "Intră în cont"}
             </button>
 
             <button
               onClick={handleSignUp}
               disabled={loading}
-              className="rounded-lg border border-white/20 py-3 font-semibold text-white transition hover:bg-white/10 disabled:opacity-60"
+              className="rounded-2xl border border-black/10 py-4 font-semibold text-black transition active:scale-[0.99] disabled:opacity-60"
             >
-              {loading ? "Please wait..." : "Create account"}
+              {loading ? "Te rugăm așteaptă..." : "Creează cont"}
             </button>
           </div>
         </div>
