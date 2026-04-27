@@ -58,6 +58,12 @@ export default function OffersPage() {
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
 
+  const [selectedGallery, setSelectedGallery] = useState<{
+  images: RepairRequest["images"];
+  index: number;
+  title: string;
+} | null>(null);
+
   useEffect(() => {
     const checkUserAndLoad = async () => {
       try {
@@ -259,11 +265,22 @@ export default function OffersPage() {
                 <div className="grid gap-0 md:grid-cols-[320px_1fr]">
                   <div className="bg-black/30">
                     {request.images.length > 0 ? (
-                      <img
-                        src={request.images[0].dataUrl}
+                      <button
+                        onClick={() =>
+                        setSelectedGallery({
+                            images: request.images,
+                            index: 0,
+                            title: `${request.carBrand} ${request.carModel}`,
+                        })
+                    }
+                    className="block h-full w-full"
+                >
+                    <img
+                        src={request.images[0].url || request.images[0].dataUrl}
                         alt={`${request.carBrand} ${request.carModel}`}
                         className="h-full min-h-[240px] w-full object-cover"
-                      />
+                    />
+                </button>
                     ) : (
                       <div className="flex min-h-[240px] items-center justify-center text-white/40">
                         No photo uploaded
@@ -365,6 +382,69 @@ export default function OffersPage() {
           </div>
         )}
       </div>
+
+        {selectedGallery && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95">
+            <button
+                onClick={() => setSelectedGallery(null)}
+                className="absolute right-5 top-5 z-50 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white"
+            >
+                Close
+            </button>
+
+            <button
+                onClick={() =>
+                setSelectedGallery((current) =>
+                current
+            ? {
+                ...current,
+                index:
+                  current.index === 0
+                    ? current.images.length - 1
+                    : current.index - 1,
+              }
+            : null
+        )
+      }
+      className="absolute left-4 z-50 rounded-full bg-white/10 px-4 py-3 text-2xl text-white"
+    >
+      ‹
+    </button>
+
+    <img
+      src={
+        selectedGallery.images[selectedGallery.index].url ||
+        selectedGallery.images[selectedGallery.index].dataUrl
+      }
+      alt={selectedGallery.title}
+      className="max-h-[85vh] max-w-[92vw] rounded-2xl object-contain"
+    />
+
+    <button
+      onClick={() =>
+        setSelectedGallery((current) =>
+          current
+            ? {
+                ...current,
+                index:
+                  current.index === current.images.length - 1
+                    ? 0
+                    : current.index + 1,
+              }
+            : null
+        )
+      }
+      className="absolute right-4 z-50 rounded-full bg-white/10 px-4 py-3 text-2xl text-white"
+    >
+      ›
+    </button>
+
+    <div className="absolute bottom-6 rounded-full bg-white/10 px-4 py-2 text-sm text-white/80">
+      {selectedGallery.index + 1} / {selectedGallery.images.length}
+    </div>
+  </div>
+)}
+
     </main>
   );
 }
