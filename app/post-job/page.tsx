@@ -249,25 +249,40 @@ export default function PostJobPage() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                Poze cu dauna
-              </label>
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileChange}
-                className="block w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm"
-              />
-            </div>
-          </div>
+                <label className="mb-2 block text-sm font-medium text-black/70">
+                    Poze cu dauna
+                </label>
 
-          {files.length > 0 && (
-            <div className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-medium text-orange-700">
-              {files.length} poză{files.length > 1 ? "e" : ""} selectată
-              {files.length > 1 ? "e" : ""}
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-[22px] border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-8 text-center transition active:scale-[0.99]">
+                    <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
+                      📸
+                    </div>
+
+                    <p className="text-base font-bold text-black">
+                        Adaugă poze
+                    </p>
+
+                    <p className="mt-1 text-sm text-black/55">
+                        Fă poze sau alege din galerie
+                    </p>
+
+                    <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                    />
+                </label>
             </div>
-          )}
+        </div>
+
+        {files.length > 0 && (
+            <div className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700">
+                {files.length} poză{files.length > 1 ? "e" : ""} adăugată
+                {files.length > 1 ? "e" : ""}
+            </div>
+        )}
 
           {files.length > 0 && (
             <div className="mt-4">
