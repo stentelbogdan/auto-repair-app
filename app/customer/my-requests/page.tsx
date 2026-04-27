@@ -82,16 +82,23 @@ export default function MyRequestsPage() {
               >
                 <div className="flex gap-4 p-4">
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10">
-                    {request.images?.[0]?.dataUrl ? (
-                      <img
-                        src={request.images[0].dataUrl}
-                        alt={`${request.car_brand} ${request.car_model}`}
-                        className="h-full w-full object-cover"
-                      />
+                    {request.images?.[0]?.thumbUrl ||
+                    request.images?.[0]?.url ||
+                    request.images?.[0]?.dataUrl ? (
+                        <img
+                            src={
+                                request.images[0].thumbUrl ||
+                                request.images[0].url ||
+                                request.images[0].dataUrl ||
+                                ""
+                            }
+                            alt={`${request.car_brand} ${request.car_model}`}
+                            className="h-full w-full object-cover"
+                        />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
-                        Fără poză
-                      </div>
+                        <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
+                            Fără poză
+                        </div>
                     )}
                   </div>
 

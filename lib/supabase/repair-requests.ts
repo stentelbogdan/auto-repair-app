@@ -12,6 +12,7 @@ export type RepairRequestRow = {
   images: {
   name: string;
   url?: string;
+  thumbUrl?: string;
   dataUrl?: string;
 }[];
   status: string;
@@ -30,6 +31,7 @@ export async function createRepairRequest(input: {
   images: {
   name: string;
   url?: string;
+  thumbUrl?: string;
   dataUrl?: string;
 }[];
 }) {
