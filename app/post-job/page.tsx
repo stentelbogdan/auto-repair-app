@@ -109,7 +109,11 @@ export default function PostJobPage() {
       router.push(`/review?id=${createdRequest.id}`);
     } catch (error) {
       console.error("Submit failed:", error);
-      alert("A apărut o problemă la salvarea cererii.");
+      alert(
+        error instanceof Error
+        ? error.message
+        : "A apărut o problemă la salvarea cererii."
+        );
     } finally {
       setIsSubmitting(false);
     }
