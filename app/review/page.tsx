@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { Home } from "lucide-react";
+import { Home, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
@@ -21,7 +21,19 @@ function ReviewContent() {
 
   const [request, setRequest] = useState<RepairRequestRow | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null
+  );
 
+  useEffect(() => {
+    if (selectedImageIndex === null) return;
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedImageIndex]);
 
   useEffect(() => {
     const loadRequest = async () => {
@@ -50,11 +62,10 @@ function ReviewContent() {
     loadRequest();
   }, [requestId, router]);
 
-  if (loading) {
-    return <ReviewLoading />;
-  }
-
+  if (loading) return <ReviewLoading />;
   if (!request) return null;
+
+  const images = Array.isArray(request.images) ? request.images : [];
 
   return (
     <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
@@ -105,28 +116,34 @@ function ReviewContent() {
               Poze încărcate
             </p>
 
-            {request.images?.length > 0 ? (
-  <>
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-      {request.images.map((image, index) => (
-        <button
-            key={`${image.name}-${index}`}
-            type="button"
-            onClick={() => window.open(image.dataUrl, "_blank")}
-            className="overflow-hidden rounded-2xl"
-        >
-            <img
-                src={image.dataUrl}
-                alt={`Poză daună ${index + 1}`}
-                className="h-32 w-full object-cover md:h-44"
-            />
-        </button>
-      ))}
-    </div>
+            {images.length > 0 ? (
+              <div className="flex snap-x gap-3 overflow-x-auto pb-2">
+                {images.map((image, index) => {
+                  const imageSrc = image.url || image.dataUrl || "";
 
-  </>
-) : (
+                  return (
+                    <button
+                      key={`${image.name}-${index}`}
+                      type="button"
+                      onClick={() => setSelectedImageIndex(index)}
+                      className="relative h-56 min-w-full snap-center overflow-hidden rounded-3xl bg-black/10 sm:min-w-[70%]"
+                    >
+                      <img
+                        src={imageSrc}
+                        alt={`Poză daună ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
 
+                      {images.length > 1 && (
+                        <span className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white">
+                          {index + 1}/{images.length}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
               <div className="rounded-2xl bg-black/[0.04] p-5 text-center text-sm text-black/50">
                 Nu ai încărcat poze.
               </div>
@@ -152,6 +169,44 @@ function ReviewContent() {
           </div>
         </div>
       </div>
+
+      {selectedImageIndex !== null && images[selectedImageIndex] && (
+        <div className="fixed inset-0 z-[9999] bg-black">
+          <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between p-4 text-white">
+            <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">
+              {selectedImageIndex + 1}/{images.length}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setSelectedImageIndex(null)}
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10"
+              aria-label="Închide poza"
+            >
+              <X size={26} />
+            </button>
+          </div>
+
+          <div className="flex h-full w-full snap-x overflow-x-auto">
+            {images.map((image, index) => {
+              const imageSrc = image.url || image.dataUrl || "";
+
+              return (
+                <div
+                  key={`fullscreen-${image.name}-${index}`}
+                  className="flex h-full min-w-full snap-center items-center justify-center overflow-auto px-3"
+                >
+                  <img
+                    src={imageSrc}
+                    alt={`Poză mărită ${index + 1}`}
+                    className="max-h-[88vh] max-w-full object-contain"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
