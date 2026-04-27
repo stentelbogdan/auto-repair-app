@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
+import { romaniaCities } from "@/lib/data/romania-cities";
 
 type DamageType =
   | "scratch"
@@ -195,36 +196,44 @@ export default function PostJobPage() {
     </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                Oraș
-              </label>
-              <input
-                type="text"
+                <label className="mb-2 block text-sm font-medium text-black/70">
+                Localitate
+            </label>
+
+            <select
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                placeholder="Iași, București, Cluj..."
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-              />
-            </div>
+            >
+            <option value="">Alege localitatea</option>
 
-            <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                Tip daună
-              </label>
-              <select
-                value={damageType}
-                onChange={(e) => setDamageType(e.target.value as DamageType)}
-                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
-              >
-                <option value="scratch">Zgârietură</option>
-                <option value="dent">Îndoitură</option>
-                <option value="bumper">Bară avariată</option>
-                <option value="paint">Problemă vopsea</option>
-                <option value="cracked_part">Element crăpat</option>
-                <option value="other">Altă daună</option>
-              </select>
-            </div>
+            {romaniaCities.map((cityName) => (
+            <option key={cityName} value={cityName}>
+            {cityName}
+            </option>
+            ))}
+        </select>
+        </div>
+
+        <div className="md:col-span-2">
+        <label className="mb-2 block text-sm font-medium text-black/70">
+            Tip daună
+        </label>
+
+        <select
+            value={damageType}
+            onChange={(e) => setDamageType(e.target.value as DamageType)}
+            className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
+        >
+        <option value="scratch">Zgârietură</option>
+        <option value="dent">Îndoitură</option>
+        <option value="bumper">Bară avariată</option>
+        <option value="paint">Problemă vopsea</option>
+        <option value="cracked_part">Element crăpat</option>
+        <option value="other">Altă daună</option>
+        </select>
+        </div>
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-black/70">
