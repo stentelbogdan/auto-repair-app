@@ -384,63 +384,91 @@ export default function OffersPage() {
       </div>
 
         {selectedGallery && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95">
-            <button
-                onClick={() => setSelectedGallery(null)}
-                className="absolute right-5 top-5 z-50 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white"
-            >
-                Close
-            </button>
+  <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
+    <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
+      <button
+        onClick={() => setSelectedGallery(null)}
+        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold"
+      >
+        ✕ Close
+      </button>
 
-            <button
-                onClick={() =>
-                setSelectedGallery((current) =>
-                current
-            ? {
-                ...current,
-                index:
-                  current.index === 0
-                    ? current.images.length - 1
-                    : current.index - 1,
-              }
-            : null
-        )
-      }
-      className="absolute left-4 z-50 rounded-full bg-white/10 px-4 py-3 text-2xl text-white"
-    >
-      ‹
-    </button>
+      <div className="text-sm text-white/70">
+        {selectedGallery.index + 1} / {selectedGallery.images.length}
+      </div>
+    </div>
 
-    <img
-      src={
-        selectedGallery.images[selectedGallery.index].url ||
-        selectedGallery.images[selectedGallery.index].dataUrl
-      }
-      alt={selectedGallery.title}
-      className="max-h-[85vh] max-w-[92vw] rounded-2xl object-contain"
-    />
+    <div className="relative flex flex-1 items-center justify-center overflow-hidden">
+      <button
+        onClick={() =>
+          setSelectedGallery((current) =>
+            current
+              ? {
+                  ...current,
+                  index:
+                    current.index === 0
+                      ? current.images.length - 1
+                      : current.index - 1,
+                }
+              : null
+          )
+        }
+        className="absolute left-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-4xl"
+      >
+        ‹
+      </button>
 
-    <button
-      onClick={() =>
-        setSelectedGallery((current) =>
-          current
-            ? {
-                ...current,
-                index:
-                  current.index === current.images.length - 1
-                    ? 0
-                    : current.index + 1,
-              }
-            : null
-        )
-      }
-      className="absolute right-4 z-50 rounded-full bg-white/10 px-4 py-3 text-2xl text-white"
-    >
-      ›
-    </button>
+      <img
+        src={
+          selectedGallery.images[selectedGallery.index].url ||
+          selectedGallery.images[selectedGallery.index].dataUrl
+        }
+        alt={selectedGallery.title}
+        className="max-h-full max-w-full object-contain"
+      />
 
-    <div className="absolute bottom-6 rounded-full bg-white/10 px-4 py-2 text-sm text-white/80">
-      {selectedGallery.index + 1} / {selectedGallery.images.length}
+      <button
+        onClick={() =>
+          setSelectedGallery((current) =>
+            current
+              ? {
+                  ...current,
+                  index:
+                    current.index === current.images.length - 1
+                      ? 0
+                      : current.index + 1,
+                }
+              : null
+          )
+        }
+        className="absolute right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-4xl"
+      >
+        ›
+      </button>
+    </div>
+
+    <div className="flex gap-3 overflow-x-auto border-t border-white/10 bg-black px-4 py-3">
+      {selectedGallery.images.map((image, imageIndex) => (
+        <button
+          key={`${image.name}-${imageIndex}`}
+          onClick={() =>
+            setSelectedGallery((current) =>
+              current ? { ...current, index: imageIndex } : null
+            )
+          }
+          className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border ${
+            imageIndex === selectedGallery.index
+              ? "border-white"
+              : "border-white/20 opacity-60"
+          }`}
+        >
+          <img
+            src={image.url || image.dataUrl}
+            alt={image.name}
+            className="h-full w-full object-cover"
+          />
+        </button>
+      ))}
     </div>
   </div>
 )}
