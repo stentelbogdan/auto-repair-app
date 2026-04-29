@@ -75,15 +75,19 @@ export default function PostJobPage() {
   }, [previewUrls]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-  const newFiles = Array.from(e.target.files || []);
+  const selectedFiles = Array.from(e.target.files || []);
 
-  setFiles((currentFiles) => {
-    const combinedFiles = [...currentFiles, ...newFiles];
+  if (selectedFiles.length === 0) {
+    return;
+  }
 
-    return combinedFiles.slice(0, 8);
+  setFiles((previousFiles) => {
+    const updatedFiles = [...previousFiles, ...selectedFiles];
+
+    return updatedFiles.slice(0, 8);
   });
 
-  e.target.value = "";
+  e.currentTarget.value = "";
 };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
