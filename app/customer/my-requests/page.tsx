@@ -75,11 +75,10 @@ export default function MyRequestsPage() {
         ) : (
           <div className="space-y-3">
             {requests.map((request) => (
-              <button
+              <div
                 key={request.id}
-                onClick={() => router.push(`/review?id=${request.id}`)}
                 className="w-full overflow-hidden rounded-[22px] bg-white text-left text-black shadow-lg"
-              >
+            >
                 <div className="flex gap-4 p-4">
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10">
                     {request.images?.[0]?.thumbUrl ||
@@ -123,7 +122,7 @@ export default function MyRequestsPage() {
                     </p>
                   </div>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}
