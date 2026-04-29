@@ -92,7 +92,7 @@ export default function MyRequestsPage() {
                                 ""
                             }
                             alt={`${request.car_brand} ${request.car_model}`}
-                            className="h-full w-full object-cover border-4 border-red-500"
+                            className="h-full w-full object-cover"
                         />
                     ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
@@ -101,7 +101,10 @@ export default function MyRequestsPage() {
                     )}
                   </div>
 
-                  <div className="min-w-0 flex-1">
+                  <div
+                    onClick={() => router.push(`/review?id=${request.id}`)}
+                    className="min-w-0 flex-1 cursor-pointer"
+                >
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <h2 className="font-bold leading-tight">
