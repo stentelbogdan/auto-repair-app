@@ -294,6 +294,7 @@ export default function PostJobPage() {
                         type="file"
                         multiple
                         accept="image/*"
+                        capture="environment"
                         onChange={handleFileChange}
                         className="hidden"
                     />
