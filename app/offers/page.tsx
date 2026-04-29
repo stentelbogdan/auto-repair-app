@@ -12,6 +12,9 @@ import {
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
 
 type RepairRequest = {
   id: string;
@@ -383,95 +386,29 @@ export default function OffersPage() {
         )}
       </div>
 
-        {selectedGallery && (
-  <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
-    <div className="flex h-16 items-center justify-between border-b border-white/10 px-4">
-      <button
-        onClick={() => setSelectedGallery(null)}
-        className="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold"
-      >
-        ✕ Close
-      </button>
-
-      <div className="text-sm text-white/70">
-        {selectedGallery.index + 1} / {selectedGallery.images.length}
-      </div>
-    </div>
-
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-      <button
-        onClick={() =>
-          setSelectedGallery((current) =>
-            current
-              ? {
-                  ...current,
-                  index:
-                    current.index === 0
-                      ? current.images.length - 1
-                      : current.index - 1,
-                }
-              : null
-          )
-        }
-        className="absolute left-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-4xl"
-      >
-        ‹
-      </button>
-
-      <img
-        src={
-          selectedGallery.images[selectedGallery.index].url ||
-          selectedGallery.images[selectedGallery.index].dataUrl
-        }
-        alt={selectedGallery.title}
-        className="max-h-full max-w-full object-contain"
-      />
-
-      <button
-        onClick={() =>
-          setSelectedGallery((current) =>
-            current
-              ? {
-                  ...current,
-                  index:
-                    current.index === current.images.length - 1
-                      ? 0
-                      : current.index + 1,
-                }
-              : null
-          )
-        }
-        className="absolute right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-4xl"
-      >
-        ›
-      </button>
-    </div>
-
-    <div className="flex gap-3 overflow-x-auto border-t border-white/10 bg-black px-4 py-3">
-      {selectedGallery.images.map((image, imageIndex) => (
-        <button
-          key={`${image.name}-${imageIndex}`}
-          onClick={() =>
-            setSelectedGallery((current) =>
-              current ? { ...current, index: imageIndex } : null
-            )
-          }
-          className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border ${
-            imageIndex === selectedGallery.index
-              ? "border-white"
-              : "border-white/20 opacity-60"
-          }`}
-        >
-          <img
-            src={image.url || image.dataUrl}
-            alt={image.name}
-            className="h-full w-full object-cover"
-          />
-        </button>
-      ))}
-    </div>
-  </div>
-)}
+        <Lightbox
+            open={!!selectedGallery}
+            close={() => setSelectedGallery(null)}
+            index={selectedGallery?.index || 0}
+            slides={
+                selectedGallery?.images.map((image) => ({
+                    src: image.url || image.dataUrl || "",
+                })) || []
+            }
+            plugins={[Zoom]}
+            zoom={{
+                maxZoomPixelRatio: 4,
+                scrollToZoom: true,
+                doubleTapDelay: 300,
+                doubleClickDelay: 300,
+            }}
+            carousel={{
+                finite: false,
+            }}
+            controller={{
+                closeOnBackdropClick: true,
+            }}
+        />
 
     </main>
   );
