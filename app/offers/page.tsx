@@ -281,7 +281,7 @@ export default function OffersPage() {
                     <img
                         src={request.images[0].url || request.images[0].dataUrl}
                         alt={`${request.carBrand} ${request.carModel}`}
-                        className="h-full min-h-[240px] w-full object-cover"
+                        className="h-full min-h-[240px] w-full object-cover border-4 border-red-500"
                     />
                 </button>
                     ) : (
