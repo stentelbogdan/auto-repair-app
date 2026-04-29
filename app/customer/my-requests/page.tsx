@@ -93,7 +93,7 @@ export default function MyRequestsPage() {
                                 ""
                             }
                             alt={`${request.car_brand} ${request.car_model}`}
-                            className="h-full w-full object-cover"
+                            className="h-full w-full object-cover border-4 border-red-500"
                         />
                     ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
