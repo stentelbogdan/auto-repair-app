@@ -21,7 +21,10 @@ type StoredImage = {
   dataUrl?: string;
 };
 
-async function uploadRepairImage(file: File, userId: string): Promise<StoredImage> {
+async function uploadRepairImage(
+  file: File,
+  userId: string,
+): Promise<StoredImage> {
   const fileExt = file.name.split(".").pop() || "jpg";
   const fileName = `${userId}/${Date.now()}-${Math.random()
     .toString(36)
@@ -60,9 +63,9 @@ export default function PostJobPage() {
   const availableModels = carModelsByBrand[carBrand] || [];
 
   const years = Array.from(
-  { length: new Date().getFullYear() - 1989 },
-  (_, i) => String(new Date().getFullYear() - i)
-);
+    { length: new Date().getFullYear() - 1989 },
+    (_, i) => String(new Date().getFullYear() - i),
+  );
 
   const previewUrls = useMemo(() => {
     return files.map((file) => URL.createObjectURL(file));
@@ -75,20 +78,17 @@ export default function PostJobPage() {
   }, [previewUrls]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-  const selectedFiles = Array.from(e.target.files || []);
+    const newFiles = Array.from(e.target.files || []);
 
-  if (selectedFiles.length === 0) {
-    return;
-  }
+    if (newFiles.length === 0) return;
 
-  setFiles((previousFiles) => {
-    const updatedFiles = [...previousFiles, ...selectedFiles];
+    setFiles((currentFiles) => {
+      const updatedFiles = [...currentFiles, ...newFiles];
+      return updatedFiles.slice(0, 8);
+    });
 
-    return updatedFiles.slice(0, 8);
-  });
-
-  e.currentTarget.value = "";
-};
+    e.currentTarget.value = "";
+  };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -104,7 +104,7 @@ export default function PostJobPage() {
       }
 
       const storedImages: StoredImage[] = await Promise.all(
-        files.map((file) => uploadRepairImage(file, authData.user.id))
+        files.map((file) => uploadRepairImage(file, authData.user.id)),
       );
 
       const createdRequest = await createRepairRequest({
@@ -123,9 +123,9 @@ export default function PostJobPage() {
       console.error("Submit failed:", error);
       alert(
         error instanceof Error
-        ? error.message
-        : "A apărut o problemă la salvarea cererii."
-        );
+          ? error.message
+          : "A apărut o problemă la salvarea cererii.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -199,65 +199,65 @@ export default function PostJobPage() {
             </div>
 
             <div>
-                <label className="mb-2 block text-sm font-medium text-black/70">
-                 An fabricație
-            </label>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                An fabricație
+              </label>
 
-            <select
+              <select
                 value={carYear}
                 onChange={(e) => setCarYear(e.target.value)}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-            >
-            <option value="">Alege anul</option>
+              >
+                <option value="">Alege anul</option>
 
                 {years.map((year) => (
-            <option key={year} value={year}>
-            {year}
-        </option>
-        ))}
-    </select>
-    </div>
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div>
-                <label className="mb-2 block text-sm font-medium text-black/70">
+              <label className="mb-2 block text-sm font-medium text-black/70">
                 Localitate
-            </label>
+              </label>
 
-            <select
+              <select
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-            >
-            <option value="">Alege localitatea</option>
+              >
+                <option value="">Alege localitatea</option>
 
-            {romaniaCities.map((cityName) => (
-            <option key={cityName} value={cityName}>
-            {cityName}
-            </option>
-            ))}
-        </select>
-        </div>
+                {romaniaCities.map((cityName) => (
+                  <option key={cityName} value={cityName}>
+                    {cityName}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div className="md:col-span-2">
-        <label className="mb-2 block text-sm font-medium text-black/70">
-            Tip daună
-        </label>
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Tip daună
+              </label>
 
-        <select
-            value={damageType}
-            onChange={(e) => setDamageType(e.target.value as DamageType)}
-            className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
-        >
-        <option value="scratch">Zgârietură</option>
-        <option value="dent">Îndoitură</option>
-        <option value="bumper">Bară avariată</option>
-        <option value="paint">Problemă vopsea</option>
-        <option value="cracked_part">Element crăpat</option>
-        <option value="other">Altă daună</option>
-        </select>
-        </div>
+              <select
+                value={damageType}
+                onChange={(e) => setDamageType(e.target.value as DamageType)}
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
+              >
+                <option value="scratch">Zgârietură</option>
+                <option value="dent">Îndoitură</option>
+                <option value="bumper">Bară avariată</option>
+                <option value="paint">Problemă vopsea</option>
+                <option value="cracked_part">Element crăpat</option>
+                <option value="other">Altă daună</option>
+              </select>
+            </div>
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-black/70">
@@ -273,41 +273,39 @@ export default function PostJobPage() {
             </div>
 
             <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-medium text-black/70">
-                    Poze cu dauna
-                </label>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Poze cu dauna
+              </label>
 
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-[22px] border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-8 text-center transition active:scale-[0.99]">
-                    <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
-                      📸
-                    </div>
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-[22px] border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-8 text-center transition active:scale-[0.99]">
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
+                  📸
+                </div>
 
-                    <p className="text-base font-bold text-black">
-                        Adaugă poze
-                    </p>
+                <p className="text-base font-bold text-black">Adaugă poze</p>
 
-                    <p className="mt-1 text-sm text-black/55">
-                        Fă poze sau alege din galerie
-                    </p>
+                <p className="mt-1 text-sm text-black/55">
+                  Fă poze sau alege din galerie
+                </p>
 
-                    <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleFileChange}
-                        className="hidden"
-                    />
-                </label>
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
             </div>
-        </div>
+          </div>
 
-        {files.length > 0 && (
+          {files.length > 0 && (
             <div className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700">
-                {files.length} poză{files.length > 1 ? "e" : ""} adăugată
-                {files.length > 1 ? "e" : ""}
+              {files.length} poză{files.length > 1 ? "e" : ""} adăugată
+              {files.length > 1 ? "e" : ""}
             </div>
-        )}
+          )}
 
           {files.length > 0 && (
             <div className="mt-4">

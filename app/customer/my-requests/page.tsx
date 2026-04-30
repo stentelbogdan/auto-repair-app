@@ -99,21 +99,29 @@ export default function MyRequestsPage() {
                       setSelectedImages(images);
                       setLightboxIndex(0);
                     }}
-                    className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10"
+                    className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10"
                   >
                     {request.images?.[0]?.thumbUrl ||
                     request.images?.[0]?.url ||
                     request.images?.[0]?.dataUrl ? (
-                      <img
-                        src={
-                          request.images[0].thumbUrl ||
-                          request.images[0].url ||
-                          request.images[0].dataUrl ||
-                          ""
-                        }
-                        alt={`${request.car_brand} ${request.car_model}`}
-                        className="h-full w-full object-cover"
-                      />
+                      <>
+                        <img
+                          src={
+                            request.images[0].thumbUrl ||
+                            request.images[0].url ||
+                            request.images[0].dataUrl ||
+                            ""
+                          }
+                          alt={`${request.car_brand} ${request.car_model}`}
+                          className="h-full w-full object-cover"
+                        />
+
+                        {request.images.length > 1 && (
+                          <div className="absolute bottom-1 right-1 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-bold text-white">
+                            +{request.images.length - 1}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
                         Fără poză

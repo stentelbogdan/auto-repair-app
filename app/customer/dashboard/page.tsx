@@ -55,12 +55,11 @@ export default function CustomerDashboardPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
               ✓
             </div>
-            <h2 className="text-base font-bold leading-tight">Programări</h2>
+            ∏<h2 className="text-base font-bold leading-tight">Programări</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
               Lucrări programate
             </p>
           </button>
-
         </div>
       </div>
     </main>
