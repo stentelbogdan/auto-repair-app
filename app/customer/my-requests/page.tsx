@@ -157,6 +157,10 @@ export default function MyRequestsPage() {
             slides={selectedImages.map((src) => ({ src }))}
             index={lightboxIndex}
             plugins={[Zoom]}
+            render={{
+            buttonPrev: () => null,
+            buttonNext: () => null,
+        }}
             controller={{
                 closeOnBackdropClick: true,
                 closeOnPullDown: true,
@@ -173,7 +177,7 @@ export default function MyRequestsPage() {
                 doubleClickDelay: 250,
         }}
             carousel={{
-                finite: false,
+                finite: true,
                 padding: "16px",
                 spacing: "16px",
         }}
