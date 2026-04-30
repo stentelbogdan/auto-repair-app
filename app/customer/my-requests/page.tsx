@@ -89,15 +89,15 @@ export default function MyRequestsPage() {
                   <button
                     type="button"
                     onClick={(e) => {
-                        e.stopPropagation();
+                      e.stopPropagation();
 
-                        const images =
-                        request.images?.map(
-                        (img) => img.url || img.dataUrl || ""
-                    ) || [];
+                      const images =
+                        request.images
+                          ?.map((img) => img.url || img.dataUrl || "")
+                          .filter(Boolean) || [];
 
-                        setSelectedImages(images);
-                        setLightboxIndex(0);
+                      setSelectedImages(images);
+                      setLightboxIndex(0);
                     }}
                     className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10"
                   >
@@ -151,38 +151,36 @@ export default function MyRequestsPage() {
         )}
       </div>
 
-       <Lightbox
-            open={selectedImages.length > 0}
-            close={() => setSelectedImages([])}
-            slides={selectedImages.map((src) => ({ src }))}
-            index={lightboxIndex}
-            plugins={[Zoom]}
-            render={{
-            buttonPrev: () => null,
-            buttonNext: () => null,
+      <Lightbox
+        open={selectedImages.length > 0}
+        close={() => setSelectedImages([])}
+        slides={selectedImages.map((src) => ({ src }))}
+        index={lightboxIndex}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
         }}
-            controller={{
-                closeOnBackdropClick: true,
-                closeOnPullDown: true,
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
         }}
-            animation={{
-                fade: 220,
-                swipe: 260,
-                zoom: 260,
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
         }}
-            zoom={{
-                maxZoomPixelRatio: 4,
-                scrollToZoom: true,
-                doubleTapDelay: 250,
-                doubleClickDelay: 250,
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
         }}
-            carousel={{
-                finite: true,
-                padding: "16px",
-                spacing: "16px",
+        styles={{
+          button: { display: "none" },
         }}
-    />
-
+      />
     </main>
   );
 }
