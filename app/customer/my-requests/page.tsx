@@ -8,11 +8,17 @@ import {
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
 
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
+
 export default function MyRequestsPage() {
   const router = useRouter();
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     const loadRequests = async () => {
@@ -83,8 +89,15 @@ export default function MyRequestsPage() {
                   <button
                     type="button"
                     onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(`/review?id=${request.id}`);
+                        e.stopPropagation();
+
+                        const images =
+                        request.images?.map(
+                        (img) => img.url || img.dataUrl || ""
+                    ) || [];
+
+                        setSelectedImages(images);
+                        setLightboxIndex(0);
                     }}
                     className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10"
                   >
@@ -137,6 +150,19 @@ export default function MyRequestsPage() {
           </div>
         )}
       </div>
+
+        <Lightbox
+            open={selectedImages.length > 0}
+            close={() => setSelectedImages([])}
+            slides={selectedImages.map((src) => ({ src }))}
+            index={lightboxIndex}
+            plugins={[Zoom]}
+            zoom={{
+                maxZoomPixelRatio: 4,
+                scrollToZoom: true,
+            }}
+        />
+
     </main>
   );
 }
