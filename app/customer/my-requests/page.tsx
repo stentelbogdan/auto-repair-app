@@ -151,17 +151,33 @@ export default function MyRequestsPage() {
         )}
       </div>
 
-        <Lightbox
+       <Lightbox
             open={selectedImages.length > 0}
             close={() => setSelectedImages([])}
             slides={selectedImages.map((src) => ({ src }))}
             index={lightboxIndex}
             plugins={[Zoom]}
+            controller={{
+                closeOnBackdropClick: true,
+                closeOnPullDown: true,
+        }}
+            animation={{
+                fade: 220,
+                swipe: 260,
+                zoom: 260,
+        }}
             zoom={{
                 maxZoomPixelRatio: 4,
                 scrollToZoom: true,
-            }}
-        />
+                doubleTapDelay: 250,
+                doubleClickDelay: 250,
+        }}
+            carousel={{
+                finite: false,
+                padding: "16px",
+                spacing: "16px",
+        }}
+    />
 
     </main>
   );
