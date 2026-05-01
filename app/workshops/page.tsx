@@ -18,10 +18,10 @@ type WorkshopRequest = {
   damageType: string;
   description: string;
   images: {
-  name: string;
-  url?: string;
-  dataUrl?: string;
-}[];
+    name: string;
+    url?: string;
+    dataUrl?: string;
+  }[];
   status: string;
   postedAt: string;
 };
@@ -199,15 +199,29 @@ export default function WorkshopsPage() {
                   className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                 >
                   {request.images.length > 0 ? (
-                    <img
-                      src={request.images[0].dataUrl}
-                      alt={`${request.carBrand} ${request.carModel}`}
-                      className="h-56 w-full object-cover"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/workshops/${request.id}`)}
+                      className="block w-full overflow-hidden"
+                    >
+                      <img
+                        src={
+                          request.images[0].url ||
+                          request.images[0].dataUrl ||
+                          ""
+                        }
+                        alt={`${request.carBrand} ${request.carModel}`}
+                        className="h-56 w-full object-cover"
+                      />
+                    </button>
                   ) : (
-                    <div className="flex h-56 w-full items-center justify-center bg-white/5 text-white/40">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/workshops/${request.id}`)}
+                      className="flex h-56 w-full items-center justify-center bg-white/5 text-white/40"
+                    >
                       No photo uploaded
-                    </div>
+                    </button>
                   )}
 
                   <div className="p-5">
@@ -255,7 +269,7 @@ export default function WorkshopsPage() {
                       </button>
 
                       <button
-                        onClick={() => router.push(`/workshops/${request.id}/offer`)}
+                        onClick={() => router.push(`/workshops/${request.id}`)}
                         disabled={isMatched}
                         className="w-full rounded-lg bg-white px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                       >
