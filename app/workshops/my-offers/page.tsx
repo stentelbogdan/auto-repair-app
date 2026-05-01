@@ -91,7 +91,8 @@ export default function WorkshopMyOffersPage() {
 
         const { data, error } = await supabase
           .from("repair_offers")
-          .select(`
+          .select(
+            `
             id,
             request_id,
             workshop_user_id,
@@ -113,7 +114,8 @@ export default function WorkshopMyOffersPage() {
               created_at,
               accepted_offer_id
             )
-          `)
+          `,
+          )
           .eq("workshop_user_id", authData.user.id)
           .order("created_at", { ascending: false });
 
@@ -125,32 +127,34 @@ export default function WorkshopMyOffersPage() {
         } else if (!data) {
           setOffers([]);
         } else {
-          const mapped: RepairOffer[] = data.map((row: any): RepairOffer => ({
-            id: String(row.id),
-            request_id: String(row.request_id),
-            workshop_user_id: String(row.workshop_user_id),
-            workshop_name: row.workshop_name || "",
-            price: row.price ?? "",
-            days: row.days ?? "",
-            message: row.message || "",
-            status: row.status || "pending",
-            created_at: String(row.created_at),
-            repair_requests: row.repair_requests
-              ? {
-                  id: String(row.repair_requests.id),
-                  car_brand: row.repair_requests.car_brand ?? null,
-                  car_model: row.repair_requests.car_model ?? null,
-                  car_year: row.repair_requests.car_year ?? null,
-                  city: row.repair_requests.city ?? null,
-                  damage_type: row.repair_requests.damage_type ?? null,
-                  description: row.repair_requests.description ?? null,
-                  status: row.repair_requests.status ?? null,
-                  created_at: row.repair_requests.created_at ?? null,
-                  accepted_offer_id:
-                    row.repair_requests.accepted_offer_id ?? null,
-                }
-              : null,
-          }));
+          const mapped: RepairOffer[] = data.map(
+            (row: any): RepairOffer => ({
+              id: String(row.id),
+              request_id: String(row.request_id),
+              workshop_user_id: String(row.workshop_user_id),
+              workshop_name: row.workshop_name || "",
+              price: row.price ?? "",
+              days: row.days ?? "",
+              message: row.message || "",
+              status: row.status || "pending",
+              created_at: String(row.created_at),
+              repair_requests: row.repair_requests
+                ? {
+                    id: String(row.repair_requests.id),
+                    car_brand: row.repair_requests.car_brand ?? null,
+                    car_model: row.repair_requests.car_model ?? null,
+                    car_year: row.repair_requests.car_year ?? null,
+                    city: row.repair_requests.city ?? null,
+                    damage_type: row.repair_requests.damage_type ?? null,
+                    description: row.repair_requests.description ?? null,
+                    status: row.repair_requests.status ?? null,
+                    created_at: row.repair_requests.created_at ?? null,
+                    accepted_offer_id:
+                      row.repair_requests.accepted_offer_id ?? null,
+                  }
+                : null,
+            }),
+          );
 
           setOffers(mapped);
         }
@@ -258,10 +262,10 @@ export default function WorkshopMyOffersPage() {
   }
 
   function formatStatus(status: "pending" | "won" | "lost") {
-    if (status === "won") return "Won";
-    if (status === "lost") return "Lost";
-    return "Pending";
-  }
+  if (status === "won") return "Acceptată";
+  if (status === "lost") return "Pierdută";
+  return "În așteptare";
+}
 
   function statusClasses(status: "pending" | "won" | "lost") {
     if (status === "won") {
@@ -309,59 +313,57 @@ export default function WorkshopMyOffersPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap gap-3">
           <Link
-            href="/workshops/dashboard"
+            href="/workshops/Panou"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
-            Dashboard
+            Panou
           </Link>
           <Link
             href="/workshops"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
-            Browse requests
+            Daune disponibile
           </Link>
           <Link
             href="/workshops/my-offers"
             className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
           >
-            My offers
+            Ofertele tale
           </Link>
           <Link
             href="/workshops/won-jobs"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
-            Won jobs
+            Lucrări câștigate
           </Link>
         </div>
 
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Workshop dashboard
+              Workshop Panou
             </p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">My offers</h1>
+            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
+              Ofertele tale
+            </h1>
             <p className="mt-3 max-w-2xl text-white/70">
-              See all offers sent by your workshop and track which jobs you won.
+              Vezi ofertele trimise clienților și urmărește statusul fiecărei
+              lucrări.
             </p>
           </div>
         </div>
 
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="All offers" value={counts.all} />
-          <StatCard label="Pending" value={counts.pending} />
-          <StatCard label="Won jobs" value={counts.won} />
-          <StatCard label="Lost" value={counts.lost} />
-        </section>
-
         <section className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-2">
-              {([
-                ["all", `All (${counts.all})`],
-                ["pending", `Pending (${counts.pending})`],
-                ["won", `Won (${counts.won})`],
-                ["lost", `Lost (${counts.lost})`],
-              ] as [FilterKey, string][]).map(([key, label]) => {
+              {(
+                [
+                  ["all", `Toate (${counts.all})`],
+                  ["pending", `În așteptare (${counts.pending})`],
+                  ["won", `Acceptate (${counts.won})`],
+                  ["lost", `Pierdute (${counts.lost})`],
+                ] as [FilterKey, string][]
+              ).map(([key, label]) => {
                 const isActive = activeFilter === key;
 
                 return (
@@ -401,9 +403,12 @@ export default function WorkshopMyOffersPage() {
           </div>
         ) : filteredOffers.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
-            <h2 className="text-lg font-semibold text-white">No offers found</h2>
+            <h2 className="text-lg font-semibold text-white">
+              No offers found
+            </h2>
             <p className="mt-2 text-sm text-white/60">
-              Try another filter or send your first offer from the requests page.
+              Try another filter or send your first offer from the requests
+              page.
             </p>
           </div>
         ) : (
@@ -427,7 +432,7 @@ export default function WorkshopMyOffersPage() {
 
                         <span
                           className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(
-                            offer.derivedStatus
+                            offer.derivedStatus,
                           )}`}
                         >
                           {formatStatus(offer.derivedStatus)}
@@ -455,7 +460,10 @@ export default function WorkshopMyOffersPage() {
                     <div className="grid min-w-full gap-3 rounded-2xl bg-black/30 p-4 sm:min-w-[300px] lg:max-w-sm">
                       <div className="grid grid-cols-2 gap-3">
                         <InfoBox label="Your price" value={`€${offer.price}`} />
-                        <InfoBox label="Estimated days" value={`${offer.days} days`} />
+                        <InfoBox
+                          label="Estimated days"
+                          value={`${offer.days} days`}
+                        />
                       </div>
 
                       <div>
