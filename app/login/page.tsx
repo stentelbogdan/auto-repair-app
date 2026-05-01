@@ -35,7 +35,7 @@ export default function LoginPage() {
       if (roles.includes("admin")) {
         router.push("/admin");
       } else if (roles.includes("workshop")) {
-        router.push("/workshops/dashboard");
+        router.push("/customer/dashboard");
       } else {
         router.push("/customer/dashboard");
       }
@@ -51,7 +51,7 @@ export default function LoginPage() {
     }
 
     if (selectedRole === "workshop" && roles.includes("workshop")) {
-      router.push("/workshops/dashboard");
+      router.push("/customer/dashboard");
       return;
     }
 
