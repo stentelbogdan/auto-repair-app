@@ -94,7 +94,7 @@ export default function WorkshopsPage() {
         damageType: formatDamageType(req.damage_type || "other"),
         description: req.description || "No description provided.",
         images: Array.isArray(req.images) ? req.images : [],
-        status: req.status || "open",
+        status: req.status || "Deschisă",
         postedAt: formatPostedAt(req.created_at),
       }));
 
@@ -126,72 +126,73 @@ export default function WorkshopsPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap gap-3">
           <Link
-            href="/workshops/dashboard"
+            href="/workshops/Panou"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
-            Dashboard
+            Panou
           </Link>
           <Link
             href="/workshops"
             className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
           >
-            Browse requests
+            Daune disponibile
           </Link>
           <Link
             href="/workshops/my-offers"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
-            My offers
+            Ofertele tale
           </Link>
           <Link
             href="/workshops/won-jobs"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
-            Won jobs
+            Lucrări câștigate
           </Link>
         </div>
 
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Workshop marketplace
+              Service auto
             </p>
             <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Browse repair requests
+              Daune disponibile
             </h1>
             <p className="mt-3 max-w-2xl text-white/70">
-              Browse customer requests and send your offer to win the job.
+              Alege o daună, verifică pozele și trimite oferta ta clientului.
             </p>
           </div>
 
           <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-            {requests.length} active request{requests.length !== 1 ? "s" : ""}
+            {requests.length} daune active
           </div>
         </div>
 
         {loadingRequests ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
-            <p className="text-white/70">Loading repair requests...</p>
+            <p className="text-white/70">Se încarcă daunele...</p>
           </div>
         ) : requests.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
-            <h2 className="text-2xl font-semibold">No requests yet</h2>
+            <h2 className="text-2xl font-semibold">
+              Nu există daune disponibile
+            </h2>
             <p className="mt-3 text-white/70">
-              Submit a repair request from the customer flow and it will appear
-              here.
+              Când un client postează o daună, aceasta va apărea aici.
             </p>
 
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/customer/dashboard")}
               className="mt-6 rounded-lg bg-white px-6 py-3 font-semibold text-black"
             >
-              Go to customer form
+              Înapoi la panou
             </button>
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {requests.map((request) => {
-              const isMatched = request.status === "matched";
+              const isAcceptată = request.status === "Acceptată";
 
               return (
                 <div
@@ -220,7 +221,7 @@ export default function WorkshopsPage() {
                       onClick={() => router.push(`/workshops/${request.id}`)}
                       className="flex h-56 w-full items-center justify-center bg-white/5 text-white/40"
                     >
-                      No photo uploaded
+                      Fără poză
                     </button>
                   )}
 
@@ -247,12 +248,12 @@ export default function WorkshopsPage() {
 
                       <span
                         className={`inline-block rounded-full border px-3 py-1 text-xs font-medium ${
-                          isMatched
+                          isAcceptată
                             ? "border-green-500/20 bg-green-500/15 text-green-300"
                             : "border-yellow-500/20 bg-yellow-500/15 text-yellow-300"
                         }`}
                       >
-                        {isMatched ? "Matched" : "Open"}
+                        {isAcceptată ? "Acceptată" : "Deschisă"}
                       </span>
                     </div>
 
@@ -265,15 +266,15 @@ export default function WorkshopsPage() {
                         onClick={() => router.push(`/workshops/${request.id}`)}
                         className="w-full rounded-lg border border-white/20 px-4 py-3 font-semibold text-white"
                       >
-                        View job
+                        Vezi detalii
                       </button>
 
                       <button
                         onClick={() => router.push(`/workshops/${request.id}`)}
-                        disabled={isMatched}
+                        disabled={isAcceptată}
                         className="w-full rounded-lg bg-white px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {isMatched ? "Offer closed" : "Send offer"}
+                        {isAcceptată ? "Oferta închisă" : "Trimite ofertă"}
                       </button>
                     </div>
                   </div>
@@ -289,18 +290,18 @@ export default function WorkshopsPage() {
 
 function formatDamageType(value: string) {
   switch (value) {
-    case "scratch":
-      return "Scratch";
-    case "dent":
-      return "Dent";
-    case "bumper":
-      return "Bumper damage";
-    case "paint":
-      return "Paint damage";
-    case "cracked_part":
-      return "Cracked part";
+    case "Zgârietură":
+      return "Zgârietură";
+    case "Îndoitură":
+      return "Îndoitură";
+    case "Bară avariată":
+      return "Bară avariată";
+    case "Problemă vopsea":
+      return "Problemă vopsea";
+    case "Element crăpat":
+      return "Element crăpat";
     default:
-      return "Other";
+      return "Altă daună";
   }
 }
 
@@ -314,23 +315,23 @@ function formatPostedAt(value: string) {
   const diffDays = Math.floor(diffHours / 24);
 
   if (Number.isNaN(createdAt.getTime())) {
-    return "Recently";
+    return "Recent";
   }
 
   if (diffMinutes < 1) {
-    return "Just now";
+    return "Acum";
   }
 
   if (diffMinutes < 60) {
-    return `${diffMinutes}m ago`;
+    return `${diffMinutes}min`;
   }
 
   if (diffHours < 24) {
-    return `${diffHours}h ago`;
+    return `${diffHours}h`;
   }
 
   if (diffDays < 7) {
-    return `${diffDays}d ago`;
+    return `${diffDays}zile`;
   }
 
   return createdAt.toLocaleDateString();
