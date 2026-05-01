@@ -7,6 +7,15 @@ import {
   getOffersForWorkshop,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
+
+type RepairImage = {
+  name?: string;
+  url?: string;
+  dataUrl?: string;
+};
 
 type RepairRequest = {
   id: string;
@@ -16,14 +25,8 @@ type RepairRequest = {
   city: string;
   damageType: string;
   description: string;
-  images: {
-    name: string;
-    dataUrl: string;
-  }[];
-  afterImages: {
-    name: string;
-    dataUrl: string;
-  }[];
+  images: RepairImage[];
+  afterImages: RepairImage[];
   status?: string;
   acceptedOfferId?: string | null;
 };
@@ -51,14 +54,8 @@ type RepairRequestRow = {
   city: string;
   damage_type: string;
   description: string | null;
-  images: {
-    name: string;
-    dataUrl: string;
-  }[];
-  after_images: {
-    name: string;
-    dataUrl: string;
-  }[];
+  images: RepairImage[];
+  after_images: RepairImage[];
   status: string;
   accepted_offer_id: string | null;
 };
@@ -73,6 +70,9 @@ export default function WorkshopRequestDetailsPage() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [uploadingAfterImages, setUploadingAfterImages] = useState(false);
+
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     const loadPage = async () => {
@@ -117,20 +117,20 @@ export default function WorkshopRequestDetailsPage() {
         }
 
         setRequest({
-  id: requestRow.id,
-  carBrand: requestRow.car_brand || "Unknown brand",
-  carModel: requestRow.car_model || "Unknown model",
-  carYear: requestRow.car_year || "-",
-  city: requestRow.city || "-",
-  damageType: formatDamageType(requestRow.damage_type || "other"),
-  description: requestRow.description || "No description provided.",
-  images: Array.isArray(requestRow.images) ? requestRow.images : [],
-  afterImages: Array.isArray(requestRow.after_images)
-    ? requestRow.after_images
-    : [],
-  status: requestRow.status || "open",
-  acceptedOfferId: requestRow.accepted_offer_id,
-});
+          id: requestRow.id,
+          carBrand: requestRow.car_brand || "Unknown brand",
+          carModel: requestRow.car_model || "Unknown model",
+          carYear: requestRow.car_year || "-",
+          city: requestRow.city || "-",
+          damageType: formatDamageType(requestRow.damage_type || "other"),
+          description: requestRow.description || "No description provided.",
+          images: Array.isArray(requestRow.images) ? requestRow.images : [],
+          afterImages: Array.isArray(requestRow.after_images)
+            ? requestRow.after_images
+            : [],
+          status: requestRow.status || "open",
+          acceptedOfferId: requestRow.accepted_offer_id,
+        });
 
         const workshopOffers = await getOffersForWorkshop(authData.user.id);
 
@@ -181,7 +181,7 @@ export default function WorkshopRequestDetailsPage() {
               ...prev,
               status: newStatus,
             }
-          : prev
+          : prev,
       );
     } catch (error) {
       console.error("Failed to update job status:", error);
@@ -192,65 +192,65 @@ export default function WorkshopRequestDetailsPage() {
   };
 
   const handleAfterImagesUpload = async (
-  event: React.ChangeEvent<HTMLInputElement>
-) => {
-  if (!request) return;
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    if (!request) return;
 
-  const files = Array.from(event.target.files || []);
-  if (!files.length) return;
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
 
-  try {
-    setUploadingAfterImages(true);
+    try {
+      setUploadingAfterImages(true);
 
-    const fileToDataUrl = (file: File) =>
-      new Promise<{ name: string; dataUrl: string }>((resolve, reject) => {
-        const reader = new FileReader();
+      const fileToDataUrl = (file: File) =>
+        new Promise<RepairImage>((resolve, reject) => {
+          const reader = new FileReader();
 
-        reader.onload = () => {
-          resolve({
-            name: file.name,
-            dataUrl: String(reader.result || ""),
-          });
-        };
+          reader.onload = () => {
+            resolve({
+              name: file.name,
+              dataUrl: String(reader.result || ""),
+            });
+          };
 
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
 
-    const uploadedImages = await Promise.all(files.map(fileToDataUrl));
+      const uploadedImages = await Promise.all(files.map(fileToDataUrl));
 
-    const updatedAfterImages = [
-      ...(request.afterImages || []),
-      ...uploadedImages,
-    ];
+      const updatedAfterImages = [
+        ...(request.afterImages || []),
+        ...uploadedImages,
+      ];
 
-    const { error } = await supabase
-      .from("repair_requests")
-      .update({
-        after_images: updatedAfterImages,
-      })
-      .eq("id", request.id);
+      const { error } = await supabase
+        .from("repair_requests")
+        .update({
+          after_images: updatedAfterImages,
+        })
+        .eq("id", request.id);
 
-    if (error) {
-      throw error;
+      if (error) {
+        throw error;
+      }
+
+      setRequest((prev) =>
+        prev
+          ? {
+              ...prev,
+              afterImages: updatedAfterImages,
+            }
+          : prev,
+      );
+    } catch (error) {
+      console.error("Failed to upload after images:", error);
+      alert("Failed to upload after images.");
+    } finally {
+      setUploadingAfterImages(false);
+      event.target.value = "";
     }
-
-    setRequest((prev) =>
-      prev
-        ? {
-            ...prev,
-            afterImages: updatedAfterImages,
-          }
-        : prev
-    );
-  } catch (error) {
-    console.error("Failed to upload after images:", error);
-    alert("Failed to upload after images.");
-  } finally {
-    setUploadingAfterImages(false);
-    event.target.value = "";
-  }
-};
+  };
 
   if (!isLoaded) {
     return (
@@ -321,11 +321,24 @@ export default function WorkshopRequestDetailsPage() {
           <div className="space-y-6">
             <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5">
               {request.images.length > 0 ? (
-                <img
-                  src={request.images[0].dataUrl}
-                  alt={`${request.carBrand} ${request.carModel}`}
-                  className="h-[420px] w-full object-cover"
-                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const images = request.images
+                      .map((image) => image.url || image.dataUrl || "")
+                      .filter(Boolean);
+
+                    setSelectedImages(images);
+                    setLightboxIndex(0);
+                  }}
+                  className="block w-full overflow-hidden rounded-3xl"
+                >
+                  <img
+                    src={request.images[0].url || request.images[0].dataUrl}
+                    alt={`${request.carBrand} ${request.carModel}`}
+                    className="h-[420px] w-full object-cover"
+                  />
+                </button>
               ) : (
                 <div className="flex h-[420px] items-center justify-center bg-white/5 text-white/40">
                   No photo uploaded
@@ -342,7 +355,7 @@ export default function WorkshopRequestDetailsPage() {
                   {request.images.slice(1).map((image, index) => (
                     <img
                       key={`${image.name}-${index}`}
-                      src={image.dataUrl}
+                      src={image.url || image.dataUrl || ""}
                       alt={`Additional ${index + 1}`}
                       className="h-32 w-full rounded-2xl border border-white/10 object-cover"
                     />
@@ -352,70 +365,76 @@ export default function WorkshopRequestDetailsPage() {
             )}
 
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-      <p className="text-xs uppercase tracking-[0.18em] text-white/45">
-        Repair photos
-      </p>
-      <h3 className="mt-2 text-xl font-semibold text-white">
-        Before / After
-      </h3>
-    </div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.18em] text-white/45">
+                    Repair photos
+                  </p>
+                  <h3 className="mt-2 text-xl font-semibold text-white">
+                    Before / After
+                  </h3>
+                </div>
 
-    <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90">
-      {uploadingAfterImages ? "Uploading..." : "Upload after photos"}
-      <input
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handleAfterImagesUpload}
-        className="hidden"
-      />
-    </label>
-  </div>
+                <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90">
+                  {uploadingAfterImages
+                    ? "Uploading..."
+                    : "Upload after photos"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleAfterImagesUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
 
-  <div className="mt-6 grid gap-6 lg:grid-cols-2">
-    <div>
-      <p className="mb-3 text-sm font-medium text-white/65">Before</p>
-      {request.images.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3">
-          {request.images.map((image, index) => (
-            <img
-              key={`${image.name}-${index}`}
-              src={image.dataUrl}
-              alt={`Before ${index + 1}`}
-              className="h-32 w-full rounded-2xl border border-white/10 object-cover"
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="flex h-32 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-white/40">
-          No before photos
-        </div>
-      )}
-    </div>
+              <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                <div>
+                  <p className="mb-3 text-sm font-medium text-white/65">
+                    Before
+                  </p>
+                  {request.images.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {request.images.map((image, index) => (
+                        <img
+                          key={`${image.name}-${index}`}
+                          src={image.url || image.dataUrl || ""}
+                          alt={`Before ${index + 1}`}
+                          className="h-32 w-full rounded-2xl border border-white/10 object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-32 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-white/40">
+                      No before photos
+                    </div>
+                  )}
+                </div>
 
-    <div>
-      <p className="mb-3 text-sm font-medium text-white/65">After</p>
-      {request.afterImages.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3">
-          {request.afterImages.map((image, index) => (
-            <img
-              key={`${image.name}-${index}`}
-              src={image.dataUrl}
-              alt={`After ${index + 1}`}
-              className="h-32 w-full rounded-2xl border border-white/10 object-cover"
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 text-white/40">
-          No after photos yet
-        </div>
-      )}
-    </div>
-  </div>
-</div>
+                <div>
+                  <p className="mb-3 text-sm font-medium text-white/65">
+                    After
+                  </p>
+                  {request.afterImages.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {request.afterImages.map((image, index) => (
+                        <img
+                          key={`${image.name}-${index}`}
+                          src={image.url || image.dataUrl || ""}
+                          alt={`After ${index + 1}`}
+                          className="h-32 w-full rounded-2xl border border-white/10 object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/20 text-white/40">
+                      No after photos yet
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
               <p className="text-xs uppercase tracking-[0.18em] text-white/45">
@@ -478,7 +497,9 @@ export default function WorkshopRequestDetailsPage() {
                       <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
                         <p className="text-sm text-white/50">Offer status</p>
                         <p className="mt-1 text-lg font-semibold">
-                          {formatOfferStatus(acceptedOffer.status || "accepted")}
+                          {formatOfferStatus(
+                            acceptedOffer.status || "accepted",
+                          )}
                         </p>
                       </div>
                     </div>
@@ -533,10 +554,10 @@ export default function WorkshopRequestDetailsPage() {
                   {isInProgress
                     ? "Repair started"
                     : isCompleted
-                    ? "Job already completed"
-                    : updatingStatus
-                    ? "Updating..."
-                    : "Start repair"}
+                      ? "Job already completed"
+                      : updatingStatus
+                        ? "Updating..."
+                        : "Start repair"}
                 </button>
 
                 <button
@@ -547,8 +568,8 @@ export default function WorkshopRequestDetailsPage() {
                   {isCompleted
                     ? "Completed"
                     : updatingStatus
-                    ? "Updating..."
-                    : "Mark as completed"}
+                      ? "Updating..."
+                      : "Mark as completed"}
                 </button>
               </div>
             </div>
@@ -559,7 +580,10 @@ export default function WorkshopRequestDetailsPage() {
               </p>
 
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <InfoCard label="Car" value={`${request.carBrand} ${request.carModel}`} />
+                <InfoCard
+                  label="Car"
+                  value={`${request.carBrand} ${request.carModel}`}
+                />
                 <InfoCard label="Year" value={request.carYear} />
                 <InfoCard label="City" value={request.city} />
                 <InfoCard label="Damage type" value={request.damageType} />
@@ -568,6 +592,37 @@ export default function WorkshopRequestDetailsPage() {
           </div>
         </div>
       </div>
+
+      <Lightbox
+        open={selectedImages.length > 0}
+        close={() => setSelectedImages([])}
+        slides={selectedImages.map((src) => ({ src }))}
+        index={lightboxIndex}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
+      />
     </main>
   );
 }
@@ -587,11 +642,7 @@ function ProgressStep({
     <div className="flex items-start gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
       <div
         className={`mt-1 h-3.5 w-3.5 rounded-full ${
-          complete
-            ? "bg-green-400"
-            : active
-            ? "bg-yellow-300"
-            : "bg-white/15"
+          complete ? "bg-green-400" : active ? "bg-yellow-300" : "bg-white/15"
         }`}
       />
       <div>
