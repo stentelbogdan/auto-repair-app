@@ -29,7 +29,9 @@ export default function CustomerDashboardPage() {
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
 
-      setIsWorkshop(roles.includes("workshop"));
+      const activeRole = localStorage.getItem("activeRole");
+
+      setIsWorkshop(activeRole === "workshop" && roles.includes("workshop"));
     };
 
     loadRole();
@@ -47,7 +49,6 @@ export default function CustomerDashboardPage() {
     <main className="h-[calc(100dvh-86px)] overflow-hidden bg-[#101010] px-4 py-2 text-white">
       <div className="mx-auto max-w-5xl">
         <div className="mt-10 grid grid-cols-2 gap-3">
-
           {/* CLIENT */}
           {!isWorkshop && (
             <>
@@ -106,7 +107,6 @@ export default function CustomerDashboardPage() {
               />
             </>
           )}
-
         </div>
       </div>
     </main>
