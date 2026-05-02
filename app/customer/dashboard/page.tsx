@@ -14,9 +14,11 @@ export default function CustomerDashboardPage() {
 
   useEffect(() => {
     const loadRole = async () => {
-      const { data: authData } = await supabase.auth.getUser();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (!authData.user) {
+      if (!session) {
         router.push("/login");
         return;
       }
@@ -24,7 +26,7 @@ export default function CustomerDashboardPage() {
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", authData.user.id)
+        .eq("id", session.user.id)
         .single<ProfileRow>();
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
