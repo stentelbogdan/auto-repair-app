@@ -23,13 +23,15 @@ export default function CustomerDashboardPage() {
           </button>
 
           <button
-            onClick={() => router.push("/offers")}
+            onClick={() => router.push("/workshops")}
             className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
           >
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
               €
             </div>
-            <h2 className="text-base font-bold leading-tight">Daune disponibile</h2>
+            <h2 className="text-base font-bold leading-tight">
+              Daune disponibile
+            </h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
               Vezi cererile clienților
             </p>
@@ -42,7 +44,7 @@ export default function CustomerDashboardPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
               ✓
             </div>
-            ∏<h2 className="text-base font-bold leading-tight">Programări</h2>
+            <h2 className="text-base font-bold leading-tight">Programări</h2>
             <p className="mt-1 text-xs leading-snug text-black/55">
               Lucrări programate
             </p>
