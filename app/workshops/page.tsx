@@ -94,7 +94,7 @@ export default function WorkshopsPage() {
         damageType: formatDamageType(req.damage_type || "other"),
         description: req.description || "No description provided.",
         images: Array.isArray(req.images) ? req.images : [],
-        status: req.status || "Deschisă",
+        status: req.status || "open",
         postedAt: formatPostedAt(req.created_at),
       }));
 
@@ -126,7 +126,7 @@ export default function WorkshopsPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap gap-3">
           <Link
-            href="/workshops/Panou"
+            href="/customer/dashboard"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
             Panou
@@ -192,7 +192,7 @@ export default function WorkshopsPage() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {requests.map((request) => {
-              const isAcceptată = request.status === "Acceptată";
+              const isAcceptata = request.status === "matched";
 
               return (
                 <div
@@ -248,12 +248,12 @@ export default function WorkshopsPage() {
 
                       <span
                         className={`inline-block rounded-full border px-3 py-1 text-xs font-medium ${
-                          isAcceptată
+                          isAcceptata
                             ? "border-green-500/20 bg-green-500/15 text-green-300"
                             : "border-yellow-500/20 bg-yellow-500/15 text-yellow-300"
                         }`}
                       >
-                        {isAcceptată ? "Acceptată" : "Deschisă"}
+                        {isAcceptata ? "Acceptată" : "Deschisă"}
                       </span>
                     </div>
 
@@ -271,10 +271,10 @@ export default function WorkshopsPage() {
 
                       <button
                         onClick={() => router.push(`/workshops/${request.id}`)}
-                        disabled={isAcceptată}
+                        disabled={isAcceptata}
                         className="w-full rounded-lg bg-white px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {isAcceptată ? "Oferta închisă" : "Trimite ofertă"}
+                        {isAcceptata ? "Oferta închisă" : "Trimite ofertă"}
                       </button>
                     </div>
                   </div>
@@ -290,15 +290,15 @@ export default function WorkshopsPage() {
 
 function formatDamageType(value: string) {
   switch (value) {
-    case "Zgârietură":
+    case "scratch":
       return "Zgârietură";
-    case "Îndoitură":
+    case "dent":
       return "Îndoitură";
-    case "Bară avariată":
+    case "bumper":
       return "Bară avariată";
-    case "Problemă vopsea":
+    case "paint":
       return "Problemă vopsea";
-    case "Element crăpat":
+    case "cracked_part":
       return "Element crăpat";
     default:
       return "Altă daună";
