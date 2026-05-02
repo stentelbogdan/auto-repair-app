@@ -210,9 +210,10 @@ export default function LoginPage() {
               </label>
               <input
                 type="email"
-                name="username"
+                name="email"
                 autoComplete="username"
                 placeholder="email@exemplu.ro"
+                required
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -225,23 +226,15 @@ export default function LoginPage() {
               </label>
               <input
                 type="password"
-                name="current-password"
+                name="password"
                 autoComplete="current-password"
                 placeholder="Introdu parola"
+                required
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-
-            <input type="email" name="email" autoComplete="email" required />
-
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              required
-            />
 
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
