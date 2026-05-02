@@ -193,8 +193,8 @@ export default function LoginPage() {
               </label>
               <input
                 type="email"
-                name="email"
-                autoComplete="email"
+                name="username"
+                autoComplete="username"
                 placeholder="email@exemplu.ro"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 value={email}
@@ -208,7 +208,7 @@ export default function LoginPage() {
               </label>
               <input
                 type="password"
-                name="password"
+                name="current-password"
                 autoComplete="current-password"
                 placeholder="Introdu parola"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
