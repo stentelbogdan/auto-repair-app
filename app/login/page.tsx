@@ -20,14 +20,16 @@ export default function LoginPage() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data } = await supabase.auth.getUser();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (!data.user) return;
+      if (!session) return;
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", data.user.id)
+        .eq("id", session.user.id)
         .single<ProfileRow>();
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
@@ -63,10 +65,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const { data, error } = await supabase.auth.signUp({ email, password });
 
       if (error) {
         alert(error.message);
@@ -150,7 +149,6 @@ export default function LoginPage() {
       }
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
-
       goToDashboard(role, roles);
     } catch (err) {
       console.error("Login failed:", err);
