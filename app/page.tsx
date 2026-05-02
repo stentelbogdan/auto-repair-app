@@ -35,7 +35,7 @@ export default function LoginPage() {
       if (roles.includes("admin")) {
         router.push("/admin");
       } else if (roles.includes("workshop")) {
-        router.push("/workshops/dashboard");
+        router.push("/workshops/my-offers");
       } else {
         router.push("/customer/dashboard");
       }
@@ -100,7 +100,7 @@ export default function LoginPage() {
         alert("Account created and logged in successfully.");
 
         if (role === "workshop") {
-          router.push("/workshops/dashboard");
+          router.push("/workshops/my-offers");
         } else {
           router.push("/customer/dashboard");
         }
@@ -160,7 +160,7 @@ export default function LoginPage() {
       }
 
       if (roles.includes("workshop")) {
-        router.push("/workshops/dashboard");
+        router.push("/workshops/my-offers");
       } else {
         router.push("/customer/dashboard");
       }

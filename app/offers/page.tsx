@@ -92,7 +92,7 @@ export default function OffersPage() {
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 
         if (!roles.includes("customer")) {
-          router.push("/workshops/dashboard");
+          router.push("/workshops/my-offers");
           return;
         }
 
