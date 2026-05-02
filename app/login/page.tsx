@@ -160,6 +160,23 @@ export default function LoginPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!email) {
+      alert("Introdu emailul mai întâi.");
+      return;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "http://localhost:3000/reset-password",
+    });
+
+    if (error) {
+      alert(error.message);
+    } else {
+      alert("Verifică emailul pentru resetarea parolei.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#101010] px-4 py-6 text-white">
       <div className="mx-auto flex min-h-[85vh] max-w-md items-center justify-center">
@@ -217,6 +234,15 @@ export default function LoginPage() {
               />
             </div>
 
+            <input type="email" name="email" autoComplete="email" required />
+
+            <input
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              required
+            />
+
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
                 Tip cont
@@ -247,6 +273,14 @@ export default function LoginPage() {
                 className="rounded-2xl border border-black/10 py-4 font-semibold text-black transition active:scale-[0.99] disabled:opacity-60"
               >
                 {loading ? "Te rugăm așteaptă..." : "Creează cont"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                className="text-sm text-blue-500 underline"
+              >
+                Ai uitat parola?
               </button>
             </div>
           </form>
