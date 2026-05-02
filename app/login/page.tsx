@@ -180,7 +180,13 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <div className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleLogin();
+            }}
+            className="space-y-4"
+          >
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
                 Email
@@ -224,25 +230,26 @@ export default function LoginPage() {
                 <option value="workshop">Service auto</option>
               </select>
             </div>
-          </div>
 
-          <div className="mt-6 flex flex-col gap-3">
-            <button
-              onClick={handleLogin}
-              disabled={loading}
-              className="rounded-2xl bg-black py-4 font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
-            >
-              {loading ? "Te rugăm așteaptă..." : "Intră în cont"}
-            </button>
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-2xl bg-black py-4 font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
+              >
+                {loading ? "Te rugăm așteaptă..." : "Intră în cont"}
+              </button>
 
-            <button
-              onClick={handleSignUp}
-              disabled={loading}
-              className="rounded-2xl border border-black/10 py-4 font-semibold text-black transition active:scale-[0.99] disabled:opacity-60"
-            >
-              {loading ? "Te rugăm așteaptă..." : "Creează cont"}
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={handleSignUp}
+                disabled={loading}
+                className="rounded-2xl border border-black/10 py-4 font-semibold text-black transition active:scale-[0.99] disabled:opacity-60"
+              >
+                {loading ? "Te rugăm așteaptă..." : "Creează cont"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </main>
