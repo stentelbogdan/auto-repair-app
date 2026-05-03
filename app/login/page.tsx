@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 
-
 type UserRole = "customer" | "workshop";
 
 type ProfileRow = {

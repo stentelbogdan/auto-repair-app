@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth-provider";
 
 type ProfileRow = {
   role: string[] | null;
@@ -10,6 +11,8 @@ type ProfileRow = {
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
+  const { activeRole } = useAuth();
+
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -31,17 +34,15 @@ export default function CustomerDashboardPage() {
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
 
-      const activeRole = localStorage.getItem("activeRole");
-
       setIsWorkshop(activeRole === "workshop" && roles.includes("workshop"));
     };
 
     loadRole();
-  }, [router]);
+  }, [router, activeRole]);
 
   if (isWorkshop === null) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-black text-white">
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
         Se încarcă...
       </main>
     );
@@ -51,7 +52,6 @@ export default function CustomerDashboardPage() {
     <main className="h-[calc(100dvh-86px)] overflow-hidden bg-[#101010] px-4 py-2 text-white">
       <div className="mx-auto max-w-5xl">
         <div className="mt-10 grid grid-cols-2 gap-3">
-          {/* CLIENT */}
           {!isWorkshop && (
             <>
               <Card
@@ -84,7 +84,6 @@ export default function CustomerDashboardPage() {
             </>
           )}
 
-          {/* SERVICE */}
           {isWorkshop && (
             <>
               <Card
@@ -115,7 +114,6 @@ export default function CustomerDashboardPage() {
   );
 }
 
-/* COMPONENT REUTILIZABIL */
 function Card({
   title,
   desc,
