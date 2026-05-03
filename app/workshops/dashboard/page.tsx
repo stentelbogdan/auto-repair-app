@@ -39,17 +39,11 @@ export default function WorkshopDashboardPage() {
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", authData.user.id)
           .single<ProfileRow>();
-
-        if (profileError) {
-          console.error("Failed to load profile:", profileError);
-          router.push("/");
-          return;
-        }
 
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 
@@ -61,7 +55,6 @@ export default function WorkshopDashboardPage() {
         setAuthorized(true);
         await loadStats(authData.user.id);
       } catch (error) {
-        console.error("Access check failed:", error);
         router.push("/login");
       } finally {
         setCheckingAccess(false);
@@ -107,8 +100,7 @@ export default function WorkshopDashboardPage() {
               status,
               accepted_offer_id
             )
-          `,
-            { count: "exact", head: false },
+          `
           )
           .eq("workshop_id", userId)
           .eq("repair_requests.status", "matched"),
@@ -129,8 +121,7 @@ export default function WorkshopDashboardPage() {
         pendingOffers: pendingOffersResult.count || 0,
         wonJobs: wonCount,
       });
-    } catch (error) {
-      console.error("Failed to load workshop stats:", error);
+    } catch {
       setStats({
         openRequests: 0,
         myOffers: 0,
@@ -144,49 +135,40 @@ export default function WorkshopDashboardPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-black px-6 py-10 text-white">
-        <div className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center">
-          <p className="text-white/60">Se verifică accesul...</p>
-        </div>
+      <main className="min-h-screen bg-black flex items-center justify-center text-white">
+        Se verifică accesul...
       </main>
     );
   }
 
-  if (!authorized) {
-    return null;
-  }
+  if (!authorized) return null;
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
       <div className="mx-auto max-w-7xl">
-        <section className="mb-6 text-center">
+
+        {/* HEADER */}
+        <section className="mb-8 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
             PANOU SERVICE
           </p>
 
           <div className="mt-6 grid grid-cols-3 gap-3">
-            <MiniStat
-              label="Daune"
-              value={loadingStats ? "..." : stats.openRequests}
-            />
-            <MiniStat
-              label="Oferte"
-              value={loadingStats ? "..." : stats.myOffers}
-            />
-            <MiniStat
-              label="Câștigate"
-              value={loadingStats ? "..." : stats.wonJobs}
-            />
+            <MiniStat label="Daune" value={stats.openRequests} />
+            <MiniStat label="Oferte" value={stats.myOffers} />
+            <MiniStat label="Câștigate" value={stats.wonJobs} />
           </div>
         </section>
 
+        {/* CARDS */}
         <section className="grid grid-cols-2 gap-4">
+
           <DashboardCard
             href="/workshops"
             icon="🔎"
             title="DAUNE DISPONIBILE"
             description="Cererile clienților"
-            value={loadingStats ? "..." : stats.openRequests}
+            value={stats.openRequests}
           />
 
           <DashboardCard
@@ -194,27 +176,38 @@ export default function WorkshopDashboardPage() {
             icon="€"
             title="OFERTELE TALE"
             description="Oferte trimise"
-            value={loadingStats ? "..." : stats.myOffers}
+            value={stats.myOffers}
           />
 
+          {/* FULL WIDTH */}
           <DashboardCard
             href="/workshops/won-jobs"
             icon="✓"
             title="LUCRĂRI CÂȘTIGATE"
             description="Joburi acceptate"
-            value={loadingStats ? "..." : stats.wonJobs}
+            value={stats.wonJobs}
+            fullWidth
           />
+
         </section>
       </div>
     </main>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string | number }) {
+/* ---------------- COMPONENTS ---------------- */
+
+function MiniStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-center">
+    <div className="rounded-2xl border border-white/15 bg-white/[0.03] px-4 py-4 text-center">
       <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="mt-1 text-[11px] text-white/45">{label}</p>
+      <p className="mt-1 text-[11px] text-white/60">{label}</p>
     </div>
   );
 }
@@ -225,19 +218,23 @@ function DashboardCard({
   title,
   description,
   value,
+  fullWidth,
 }: {
   href: string;
   icon: string;
   title: string;
   description: string;
-  value: string | number;
+  value: number;
+  fullWidth?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="relative flex min-h-[128px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-3 py-5 text-center text-black shadow-xl transition active:scale-[0.98]"
+      className={`relative flex min-h-[140px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition active:scale-[0.98] ${
+        fullWidth ? "col-span-2" : ""
+      }`}
     >
-      <div className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-black px-2 text-xs font-bold text-white">
+      <div className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-black shadow-md px-2 text-xs font-bold text-white">
         {value}
       </div>
 
@@ -245,11 +242,11 @@ function DashboardCard({
         {icon}
       </div>
 
-      <h2 className="mt-4 text-[18px] font-black leading-tight tracking-tight">
+      <h2 className="mt-4 text-[18px] font-black leading-tight">
         {title}
       </h2>
 
-      <p className="mt-2 text-[13px] leading-tight text-black/50">
+      <p className="mt-2 text-[13px] text-black/50">
         {description}
       </p>
     </Link>
