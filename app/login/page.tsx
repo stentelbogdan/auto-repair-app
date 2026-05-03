@@ -50,6 +50,8 @@ export default function LoginPage() {
   const goToDashboard = (selectedRole: UserRole, roles: string[]) => {
     setActiveRole(selectedRole);
 
+    localStorage.setItem("activeRole", selectedRole); // 🔥 IMPORTANT
+
     if (roles.includes("admin")) {
       router.push("/admin");
       return;

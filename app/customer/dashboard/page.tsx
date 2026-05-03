@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { useAuth } from "@/lib/auth-provider";
 
 type ProfileRow = {
   role: string[] | null;
@@ -11,8 +10,6 @@ type ProfileRow = {
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
-  const { activeRole } = useAuth();
-
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -33,12 +30,13 @@ export default function CustomerDashboardPage() {
         .single<ProfileRow>();
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
+      const savedRole = localStorage.getItem("activeRole");
 
-      setIsWorkshop(activeRole === "workshop" && roles.includes("workshop"));
+      setIsWorkshop(savedRole === "workshop" && roles.includes("workshop"));
     };
 
     loadRole();
-  }, [router, activeRole]);
+  }, [router]);
 
   if (isWorkshop === null) {
     return (
@@ -54,58 +52,18 @@ export default function CustomerDashboardPage() {
         <div className="mt-10 grid grid-cols-2 gap-3">
           {!isWorkshop && (
             <>
-              <Card
-                title="Postează"
-                desc="Încarcă poze și descriere"
-                icon="+"
-                onClick={() => router.push("/post-job")}
-              />
-
-              <Card
-                title="Postările tale"
-                desc="Toate daunele tale"
-                icon="📄"
-                onClick={() => router.push("/customer/my-requests")}
-              />
-
-              <Card
-                title="Oferte primite"
-                desc="Compară ofertele"
-                icon="€"
-                onClick={() => router.push("/offers")}
-              />
-
-              <Card
-                title="Programări"
-                desc="Lucrări programate"
-                icon="✓"
-                onClick={() => router.push("/customer/my-jobs")}
-              />
+              <Card title="Postează" desc="Încarcă poze și descriere" icon="+" onClick={() => router.push("/post-job")} />
+              <Card title="Postările tale" desc="Toate daunele tale" icon="📄" onClick={() => router.push("/customer/my-requests")} />
+              <Card title="Oferte primite" desc="Compară ofertele" icon="€" onClick={() => router.push("/offers")} />
+              <Card title="Programări" desc="Lucrări programate" icon="✓" onClick={() => router.push("/customer/my-jobs")} />
             </>
           )}
 
           {isWorkshop && (
             <>
-              <Card
-                title="Daune disponibile"
-                desc="Vezi cererile clienților"
-                icon="€"
-                onClick={() => router.push("/workshops")}
-              />
-
-              <Card
-                title="Ofertele tale"
-                desc="Toate ofertele trimise"
-                icon="📤"
-                onClick={() => router.push("/workshops/my-offers")}
-              />
-
-              <Card
-                title="Lucrări câștigate"
-                desc="Joburi acceptate"
-                icon="🏆"
-                onClick={() => router.push("/workshops/won-jobs")}
-              />
+              <Card title="Daune disponibile" desc="Vezi cererile clienților" icon="€" onClick={() => router.push("/workshops")} />
+              <Card title="Ofertele tale" desc="Toate ofertele trimise" icon="📤" onClick={() => router.push("/workshops/my-offers")} />
+              <Card title="Lucrări câștigate" desc="Joburi acceptate" icon="🏆" onClick={() => router.push("/workshops/won-jobs")} />
             </>
           )}
         </div>
