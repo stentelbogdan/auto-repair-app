@@ -144,7 +144,7 @@ export default function WorkshopDashboardPage() {
   if (!authorized) return null;
 
   return (
-    <main className="bg-black px-4 pb-4 pt-4 text-white">
+    <main className="min-h-[calc(100dvh-236px)] bg-black px-4 pb-6 pt-4 text-white overflow-hidden">
       <div className="mx-auto max-w-7xl">
 
         {/* HEADER */}
@@ -230,7 +230,7 @@ function DashboardCard({
   return (
     <Link
       href={href}
-      className={`relative flex min-h-[120px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition active:scale-[0.98] ${
+      className={`relative flex min-h-[110px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition active:scale-[0.98] ${
         fullWidth ? "col-span-2" : ""
       }`}
     >
@@ -238,7 +238,7 @@ function DashboardCard({
         {value}
       </div>
 
-      <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-bold">
+      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-bold">
         {icon}
       </div>
 
