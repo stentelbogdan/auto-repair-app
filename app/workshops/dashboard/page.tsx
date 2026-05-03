@@ -164,15 +164,6 @@ export default function WorkshopDashboardPage() {
             PANOU SERVICE
           </p>
 
-          <h1 className="mt-3 text-2xl font-bold tracking-tight md:text-4xl">
-            Gestionează lucrările service-ului
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">
-            Vezi daunele disponibile, urmărește ofertele trimise și continuă
-            lucrările câștigate.
-          </p>
-
           <div className="mt-6 grid grid-cols-3 gap-3">
             <MiniStat
               label="Daune"
