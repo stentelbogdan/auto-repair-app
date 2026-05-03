@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { useAuth } from "@/lib/auth-provider";
+
 
 type UserRole = "customer" | "workshop";
 
@@ -13,6 +15,7 @@ type ProfileRow = {
 export default function LoginPage() {
   const router = useRouter();
 
+  const { setActiveRole } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("customer");
@@ -46,7 +49,7 @@ export default function LoginPage() {
   }, [router]);
 
   const goToDashboard = (selectedRole: UserRole, roles: string[]) => {
-    localStorage.setItem("activeRole", selectedRole);
+    setActiveRole(selectedRole);
 
     if (roles.includes("admin")) {
       router.push("/admin");
