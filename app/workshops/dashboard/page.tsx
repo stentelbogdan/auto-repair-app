@@ -157,57 +157,57 @@ export default function WorkshopDashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
-      <div className="mx-auto max-w-7xl">
-        <section className="mb-8 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-2xl md:p-7">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
-            PANOU SERVICE
-          </p>
+  <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <div className="mx-auto max-w-7xl">
+      <section className="mb-6 text-center">
+        <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
+          PANOU SERVICE
+        </p>
 
-          <div className="mt-6 grid grid-cols-3 gap-3">
-            <MiniStat
-              label="Daune"
-              value={loadingStats ? "..." : stats.openRequests}
-            />
-            <MiniStat
-              label="Oferte"
-              value={loadingStats ? "..." : stats.myOffers}
-            />
-            <MiniStat
-              label="Câștigate"
-              value={loadingStats ? "..." : stats.wonJobs}
-            />
-          </div>
-        </section>
-
-        <section className="grid grid-cols-2 gap-4">
-          <DashboardCard
-            href="/workshops"
-            icon="🔎"
-            title="DAUNE DISPONIBILE"
-            description="Cererile clienților"
+        <div className="mt-6 grid grid-cols-3 gap-3">
+          <MiniStat
+            label="Daune"
             value={loadingStats ? "..." : stats.openRequests}
           />
-
-          <DashboardCard
-            href="/workshops/my-offers"
-            icon="€"
-            title="OFERTELE TALE"
-            description="Oferte trimise"
+          <MiniStat
+            label="Oferte"
             value={loadingStats ? "..." : stats.myOffers}
           />
-
-          <DashboardCard
-            href="/workshops/won-jobs"
-            icon="✓"
-            title="LUCRĂRI CÂȘTIGATE"
-            description="Joburi acceptate"
+          <MiniStat
+            label="Câștigate"
             value={loadingStats ? "..." : stats.wonJobs}
           />
-        </section>
-      </div>
-    </main>
-  );
+        </div>
+      </section>
+
+      <section className="grid grid-cols-2 gap-4">
+        <DashboardCard
+          href="/workshops"
+          icon="🔎"
+          title="DAUNE DISPONIBILE"
+          description="Cererile clienților"
+          value={loadingStats ? "..." : stats.openRequests}
+        />
+
+        <DashboardCard
+          href="/workshops/my-offers"
+          icon="€"
+          title="OFERTELE TALE"
+          description="Oferte trimise"
+          value={loadingStats ? "..." : stats.myOffers}
+        />
+
+        <DashboardCard
+          href="/workshops/won-jobs"
+          icon="✓"
+          title="LUCRĂRI CÂȘTIGATE"
+          description="Joburi acceptate"
+          value={loadingStats ? "..." : stats.wonJobs}
+        />
+      </section>
+    </div>
+  </main>
+);
 }
 
 function MiniStat({ label, value }: { label: string; value: string | number }) {
