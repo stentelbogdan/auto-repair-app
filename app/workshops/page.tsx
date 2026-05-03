@@ -183,7 +183,7 @@ export default function WorkshopsPage() {
             </p>
 
             <button
-              onClick={() => router.push("/customer/dashboard")}
+              onClick={() => router.push("/workshops/dashboard")}
               className="mt-6 rounded-lg bg-white px-6 py-3 font-semibold text-black"
             >
               Înapoi la panou
