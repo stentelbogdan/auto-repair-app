@@ -9,8 +9,10 @@ export default function AppNavbar() {
   const router = useRouter();
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<"client" | "workshop">("client");
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const isWorkshopMode = pathname.startsWith("/workshops");
+  const isClientMode = pathname.startsWith("/customer");
 
   useEffect(() => {
     const loadUser = async () => {
@@ -59,13 +61,11 @@ export default function AppNavbar() {
   };
 
   const goClient = () => {
-    setActiveMode("client");
-    router.push("/dashboard");
+    router.push("/customer/dashboard");
   };
 
   const goWorkshop = () => {
-    setActiveMode("workshop");
-    router.push("/workshops");
+    router.push("/workshops/dashboard");
   };
 
   return (
@@ -78,7 +78,7 @@ export default function AppNavbar() {
 
           <div className="min-w-0 flex-1 text-center">
             <p className="text-[10px] uppercase tracking-[0.24em] text-orange-400">
-              {activeMode === "client" ? "PROFIL CLIENT" : "PROFIL SERVICE"}
+              {isWorkshopMode ? "PROFIL SERVICE" : "PROFIL CLIENT"}
             </p>
 
             <h1 className="mt-1 truncate text-base font-bold leading-tight text-white">
@@ -89,7 +89,7 @@ export default function AppNavbar() {
               <button
                 onClick={goClient}
                 className={`rounded-full px-4 py-1.5 text-[11px] font-semibold transition ${
-                  activeMode === "client"
+                  isClientMode
                     ? "bg-white text-black shadow"
                     : "text-white/55 hover:text-white"
                 }`}
@@ -100,7 +100,7 @@ export default function AppNavbar() {
               <button
                 onClick={goWorkshop}
                 className={`rounded-full px-4 py-1.5 text-[11px] font-semibold transition ${
-                  activeMode === "workshop"
+                  isWorkshopMode
                     ? "bg-orange-400 text-black shadow"
                     : "text-white/55 hover:text-white"
                 }`}

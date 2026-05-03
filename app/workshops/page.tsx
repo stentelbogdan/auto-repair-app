@@ -126,7 +126,7 @@ export default function WorkshopsPage() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-wrap gap-3">
           <Link
-            href="/customer/dashboard"
+            href="/workshops/dashboard"
             className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
           >
             Panou
