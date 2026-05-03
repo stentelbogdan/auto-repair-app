@@ -108,7 +108,7 @@ export default function WorkshopDashboardPage() {
               accepted_offer_id
             )
           `,
-            { count: "exact", head: false }
+            { count: "exact", head: false },
           )
           .eq("workshop_id", userId)
           .eq("repair_requests.status", "matched"),
@@ -189,12 +189,12 @@ export default function WorkshopDashboardPage() {
           </div>
         </section>
 
-        <section className="grid gap-5 md:grid-cols-3">
+        <section className="grid grid-cols-2 gap-4">
           <DashboardCard
             href="/workshops"
             icon="🔎"
             title="DAUNE DISPONIBILE"
-            description="Vezi cererile deschise și trimite o ofertă clientului."
+            description="Cererile clienților"
             value={loadingStats ? "..." : stats.openRequests}
           />
 
@@ -202,7 +202,7 @@ export default function WorkshopDashboardPage() {
             href="/workshops/my-offers"
             icon="€"
             title="OFERTELE TALE"
-            description="Urmărește ofertele trimise și statusul lor."
+            description="Oferte trimise"
             value={loadingStats ? "..." : stats.myOffers}
           />
 
@@ -210,7 +210,7 @@ export default function WorkshopDashboardPage() {
             href="/workshops/won-jobs"
             icon="✓"
             title="LUCRĂRI CÂȘTIGATE"
-            description="Lucrările acceptate de clienți, gata de programare."
+            description="Joburi acceptate"
             value={loadingStats ? "..." : stats.wonJobs}
           />
         </section>
@@ -219,13 +219,7 @@ export default function WorkshopDashboardPage() {
   );
 }
 
-function MiniStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-center">
       <p className="text-2xl font-bold text-white">{value}</p>
@@ -250,25 +244,23 @@ function DashboardCard({
   return (
     <Link
       href={href}
-      className="group rounded-[2rem] bg-white p-6 text-black shadow-xl transition active:scale-[0.98] md:p-7"
+      className="relative flex min-h-[128px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-3 py-5 text-center text-black shadow-xl transition active:scale-[0.98]"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-bold">
-          {icon}
-        </div>
-
-        <div className="rounded-full bg-black px-3 py-1 text-sm font-bold text-white">
-          {value}
-        </div>
+      <div className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-black px-2 text-xs font-bold text-white">
+        {value}
       </div>
 
-      <h2 className="mt-7 text-2xl font-black tracking-tight">{title}</h2>
-
-      <p className="mt-3 text-sm leading-6 text-black/50">{description}</p>
-
-      <div className="mt-6 text-sm font-bold text-black/70 transition group-hover:text-black">
-        Deschide →
+      <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-bold">
+        {icon}
       </div>
+
+      <h2 className="mt-4 text-[18px] font-black leading-tight tracking-tight">
+        {title}
+      </h2>
+
+      <p className="mt-2 text-[13px] leading-tight text-black/50">
+        {description}
+      </p>
     </Link>
   );
 }
