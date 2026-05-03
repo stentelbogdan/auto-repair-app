@@ -60,12 +60,12 @@ export default function AppNavbar() {
 
   const goClient = () => {
     setActiveMode("client");
-    router.push("/customer/dashboard");
+    router.push("/dashboard");
   };
 
   const goWorkshop = () => {
     setActiveMode("workshop");
-    router.push("/workshops/dashboard");
+    router.push("/workshops");
   };
 
   return (

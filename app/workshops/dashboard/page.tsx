@@ -146,7 +146,7 @@ export default function WorkshopDashboardPage() {
     return (
       <main className="min-h-screen bg-black px-6 py-10 text-white">
         <div className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center">
-          <p className="text-white/70">Checking access...</p>
+          <p className="text-white/60">Se verifică accesul...</p>
         </div>
       </main>
     );
@@ -157,124 +157,69 @@ export default function WorkshopDashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
+    <main className="min-h-screen bg-black px-4 py-8 text-white">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Link
-            href="/workshops/dashboard"
-            className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/workshops"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Browse requests
-          </Link>
-          <Link
-            href="/workshops/my-offers"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            My offers
-          </Link>
-          <Link
-            href="/workshops/won-jobs"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Won jobs
-          </Link>
-        </div>
-
-        <div className="mb-10">
-          <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-            Workshop dashboard
+        <section className="mb-8 rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 shadow-2xl md:p-7">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
+            PANOU SERVICE
           </p>
-          <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-            Manage your workshop
+
+          <h1 className="mt-3 text-2xl font-bold tracking-tight md:text-4xl">
+            Gestionează lucrările service-ului
           </h1>
-          <p className="mt-3 max-w-2xl text-white/70">
-            Browse jobs, track offers, and manage the work you win.
-          </p>
-        </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            label="Open requests"
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">
+            Vezi daunele disponibile, urmărește ofertele trimise și continuă
+            lucrările câștigate.
+          </p>
+
+          <div className="mt-6 grid grid-cols-3 gap-3">
+            <MiniStat
+              label="Daune"
+              value={loadingStats ? "..." : stats.openRequests}
+            />
+            <MiniStat
+              label="Oferte"
+              value={loadingStats ? "..." : stats.myOffers}
+            />
+            <MiniStat
+              label="Câștigate"
+              value={loadingStats ? "..." : stats.wonJobs}
+            />
+          </div>
+        </section>
+
+        <section className="grid gap-5 md:grid-cols-3">
+          <DashboardCard
+            href="/workshops"
+            icon="🔎"
+            title="DAUNE DISPONIBILE"
+            description="Vezi cererile deschise și trimite o ofertă clientului."
             value={loadingStats ? "..." : stats.openRequests}
           />
-          <StatCard
-            label="My offers"
+
+          <DashboardCard
+            href="/workshops/my-offers"
+            icon="€"
+            title="OFERTELE TALE"
+            description="Urmărește ofertele trimise și statusul lor."
             value={loadingStats ? "..." : stats.myOffers}
           />
-          <StatCard
-            label="Pending offers"
-            value={loadingStats ? "..." : stats.pendingOffers}
-          />
-          <StatCard
-            label="Won jobs"
+
+          <DashboardCard
+            href="/workshops/won-jobs"
+            icon="✓"
+            title="LUCRĂRI CÂȘTIGATE"
+            description="Lucrările acceptate de clienți, gata de programare."
             value={loadingStats ? "..." : stats.wonJobs}
           />
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          <Link
-            href="/workshops"
-            className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:bg-white/10"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold">Browse requests</h2>
-                <p className="mt-3 text-sm leading-6 text-white/70">
-                  View all open repair requests and send offers to customers.
-                </p>
-              </div>
-              <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-black">
-                {loadingStats ? "..." : stats.openRequests}
-              </span>
-            </div>
-          </Link>
-
-          <Link
-            href="/workshops/my-offers"
-            className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:bg-white/10"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold">My offers</h2>
-                <p className="mt-3 text-sm leading-6 text-white/70">
-                  Track pending offers and see all offers sent by your workshop.
-                </p>
-              </div>
-              <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-black">
-                {loadingStats ? "..." : stats.myOffers}
-              </span>
-            </div>
-          </Link>
-
-          <Link
-            href="/workshops/won-jobs"
-            className="rounded-2xl border border-white/10 bg-white/5 p-6 transition hover:bg-white/10"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold">Won jobs</h2>
-                <p className="mt-3 text-sm leading-6 text-white/70">
-                  Open accepted jobs and continue the repair workflow.
-                </p>
-              </div>
-              <span className="rounded-xl bg-white px-3 py-2 text-sm font-bold text-black">
-                {loadingStats ? "..." : stats.wonJobs}
-              </span>
-            </div>
-          </Link>
-        </div>
+        </section>
       </div>
     </main>
   );
 }
 
-function StatCard({
+function MiniStat({
   label,
   value,
 }: {
@@ -282,9 +227,48 @@ function StatCard({
   value: string | number;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <p className="text-sm text-white/50">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-white">{value}</p>
+    <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-center">
+      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="mt-1 text-[11px] text-white/45">{label}</p>
     </div>
+  );
+}
+
+function DashboardCard({
+  href,
+  icon,
+  title,
+  description,
+  value,
+}: {
+  href: string;
+  icon: string;
+  title: string;
+  description: string;
+  value: string | number;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-[2rem] bg-white p-6 text-black shadow-xl transition active:scale-[0.98] md:p-7"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl font-bold">
+          {icon}
+        </div>
+
+        <div className="rounded-full bg-black px-3 py-1 text-sm font-bold text-white">
+          {value}
+        </div>
+      </div>
+
+      <h2 className="mt-7 text-2xl font-black tracking-tight">{title}</h2>
+
+      <p className="mt-3 text-sm leading-6 text-black/50">{description}</p>
+
+      <div className="mt-6 text-sm font-bold text-black/70 transition group-hover:text-black">
+        Deschide →
+      </div>
+    </Link>
   );
 }
