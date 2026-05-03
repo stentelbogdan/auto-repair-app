@@ -144,11 +144,11 @@ export default function WorkshopDashboardPage() {
   if (!authorized) return null;
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <main className="bg-black px-4 pb-4 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
 
         {/* HEADER */}
-        <section className="mb-8 text-center">
+        <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
             PANOU SERVICE
           </p>
@@ -230,7 +230,7 @@ function DashboardCard({
   return (
     <Link
       href={href}
-      className={`relative flex min-h-[140px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition active:scale-[0.98] ${
+      className={`relative flex min-h-[120px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition active:scale-[0.98] ${
         fullWidth ? "col-span-2" : ""
       }`}
     >
