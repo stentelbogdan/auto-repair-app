@@ -85,7 +85,7 @@ export default function WorkshopDashboardPage() {
                 status,
                 accepted_offer_id
               )
-            `
+            `,
             )
             .eq("workshop_id", userId)
             .eq("repair_requests.status", "matched"),
@@ -126,18 +126,18 @@ export default function WorkshopDashboardPage() {
 
   return (
     <main className="h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-4 text-white">
-      <div className="mx-auto max-w-md">
+      <div className="mx-auto max-w-5xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
             PANOU SERVICE
           </p>
         </section>
 
-        <section className="grid grid-cols-2 gap-4">
+        <section className="mt-10 grid grid-cols-2 gap-3">
           <DashboardCard
             href="/workshops"
             icon="🔎"
-            title="DAUNE DISPONIBILE"
+            title="Daune disponibile"
             description="Cererile clienților"
             value={stats.openRequests}
           />
@@ -145,7 +145,7 @@ export default function WorkshopDashboardPage() {
           <DashboardCard
             href="/workshops/my-offers"
             icon="€"
-            title="OFERTELE TALE"
+            title="Ofertele tale"
             description="Oferte trimise"
             value={stats.myOffers}
           />
@@ -153,7 +153,7 @@ export default function WorkshopDashboardPage() {
           <DashboardCard
             href="/workshops/won-jobs"
             icon="✓"
-            title="LUCRĂRI CÂȘTIGATE"
+            title="Lucrări câștigate"
             description="Joburi acceptate"
             value={stats.wonJobs}
           />
@@ -161,7 +161,7 @@ export default function WorkshopDashboardPage() {
           <DashboardCard
             href="/workshops"
             icon="↗"
-            title="SERVICE AUTO"
+            title="Service auto"
             description="Panou service"
             value="AR"
           />
@@ -187,21 +187,19 @@ function DashboardCard({
   return (
     <Link
       href={href}
-      className="relative flex min-h-[140px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition duration-200 active:scale-[0.97]"
+      className="relative rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
     >
       <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
         {value}
       </div>
 
-      <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#EAD7B7] text-3xl">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
         {icon}
       </div>
 
-      <h2 className="mt-4 text-[17px] font-extrabold leading-tight tracking-tight">
-        {title}
-      </h2>
+      <h2 className="text-base font-bold leading-tight">{title}</h2>
 
-      <p className="mt-2 text-[13px] text-black/50">{description}</p>
+      <p className="mt-1 text-xs leading-snug text-black/55">{description}</p>
     </Link>
   );
 }
