@@ -85,7 +85,7 @@ export default function WorkshopDashboardPage() {
                 status,
                 accepted_offer_id
               )
-            `,
+            `
             )
             .eq("workshop_id", userId)
             .eq("repair_requests.status", "matched"),
@@ -116,7 +116,7 @@ export default function WorkshopDashboardPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center text-white">
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
         Se verifică accesul...
       </main>
     );
@@ -156,7 +156,14 @@ export default function WorkshopDashboardPage() {
             title="LUCRĂRI CÂȘTIGATE"
             description="Joburi acceptate"
             value={stats.wonJobs}
-            full
+          />
+
+          <DashboardCard
+            href="/workshops"
+            icon="↗"
+            title="SERVICE AUTO"
+            description="Panou service"
+            value="AR"
           />
         </section>
       </div>
@@ -170,27 +177,23 @@ function DashboardCard({
   title,
   description,
   value,
-  full,
 }: {
   href: string;
   icon: string;
   title: string;
   description: string;
   value: string | number;
-  full?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className={`relative flex min-h-[128px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition duration-200 active:scale-[0.97] ${
-        full ? "col-span-2" : ""
-      }`}
+      className="relative flex min-h-[140px] flex-col items-center justify-center rounded-[1.7rem] bg-white px-4 py-6 text-center text-black shadow-xl transition duration-200 active:scale-[0.97]"
     >
       <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
         {value}
       </div>
 
-      <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#EAD7B7] text-3xl">
+      <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-[#EAD7B7] text-3xl">
         {icon}
       </div>
 
