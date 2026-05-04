@@ -156,14 +156,7 @@ export default function WorkshopDashboardPage() {
             title="Lucrări câștigate"
             description="Joburi acceptate"
             value={stats.wonJobs}
-          />
-
-          <DashboardCard
-            href="/workshops"
-            icon="↗"
-            title="Service auto"
-            description="Panou service"
-            value="AR"
+            centered
           />
         </section>
       </div>
@@ -177,29 +170,33 @@ function DashboardCard({
   title,
   description,
   value,
+  centered,
 }: {
   href: string;
   icon: string;
   title: string;
   description: string;
   value: string | number;
+  centered?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="relative rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
+      className={`${centered ? "col-span-2 flex justify-center" : ""}`}
     >
-      <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
-        {value}
+      <div className="relative w-full max-w-[180px] rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]">
+        <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
+          {value}
+        </div>
+
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
+          {icon}
+        </div>
+
+        <h2 className="text-base font-bold leading-tight">{title}</h2>
+
+        <p className="mt-1 text-xs leading-snug text-black/55">{description}</p>
       </div>
-
-      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
-        {icon}
-      </div>
-
-      <h2 className="text-base font-bold leading-tight">{title}</h2>
-
-      <p className="mt-1 text-xs leading-snug text-black/55">{description}</p>
     </Link>
   );
 }
