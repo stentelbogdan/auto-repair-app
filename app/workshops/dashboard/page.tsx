@@ -144,7 +144,7 @@ export default function WorkshopDashboardPage() {
   if (!authorized) return null;
 
   return (
-    <main className="min-h-[100svh] bg-black px-4 pb-6 pt-4 text-white">
+    <main className="h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
         {/* HEADER */}
         <section className="mb-5 text-center">

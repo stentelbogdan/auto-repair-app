@@ -27,10 +27,10 @@ export default function RootLayout({
       lang="ro"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-screen bg-black text-white overflow-hidden">
+      <body className="bg-black text-white">
         <AuthProvider>
           <AppNavbar />
-          <main className="h-full overflow-y-auto">{children}</main>
+          <main className="flex-1 bg-black">{children}</main>
         </AuthProvider>
       </body>
     </html>
