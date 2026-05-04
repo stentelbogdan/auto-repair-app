@@ -100,7 +100,7 @@ export default function WorkshopDashboardPage() {
               status,
               accepted_offer_id
             )
-          `
+          `,
           )
           .eq("workshop_id", userId)
           .eq("repair_requests.status", "matched"),
@@ -144,9 +144,8 @@ export default function WorkshopDashboardPage() {
   if (!authorized) return null;
 
   return (
-    <main className="min-h-[calc(100dvh-236px)] bg-black px-4 pb-6 pt-4 text-white overflow-hidden">
+    <main className="min-h-[100svh] bg-black px-4 pb-6 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
-
         {/* HEADER */}
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
@@ -162,7 +161,6 @@ export default function WorkshopDashboardPage() {
 
         {/* CARDS */}
         <section className="grid grid-cols-2 gap-4">
-
           <DashboardCard
             href="/workshops"
             icon="🔎"
@@ -188,7 +186,6 @@ export default function WorkshopDashboardPage() {
             value={stats.wonJobs}
             fullWidth
           />
-
         </section>
       </div>
     </main>
@@ -197,13 +194,7 @@ export default function WorkshopDashboardPage() {
 
 /* ---------------- COMPONENTS ---------------- */
 
-function MiniStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function MiniStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl border border-white/15 bg-white/[0.03] px-4 py-4 text-center">
       <p className="text-2xl font-bold text-white">{value}</p>
@@ -242,13 +233,9 @@ function DashboardCard({
         {icon}
       </div>
 
-      <h2 className="mt-4 text-[18px] font-black leading-tight">
-        {title}
-      </h2>
+      <h2 className="mt-4 text-[18px] font-black leading-tight">{title}</h2>
 
-      <p className="mt-2 text-[13px] text-black/50">
-        {description}
-      </p>
+      <p className="mt-2 text-[13px] text-black/50">{description}</p>
     </Link>
   );
 }
