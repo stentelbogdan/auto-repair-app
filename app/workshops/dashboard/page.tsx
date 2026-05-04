@@ -126,14 +126,14 @@ export default function WorkshopDashboardPage() {
 
   return (
     <main className="h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-4 text-white">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-md md:max-w-5xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
             PANOU SERVICE
           </p>
         </section>
 
-        <section className="mt-10 grid grid-cols-2 gap-3">
+        <section className="mt-10 grid grid-cols-2 gap-3 md:mx-auto md:max-w-3xl md:gap-6">
           <DashboardCard
             href="/workshops"
             icon="🔎"
@@ -184,18 +184,22 @@ function DashboardCard({
       href={href}
       className={`${centered ? "col-span-2 flex justify-center" : ""}`}
     >
-      <div className="relative w-full max-w-[180px] rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]">
+      <div className="relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6">
         <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
           {value}
         </div>
 
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold md:h-14 md:w-14 md:text-3xl">
           {icon}
         </div>
 
-        <h2 className="text-base font-bold leading-tight">{title}</h2>
+        <h2 className="text-base font-bold leading-tight md:text-lg">
+          {title}
+        </h2>
 
-        <p className="mt-1 text-xs leading-snug text-black/55">{description}</p>
+        <p className="mt-1 text-xs leading-snug text-black/55 md:text-sm">
+          {description}
+        </p>
       </div>
     </Link>
   );
