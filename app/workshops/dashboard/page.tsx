@@ -182,7 +182,7 @@ function DashboardCard({
   return (
     <Link
       href={href}
-      className={`${centered ? "col-span-2 flex justify-center md:col-span-1 md:col-start-2" : ""}`}
+      className={`${centered ? "col-span-2 mx-auto w-1/2" : ""}`}
     >
       <div className="relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6">
         <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
