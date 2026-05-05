@@ -125,7 +125,7 @@ export default function WorkshopDashboardPage() {
   if (!authorized) return null;
 
   return (
-    <main className="h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-4 text-white">
+    <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-black px-4 pb-4 pt-4 text-white landscape:overflow-y-auto">
       <div className="mx-auto max-w-md md:max-w-5xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
