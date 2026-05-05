@@ -50,7 +50,7 @@ export default function CustomerDashboardPage() {
     <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-[#101010] px-4 pb-4 pt-4 text-white">
       <div className="mx-auto max-w-md md:max-w-5xl">
         <section className="mb-5 text-center">
-          <p className="text-[11px] uppercase tracking-[0.26em] text-white/80">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
             PANOU CLIENT
           </p>
         </section>
