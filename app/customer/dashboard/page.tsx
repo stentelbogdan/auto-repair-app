@@ -49,6 +49,11 @@ export default function CustomerDashboardPage() {
   return (
     <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-[#101010] px-4 pb-4 pt-4 text-white">
       <div className="mx-auto max-w-md md:max-w-5xl">
+        <section className="mb-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-white/80">
+            PANOU CLIENT
+          </p>
+        </section>
         <section className="mt-10 grid grid-cols-2 gap-3 md:mx-auto md:max-w-3xl md:gap-6">
           {!isWorkshop && (
             <>
