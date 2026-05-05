@@ -124,32 +124,6 @@ export default function WorkshopsPage() {
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Link
-            href="/workshops/dashboard"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Panou
-          </Link>
-          <Link
-            href="/workshops"
-            className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
-          >
-            Daune disponibile
-          </Link>
-          <Link
-            href="/workshops/my-offers"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Ofertele tale
-          </Link>
-          <Link
-            href="/workshops/won-jobs"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Lucrări câștigate
-          </Link>
-        </div>
 
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
