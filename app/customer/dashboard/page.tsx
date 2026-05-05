@@ -47,26 +47,66 @@ export default function CustomerDashboardPage() {
   }
 
   return (
-    <main className="h-[calc(100dvh-86px)] overflow-hidden bg-[#101010] px-4 py-2 text-white">
-      <div className="mx-auto max-w-5xl">
-        <div className="mt-10 grid grid-cols-2 gap-3">
+    <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-[#101010] px-4 pb-4 pt-4 text-white">
+      <div className="mx-auto max-w-md md:max-w-5xl">
+        <section className="mt-10 grid grid-cols-2 gap-3 md:mx-auto md:max-w-3xl md:gap-6">
           {!isWorkshop && (
             <>
-              <Card title="Postează" desc="Încarcă poze și descriere" icon="+" onClick={() => router.push("/post-job")} />
-              <Card title="Postările tale" desc="Toate daunele tale" icon="📄" onClick={() => router.push("/customer/my-requests")} />
-              <Card title="Oferte primite" desc="Compară ofertele" icon="€" onClick={() => router.push("/offers")} />
-              <Card title="Programări" desc="Lucrări programate" icon="✓" onClick={() => router.push("/customer/my-jobs")} />
+              <Card
+                title="Postează"
+                desc="Încarcă poze și descriere"
+                icon="+"
+                onClick={() => router.push("/post-job")}
+              />
+
+              <Card
+                title="Postările tale"
+                desc="Toate daunele tale"
+                icon="📄"
+                onClick={() => router.push("/customer/my-requests")}
+              />
+
+              <Card
+                title="Oferte primite"
+                desc="Compară ofertele"
+                icon="€"
+                onClick={() => router.push("/offers")}
+              />
+
+              <Card
+                title="Programări"
+                desc="Lucrări programate"
+                icon="✓"
+                onClick={() => router.push("/customer/my-jobs")}
+              />
             </>
           )}
 
           {isWorkshop && (
             <>
-              <Card title="Daune disponibile" desc="Vezi cererile clienților" icon="€" onClick={() => router.push("/workshops")} />
-              <Card title="Ofertele tale" desc="Toate ofertele trimise" icon="📤" onClick={() => router.push("/workshops/my-offers")} />
-              <Card title="Lucrări câștigate" desc="Joburi acceptate" icon="🏆" onClick={() => router.push("/workshops/won-jobs")} />
+              <Card
+                title="Daune disponibile"
+                desc="Vezi cererile clienților"
+                icon="🔎"
+                onClick={() => router.push("/workshops")}
+              />
+
+              <Card
+                title="Ofertele tale"
+                desc="Toate ofertele trimise"
+                icon="€"
+                onClick={() => router.push("/workshops/my-offers")}
+              />
+
+              <Card
+                title="Lucrări câștigate"
+                desc="Joburi acceptate"
+                icon="✓"
+                onClick={() => router.push("/workshops/won-jobs")}
+              />
             </>
           )}
-        </div>
+        </section>
       </div>
     </main>
   );
@@ -86,13 +126,17 @@ function Card({
   return (
     <button
       onClick={onClick}
-      className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition active:scale-[0.98]"
+      className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6"
     >
-      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold md:h-14 md:w-14 md:text-3xl">
         {icon}
       </div>
-      <h2 className="text-base font-bold leading-tight">{title}</h2>
-      <p className="mt-1 text-xs leading-snug text-black/55">{desc}</p>
+
+      <h2 className="text-base font-bold leading-tight md:text-lg">{title}</h2>
+
+      <p className="mt-1 text-xs leading-snug text-black/55 md:text-sm">
+        {desc}
+      </p>
     </button>
   );
 }
