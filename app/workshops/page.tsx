@@ -124,7 +124,6 @@ export default function WorkshopsPage() {
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-7xl">
-
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-white/40">
@@ -244,7 +243,9 @@ export default function WorkshopsPage() {
                       </button>
 
                       <button
-                        onClick={() => router.push(`/workshops/${request.id}`)}
+                        onClick={() =>
+                          router.push(`/workshops/${request.id}/offer`)
+                        }
                         disabled={isAcceptata}
                         className="w-full rounded-lg bg-white px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
                       >
