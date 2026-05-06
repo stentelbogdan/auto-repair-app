@@ -25,10 +25,10 @@ type RepairRequest = {
   damageType: string;
   description: string;
   images: {
-  name: string;
-  url?: string;
-  dataUrl?: string;
-}[];
+    name: string;
+    url?: string;
+    dataUrl?: string;
+  }[];
   status?: string;
   acceptedOfferId?: string | null;
 };
@@ -62,10 +62,10 @@ export default function OffersPage() {
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
 
   const [selectedGallery, setSelectedGallery] = useState<{
-  images: RepairRequest["images"];
-  index: number;
-  title: string;
-} | null>(null);
+    images: RepairRequest["images"];
+    index: number;
+    title: string;
+  } | null>(null);
 
   useEffect(() => {
     const checkUserAndLoad = async () => {
@@ -270,20 +270,22 @@ export default function OffersPage() {
                     {request.images.length > 0 ? (
                       <button
                         onClick={() =>
-                        setSelectedGallery({
+                          setSelectedGallery({
                             images: request.images,
                             index: 0,
                             title: `${request.carBrand} ${request.carModel}`,
-                        })
-                    }
-                    className="block h-full w-full"
-                >
-                    <img
-                        src={request.images[0].url || request.images[0].dataUrl}
-                        alt={`${request.carBrand} ${request.carModel}`}
-                        className="h-full min-h-[240px] w-full object-cover border-4 border-red-500"
-                    />
-                </button>
+                          })
+                        }
+                        className="block h-full w-full"
+                      >
+                        <img
+                          src={
+                            request.images[0].url || request.images[0].dataUrl
+                          }
+                          alt={`${request.carBrand} ${request.carModel}`}
+                          className="h-full min-h-[240px] w-full object-cover border-4 border-red-500"
+                        />
+                      </button>
                     ) : (
                       <div className="flex min-h-[240px] items-center justify-center text-white/40">
                         No photo uploaded
@@ -309,7 +311,11 @@ export default function OffersPage() {
                           <p className="text-3xl font-bold">€{offer.price}</p>
                         </div>
 
-                        <span className={getOfferStatusClass(offer.status || "pending")}>
+                        <span
+                          className={getOfferStatusClass(
+                            offer.status || "pending",
+                          )}
+                        >
                           {formatOfferStatus(offer.status || "pending")}
                         </span>
                       </div>
@@ -354,13 +360,6 @@ export default function OffersPage() {
 
                     <div className="mt-6 flex flex-col gap-3 md:flex-row">
                       <button
-                        onClick={() => router.push("/workshops")}
-                        className="rounded-lg border border-white/20 px-6 py-3 font-semibold text-white"
-                      >
-                        View workshop dashboard
-                      </button>
-
-                      <button
                         onClick={() => handleAcceptOffer(offer.id, request.id)}
                         disabled={
                           acceptingOfferId === offer.id ||
@@ -372,10 +371,10 @@ export default function OffersPage() {
                         {acceptingOfferId === offer.id
                           ? "Accepting..."
                           : offer.status === "accepted"
-                          ? "Accepted"
-                          : request.status === "matched"
-                          ? "Job booked"
-                          : "Accept & book repair"}
+                            ? "Accepted"
+                            : request.status === "matched"
+                              ? "Job booked"
+                              : "Accept & book repair"}
                       </button>
                     </div>
                   </div>
@@ -386,30 +385,29 @@ export default function OffersPage() {
         )}
       </div>
 
-        <Lightbox
-            open={!!selectedGallery}
-            close={() => setSelectedGallery(null)}
-            index={selectedGallery?.index || 0}
-            slides={
-                selectedGallery?.images.map((image) => ({
-                    src: image.url || image.dataUrl || "",
-                })) || []
-            }
-            plugins={[Zoom]}
-            zoom={{
-                maxZoomPixelRatio: 4,
-                scrollToZoom: true,
-                doubleTapDelay: 300,
-                doubleClickDelay: 300,
-            }}
-            carousel={{
-                finite: false,
-            }}
-            controller={{
-                closeOnBackdropClick: true,
-            }}
-        />
-
+      <Lightbox
+        open={!!selectedGallery}
+        close={() => setSelectedGallery(null)}
+        index={selectedGallery?.index || 0}
+        slides={
+          selectedGallery?.images.map((image) => ({
+            src: image.url || image.dataUrl || "",
+          })) || []
+        }
+        plugins={[Zoom]}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 300,
+          doubleClickDelay: 300,
+        }}
+        carousel={{
+          finite: false,
+        }}
+        controller={{
+          closeOnBackdropClick: true,
+        }}
+      />
     </main>
   );
 }
