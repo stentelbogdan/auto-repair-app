@@ -234,24 +234,6 @@ export default function WorkshopsPage() {
                       {request.description}
                     </p>
 
-                    <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
-                      <button
-                        onClick={() => router.push(`/workshops/${request.id}`)}
-                        className="w-full rounded-lg border border-white/20 px-4 py-3 font-semibold text-white"
-                      >
-                        Vezi detalii
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          router.push(`/workshops/${request.id}/offer`)
-                        }
-                        disabled={isAcceptata}
-                        className="w-full rounded-lg bg-white px-4 py-3 font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isAcceptata ? "Oferta închisă" : "Trimite ofertă"}
-                      </button>
-                    </div>
                   </div>
                 </div>
               );
