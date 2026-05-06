@@ -73,7 +73,7 @@ export default function WorkshopDashboardPage() {
           supabase
             .from("repair_offers")
             .select("id", { count: "exact", head: true })
-            .eq("workshop_id", userId),
+            .eq("workshop_user_id", userId),
 
           supabase
             .from("repair_offers")
@@ -87,7 +87,7 @@ export default function WorkshopDashboardPage() {
               )
             `,
             )
-            .eq("workshop_id", userId)
+            .eq("workshop_user_id", userId)
             .eq("repair_requests.status", "matched"),
         ]);
 
