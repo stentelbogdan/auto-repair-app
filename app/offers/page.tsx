@@ -298,27 +298,18 @@ export default function OffersPage() {
                     )}
                   </div>
 
-                  {!isRejected && (
+                  {!isRejected && !isAccepted && !isMatched && (
                     <button
                       onClick={() => handleAcceptOffer(offer.id, request.id)}
-                      disabled={
-                        acceptingOfferId === offer.id || isAccepted || isMatched
-                      }
-                      className={`w-full rounded-2xl px-6 py-4 text-base font-bold transition active:scale-[0.98] ${
-                        isAccepted || isMatched
-                          ? "bg-white/60 text-black"
-                          : "bg-white text-black"
-                      } disabled:cursor-not-allowed disabled:opacity-70`}
+                      disabled={acceptingOfferId === offer.id}
+                      className="w-full rounded-2xl bg-white px-6 py-4 text-base font-bold text-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
                     >
                       {acceptingOfferId === offer.id
                         ? "Se confirmă..."
-                        : isAccepted
-                          ? "Lucrare confirmată"
-                          : isMatched
-                            ? "Altă ofertă a fost aleasă"
-                            : "Acceptă oferta"}
+                        : "Acceptă oferta"}
                     </button>
                   )}
+                  
                 </div>
               </div>
             );
