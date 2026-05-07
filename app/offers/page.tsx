@@ -65,7 +65,6 @@ export default function OffersPage() {
   const [selectedGallery, setSelectedGallery] = useState<{
     images: RepairRequest["images"];
     index: number;
-    title: string;
   } | null>(null);
 
   useEffect(() => {
@@ -145,7 +144,6 @@ export default function OffersPage() {
 
       offerRows.forEach((offer: RepairOfferRow) => {
         const matchingRequest = requestMap.get(offer.request_id);
-
         if (!matchingRequest) return;
 
         merged.push({
@@ -174,9 +172,7 @@ export default function OffersPage() {
   const handleAcceptOffer = async (offerId: string, requestId: string) => {
     try {
       setAcceptingOfferId(offerId);
-
       await acceptRepairOffer({ offerId, requestId });
-
       await loadData();
     } finally {
       setAcceptingOfferId(null);
@@ -185,8 +181,8 @@ export default function OffersPage() {
 
   if (checkingAccess) {
     return (
-      <main className="min-h-screen bg-black flex items-center justify-center text-white">
-        Checking access...
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        Se verifică accesul...
       </main>
     );
   }
@@ -196,61 +192,144 @@ export default function OffersPage() {
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-6xl space-y-6">
-
-        {items.map(({ offer, request }) => (
-          <div key={offer.id} className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-
-            <img
-              src={request.images[0]?.url || request.images[0]?.dataUrl || ""}
-              className="w-full h-56 object-cover"
-            />
-
-            <div className="p-6 space-y-4">
-
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold">
-                    {request.carBrand} {request.carModel}
-                  </h2>
-                  <p className="text-white/60">
-                    {request.carYear} • {request.city}
-                  </p>
-                </div>
-
-                <span className="text-sm">
-                  {formatOfferStatus(offer.status || "pending")}
-                </span>
-              </div>
-
-              <div className="text-3xl font-bold">€{offer.price}</div>
-
-              <button
-                onClick={() => handleAcceptOffer(offer.id, request.id)}
-                disabled={
-                  acceptingOfferId === offer.id ||
-                  offer.status === "accepted" ||
-                  request.status === "matched"
-                }
-                className="w-full rounded-lg bg-white py-3 text-black font-semibold disabled:opacity-50"
-              >
-                {acceptingOfferId === offer.id
-                  ? "Se acceptă..."
-                  : offer.status === "accepted"
-                  ? "Lucrare confirmată"
-                  : request.status === "matched"
-                  ? "Job deja ales"
-                  : "Acceptă oferta"}
-              </button>
-
-            </div>
+        {loadingOffers ? (
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
+            Se încarcă ofertele...
           </div>
-        ))}
+        ) : items.length === 0 ? (
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center">
+            <h2 className="text-2xl font-bold">Nu ai oferte încă</h2>
+            <p className="mt-3 text-white/60">
+              Când un service trimite o ofertă, aceasta va apărea aici.
+            </p>
+          </div>
+        ) : (
+          items.map(({ offer, request }) => {
+            const status = offer.status || "pending";
+            const isAccepted = status === "accepted";
+            const isRejected = status === "rejected";
+            const isMatched = request.status === "matched";
 
+            return (
+              <div
+                key={offer.id}
+                className={`overflow-hidden rounded-[28px] border bg-white/[0.04] ${
+                  isAccepted
+                    ? "border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.12)]"
+                    : "border-white/10"
+                }`}
+              >
+                {request.images[0]?.url || request.images[0]?.dataUrl ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedGallery({
+                        images: request.images,
+                        index: 0,
+                      })
+                    }
+                    className="block w-full"
+                  >
+                    <img
+                      src={request.images[0].url || request.images[0].dataUrl}
+                      alt={`${request.carBrand} ${request.carModel}`}
+                      className="h-72 w-full object-cover"
+                    />
+                  </button>
+                ) : (
+                  <div className="flex h-56 items-center justify-center bg-white/5 text-white/40">
+                    Fără poză
+                  </div>
+                )}
+
+                <div className="space-y-5 p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-3xl font-black leading-tight">
+                        {request.carBrand} {request.carModel}
+                      </h2>
+                      <p className="mt-2 text-lg text-white/50">
+                        {request.carYear} • {request.city}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${getOfferStatusClass(
+                        status,
+                      )}`}
+                    >
+                      {formatOfferStatus(status)}
+                    </span>
+                  </div>
+
+                  {isAccepted && (
+                    <div className="rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">
+                      Oferta aleasă
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-sm text-white/45">Preț ofertă</p>
+                    <p className="mt-1 text-5xl font-black tracking-tight">
+                      €{offer.price}
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <p className="text-sm text-white/45">Service</p>
+                      <p className="mt-1 text-xl font-bold">
+                        {offer.workshopName}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                      <p className="text-sm text-white/45">Durată estimată</p>
+                      <p className="mt-1 text-xl font-bold">
+                        {offer.days} zile
+                      </p>
+                    </div>
+
+                    {offer.message && (
+                      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                        <p className="text-sm text-white/45">Mesaj service</p>
+                        <p className="mt-2 text-white/80">{offer.message}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {!isRejected && (
+                    <button
+                      onClick={() => handleAcceptOffer(offer.id, request.id)}
+                      disabled={
+                        acceptingOfferId === offer.id || isAccepted || isMatched
+                      }
+                      className={`w-full rounded-2xl px-6 py-4 text-base font-bold transition active:scale-[0.98] ${
+                        isAccepted || isMatched
+                          ? "bg-white/60 text-black"
+                          : "bg-white text-black"
+                      } disabled:cursor-not-allowed disabled:opacity-70`}
+                    >
+                      {acceptingOfferId === offer.id
+                        ? "Se confirmă..."
+                        : isAccepted
+                          ? "Lucrare confirmată"
+                          : isMatched
+                            ? "Altă ofertă a fost aleasă"
+                            : "Acceptă oferta"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       <Lightbox
         open={!!selectedGallery}
         close={() => setSelectedGallery(null)}
+        index={selectedGallery?.index || 0}
         slides={
           selectedGallery?.images.map((img) => ({
             src: img.url || img.dataUrl || "",
@@ -260,4 +339,15 @@ export default function OffersPage() {
       />
     </main>
   );
+}
+
+function getOfferStatusClass(value: string) {
+  switch (value) {
+    case "accepted":
+      return "border-green-500/20 bg-green-500/15 text-green-300";
+    case "rejected":
+      return "border-red-500/20 bg-red-500/15 text-red-300";
+    default:
+      return "border-yellow-500/20 bg-yellow-500/15 text-yellow-300";
+  }
 }
