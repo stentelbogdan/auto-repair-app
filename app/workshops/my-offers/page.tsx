@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -213,7 +212,9 @@ export default function WorkshopMyOffersPage() {
           <p className="text-sm uppercase tracking-[0.24em] text-orange-400">
             Service auto
           </p>
-          <h1 className="mt-2 text-4xl font-black">Lucrările și ofertele tale</h1>
+          <h1 className="mt-2 text-4xl font-black">
+            Lucrările și ofertele tale
+          </h1>
           <p className="mt-3 max-w-2xl text-white/60">
             Urmărește ofertele trimise și vezi rapid ce lucrări ai câștigat.
           </p>
@@ -252,17 +253,26 @@ export default function WorkshopMyOffersPage() {
               return (
                 <article
                   key={offer.id}
-                  className={`overflow-hidden rounded-[28px] border bg-white/[0.04] ${
+                  onClick={() => {
+                    if (isWon) {
+                      router.push(`/workshops/${offer.request_id}`);
+                    }
+                  }}
+                  className={`overflow-hidden rounded-[28px] border bg-white/[0.04] transition ${
                     isWon
-                      ? "border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.12)]"
+                      ? "cursor-pointer border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.12)] hover:bg-white/[0.06] active:scale-[0.99]"
                       : "border-white/10"
                   }`}
                 >
                   {image ? (
                     <img
                       src={image}
-                      alt={`${request?.car_brand || ""} ${request?.car_model || ""}`}
-                      className={`w-full object-cover ${isLost ? "h-40 opacity-60" : "h-72"}`}
+                      alt={`${request?.car_brand || ""} ${
+                        request?.car_model || ""
+                      }`}
+                      className={`w-full object-cover ${
+                        isLost ? "h-40 opacity-60" : "h-72"
+                      }`}
                     />
                   ) : (
                     <div className="flex h-44 items-center justify-center bg-white/5 text-white/40">
@@ -310,11 +320,11 @@ export default function WorkshopMyOffersPage() {
                         value={`${offer.days} zile`}
                       />
 
-                      {offer.message && (
+                      {offer.message && !isLost && (
                         <InfoBox label="Mesaj trimis" value={offer.message} />
                       )}
 
-                      {request?.description && (
+                      {request?.description && !isLost && (
                         <InfoBox
                           label="Cererea clientului"
                           value={request.description}
@@ -322,12 +332,11 @@ export default function WorkshopMyOffersPage() {
                       )}
                     </div>
 
-                    <Link
-                      href={`/workshops/${offer.request_id}`}
-                      className="w-full rounded-2xl bg-white py-4 text-center font-bold text-black"
-                    >
-                      Deschide lucrarea
-                    </Link>
+                    {isWon && (
+                      <p className="text-center text-xs font-semibold text-green-300/80">
+                        Apasă pe card pentru a deschide lucrarea →
+                      </p>
+                    )}
                   </div>
                 </article>
               );
