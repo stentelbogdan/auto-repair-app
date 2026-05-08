@@ -4,8 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
+
 type ProfileRow = {
   role: string[] | null;
+};
+
+type RepairImage = {
+  name?: string;
+  url?: string;
+  dataUrl?: string;
 };
 
 type RepairRequest = {
@@ -18,11 +28,7 @@ type RepairRequest = {
   description: string | null;
   status?: string | null;
   accepted_offer_id?: string | null;
-  images?: {
-    name?: string;
-    url?: string;
-    dataUrl?: string;
-  }[];
+  images?: RepairImage[];
 };
 
 type RepairOffer = {
@@ -49,6 +55,9 @@ export default function WorkshopMyOffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -195,6 +204,18 @@ export default function WorkshopMyOffersPage() {
       });
   }, [offers]);
 
+  const openGallery = (images: RepairImage[] | undefined, index = 0) => {
+    const slides =
+      images
+        ?.map((image) => image.url || image.dataUrl || "")
+        .filter(Boolean) || [];
+
+    if (!slides.length) return;
+
+    setSelectedImages(slides);
+    setLightboxIndex(index);
+  };
+
   if (checkingAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -265,15 +286,24 @@ export default function WorkshopMyOffersPage() {
                   }`}
                 >
                   {image ? (
-                    <img
-                      src={image}
-                      alt={`${request?.car_brand || ""} ${
-                        request?.car_model || ""
-                      }`}
-                      className={`w-full object-cover ${
-                        isLost ? "h-40 opacity-60" : "h-72"
-                      }`}
-                    />
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openGallery(request?.images, 0);
+                      }}
+                      className="block w-full overflow-hidden"
+                    >
+                      <img
+                        src={image}
+                        alt={`${request?.car_brand || ""} ${
+                          request?.car_model || ""
+                        }`}
+                        className={`w-full object-cover ${
+                          isLost ? "h-40 opacity-60" : "h-72"
+                        }`}
+                      />
+                    </button>
                   ) : (
                     <div className="flex h-44 items-center justify-center bg-white/5 text-white/40">
                       Fără poză
@@ -344,6 +374,37 @@ export default function WorkshopMyOffersPage() {
           </div>
         )}
       </div>
+
+      <Lightbox
+        open={selectedImages.length > 0}
+        close={() => setSelectedImages([])}
+        slides={selectedImages.map((src) => ({ src }))}
+        index={lightboxIndex}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
+      />
     </main>
   );
 }
