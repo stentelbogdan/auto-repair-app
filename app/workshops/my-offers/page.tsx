@@ -133,7 +133,8 @@ export default function WorkshopMyOffersPage() {
                 damage_type: row.repair_requests.damage_type ?? null,
                 description: row.repair_requests.description ?? null,
                 status: row.repair_requests.status ?? null,
-                accepted_offer_id: row.repair_requests.accepted_offer_id ?? null,
+                accepted_offer_id:
+                  row.repair_requests.accepted_offer_id ?? null,
                 images: Array.isArray(row.repair_requests.images)
                   ? row.repair_requests.images
                   : [],
@@ -163,9 +164,11 @@ export default function WorkshopMyOffersPage() {
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers
       .map((offer) => {
-        const requestStatus = offer.repair_requests?.status?.toLowerCase() || "";
+        const requestStatus =
+          offer.repair_requests?.status?.toLowerCase() || "";
         const offerStatus = offer.status?.toLowerCase() || "";
-        const acceptedOfferId = offer.repair_requests?.accepted_offer_id || null;
+        const acceptedOfferId =
+          offer.repair_requests?.accepted_offer_id || null;
 
         let derivedStatus: "pending" | "won" | "lost" = "pending";
 
@@ -210,7 +213,7 @@ export default function WorkshopMyOffersPage() {
           <p className="text-sm uppercase tracking-[0.24em] text-orange-400">
             Service auto
           </p>
-          <h1 className="mt-2 text-4xl font-black">Ofertele tale</h1>
+          <h1 className="mt-2 text-4xl font-black">Lucrările și ofertele tale</h1>
           <p className="mt-3 max-w-2xl text-white/60">
             Urmărește ofertele trimise și vezi rapid ce lucrări ai câștigat.
           </p>
@@ -239,7 +242,9 @@ export default function WorkshopMyOffersPage() {
             {normalizedOffers.map((offer) => {
               const request = offer.repair_requests;
               const image =
-                request?.images?.[0]?.url || request?.images?.[0]?.dataUrl || "";
+                request?.images?.[0]?.url ||
+                request?.images?.[0]?.dataUrl ||
+                "";
 
               const isWon = offer.derivedStatus === "won";
               const isLost = offer.derivedStatus === "lost";
@@ -257,7 +262,7 @@ export default function WorkshopMyOffersPage() {
                     <img
                       src={image}
                       alt={`${request?.car_brand || ""} ${request?.car_model || ""}`}
-                      className={`w-full object-cover ${isLost ? "h-44" : "h-72"}`}
+                      className={`w-full object-cover ${isLost ? "h-40 opacity-60" : "h-72"}`}
                     />
                   ) : (
                     <div className="flex h-44 items-center justify-center bg-white/5 text-white/40">
@@ -300,7 +305,10 @@ export default function WorkshopMyOffersPage() {
                     </div>
 
                     <div className="grid gap-3">
-                      <InfoBox label="Durată estimată" value={`${offer.days} zile`} />
+                      <InfoBox
+                        label="Durată estimată"
+                        value={`${offer.days} zile`}
+                      />
 
                       {offer.message && (
                         <InfoBox label="Mesaj trimis" value={offer.message} />
@@ -316,9 +324,9 @@ export default function WorkshopMyOffersPage() {
 
                     <Link
                       href={`/workshops/${offer.request_id}`}
-                      className="block w-full rounded-2xl border border-white/15 px-6 py-4 text-center font-bold text-white transition hover:bg-white/10 active:scale-[0.98]"
+                      className="w-full rounded-2xl bg-white py-4 text-center font-bold text-black"
                     >
-                      Vezi dauna
+                      Deschide lucrarea
                     </Link>
                   </div>
                 </article>
