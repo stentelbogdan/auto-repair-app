@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase/client";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
-const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
 type JobFilter = "active" | "completed";
 
@@ -54,6 +53,7 @@ export default function WorkshopWonJobsPage() {
   const [search, setSearch] = useState("");
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<JobFilter>("active");
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [lightboxImages, setLightboxImages] = useState<{ src: string }[]>([]);
