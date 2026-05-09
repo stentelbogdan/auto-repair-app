@@ -639,6 +639,13 @@ export default function WorkshopWonJobsPage() {
                         Deschide lucrarea
                       </button>
 
+                      <button
+                        onClick={() => router.push(`/chat/${job.requestId}`)}
+                        className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                      >
+                        Chat cu clientul
+                      </button>
+
                       {job.request.status === "matched" && (
                         <button
                           onClick={() => {
