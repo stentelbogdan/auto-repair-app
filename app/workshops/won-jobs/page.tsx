@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
+const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
 type JobFilter = "active" | "completed";
 
@@ -467,7 +468,34 @@ export default function WorkshopWonJobsPage() {
                 >
                   <div className="relative">
                     {currentImage?.dataUrl ? (
-                      <div className="relative h-64 w-full overflow-hidden bg-white/5">
+                      <div
+                        className="relative h-64 w-full overflow-hidden bg-white/5"
+                        onTouchStart={(e) => {
+                          setTouchStartX(e.touches[0].clientX);
+                        }}
+                        onTouchEnd={(e) => {
+                          if (touchStartX === null) return;
+
+                          const touchEndX = e.changedTouches[0].clientX;
+                          const diff = touchStartX - touchEndX;
+
+                          if (Math.abs(diff) < 40) return;
+
+                          if (diff > 0) {
+                            goToNextImage(
+                              job.offerId,
+                              job.request.images.length,
+                            );
+                          } else {
+                            goToPrevImage(
+                              job.offerId,
+                              job.request.images.length,
+                            );
+                          }
+
+                          setTouchStartX(null);
+                        }}
+                      >
                         <img
                           src={currentImage.dataUrl}
                           alt={`${job.request.carBrand} ${job.request.carModel}`}
@@ -485,7 +513,6 @@ export default function WorkshopWonJobsPage() {
 
                         {job.request.images.length > 1 && (
                           <>
-
                             <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
                               {job.request.images.map((_, index) => {
                                 const isActive = index === currentImageIndex;
