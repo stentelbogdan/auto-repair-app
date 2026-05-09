@@ -629,7 +629,7 @@ export default function WorkshopWonJobsPage() {
                       </p>
                     </div>
 
-                    <div className="mt-5">
+                    <div className="mt-5 space-y-3">
                       <button
                         onClick={() =>
                           router.push(`/workshops/${job.requestId}`)
@@ -667,7 +667,7 @@ export default function WorkshopWonJobsPage() {
                               markAsCompleted(job);
                             }
                           }}
-                          className="hidden rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
+                          className="mt-2 hidden w-full rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-4 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
                         >
                           Marchează ca finalizată
                         </button>
