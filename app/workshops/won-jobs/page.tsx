@@ -234,13 +234,6 @@ export default function WorkshopWonJobsPage() {
     return jobs.filter((job) => job.request.status === "completed").length;
   }, [jobs]);
 
-  const averageQuotedPrice = useMemo(() => {
-    if (!jobs.length) return "€0";
-
-    const total = jobs.reduce((sum, job) => sum + Number(job.price || 0), 0);
-    return `€${Math.round(total / jobs.length)}`;
-  }, [jobs]);
-
   const getCurrentImageIndex = (jobId: string, imagesCount: number) => {
     if (!imagesCount) return 0;
     const current = imageIndexes[jobId] ?? 0;
@@ -345,32 +338,6 @@ export default function WorkshopWonJobsPage() {
   return (
     <main className="min-h-screen bg-black px-6 pb-10 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-wrap gap-3">
-          <Link
-            href="/workshops/dashboard"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/workshops"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            Browse requests
-          </Link>
-          <Link
-            href="/workshops/my-offers"
-            className="rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition hover:bg-white/10"
-          >
-            My offers
-          </Link>
-          <Link
-            href="/workshops/won-jobs"
-            className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-black"
-          >
-            Won jobs
-          </Link>
-        </div>
 
         <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -418,12 +385,6 @@ export default function WorkshopWonJobsPage() {
           >
             Completed jobs ({completedJobsCount})
           </button>
-        </div>
-
-        <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <StatCard label="Active jobs" value={activeJobsCount} />
-          <StatCard label="Completed jobs" value={completedJobsCount} />
-          <StatCard label="Average quoted price" value={averageQuotedPrice} />
         </div>
 
         {loadingJobs ? (
@@ -687,15 +648,6 @@ export default function WorkshopWonJobsPage() {
         )}
       </div>
     </main>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-      <p className="text-sm text-white/50">{label}</p>
-      <p className="mt-2 text-3xl font-bold text-white">{value}</p>
-    </div>
   );
 }
 
