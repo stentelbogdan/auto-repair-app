@@ -726,32 +726,31 @@ export default function WorkshopWonJobsPage() {
       <Lightbox
         open={lightboxIndex !== null}
         close={() => setLightboxIndex(null)}
-        index={lightboxIndex ?? 0}
         slides={lightboxImages}
+        index={lightboxIndex ?? 0}
         plugins={[Zoom]}
-        carousel={{
-          finite: true,
-        }}
-        animation={{
-          swipe: 280,
-          fade: 180,
-        }}
         controller={{
           closeOnBackdropClick: true,
+          closeOnPullDown: true,
         }}
-        toolbar={{
-          buttons: ["close"],
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
         }}
         zoom={{
-          maxZoomPixelRatio: 3,
+          maxZoomPixelRatio: 4,
           scrollToZoom: true,
           doubleTapDelay: 250,
           doubleClickDelay: 250,
-          doubleClickMaxStops: 2,
         }}
-        render={{
-          buttonPrev: () => null,
-          buttonNext: () => null,
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
         }}
       />
     </main>
