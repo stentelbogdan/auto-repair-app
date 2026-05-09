@@ -31,6 +31,7 @@ type WonJob = {
     images: {
       name: string;
       dataUrl: string;
+      url?: string;
     }[];
     status: string;
     acceptedOfferId: string | null;
@@ -97,7 +98,8 @@ export default function WorkshopWonJobsPage() {
     try {
       const { data: offersData, error: offersError } = await supabase
         .from("repair_offers")
-        .select(`
+        .select(
+          `
           id,
           request_id,
           workshop_user_id,
@@ -107,7 +109,8 @@ export default function WorkshopWonJobsPage() {
           message,
           status,
           created_at
-        `)
+        `,
+        )
         .eq("workshop_user_id", userId)
         .eq("status", "accepted")
         .order("created_at", { ascending: false });
@@ -116,14 +119,17 @@ export default function WorkshopWonJobsPage() {
         throw offersError;
       }
 
-      const requestIds = (offersData || []).map((offer: any) => offer.request_id);
+      const requestIds = (offersData || []).map(
+        (offer: any) => offer.request_id,
+      );
 
       let requestsMap = new Map<string, any>();
 
       if (requestIds.length > 0) {
         const { data: requestsData, error: requestsError } = await supabase
           .from("repair_requests")
-          .select(`
+          .select(
+            `
             id,
             car_brand,
             car_model,
@@ -135,7 +141,8 @@ export default function WorkshopWonJobsPage() {
             status,
             accepted_offer_id,
             created_at
-          `)
+          `,
+          )
           .in("id", requestIds);
 
         if (requestsError) {
@@ -143,7 +150,7 @@ export default function WorkshopWonJobsPage() {
         }
 
         requestsMap = new Map(
-          (requestsData || []).map((request: any) => [request.id, request])
+          (requestsData || []).map((request: any) => [request.id, request]),
         );
       }
 
@@ -173,7 +180,7 @@ export default function WorkshopWonJobsPage() {
               Array.isArray(request?.images) && request.images.length > 0
                 ? request.images.map((image: any) => ({
                     name: image?.name || "",
-                    dataUrl: image?.dataUrl || "",
+                    dataUrl: image?.dataUrl || image?.url || "",
                   }))
                 : [],
             status: request?.status || "matched",
@@ -197,8 +204,7 @@ export default function WorkshopWonJobsPage() {
 
     return jobs.filter((job) => {
       const isCompleted = job.request.status === "completed";
-      const matchesTab =
-        activeTab === "completed" ? isCompleted : !isCompleted;
+      const matchesTab = activeTab === "completed" ? isCompleted : !isCompleted;
 
       const haystack = [
         job.request.carBrand,
@@ -251,6 +257,63 @@ export default function WorkshopWonJobsPage() {
         [jobId]: current === 0 ? imagesCount - 1 : current - 1,
       };
     });
+  };
+
+  const markAsCompleted = async (job: WonJob) => {
+    try {
+      const { error } = await supabase
+        .from("repair_requests")
+        .update({ status: "completed" })
+        .eq("id", job.requestId);
+
+      if (error) throw error;
+
+      // update local state instant
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.requestId === job.requestId
+            ? {
+                ...j,
+                request: {
+                  ...j.request,
+                  status: "completed",
+                },
+              }
+            : j,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to mark as completed:", err);
+      alert("Something went wrong.");
+    }
+  };
+
+  const startJob = async (job: WonJob) => {
+    try {
+      const { error } = await supabase
+        .from("repair_requests")
+        .update({ status: "in_progress" })
+        .eq("id", job.requestId);
+
+      if (error) throw error;
+
+      setJobs((prev) =>
+        prev.map((j) =>
+          j.requestId === job.requestId
+            ? {
+                ...j,
+                request: {
+                  ...j.request,
+                  status: "in_progress",
+                },
+              }
+            : j,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to start job:", err);
+      alert("Nu am putut începe lucrarea.");
+    }
   };
 
   const goToNextImage = (jobId: string, imagesCount: number) => {
@@ -358,9 +421,9 @@ export default function WorkshopWonJobsPage() {
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <StatCard label="Active jobs" value={activeJobsCount} />
-            <StatCard label="Completed jobs" value={completedJobsCount} />
-            <StatCard label="Average quoted price" value={averageQuotedPrice} />
+          <StatCard label="Active jobs" value={activeJobsCount} />
+          <StatCard label="Completed jobs" value={completedJobsCount} />
+          <StatCard label="Average quoted price" value={averageQuotedPrice} />
         </div>
 
         {loadingJobs ? (
@@ -370,7 +433,9 @@ export default function WorkshopWonJobsPage() {
         ) : filteredJobs.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
             <h2 className="text-2xl font-semibold">
-              {activeTab === "completed" ? "No completed jobs yet" : "No active jobs yet"}
+              {activeTab === "completed"
+                ? "No completed jobs yet"
+                : "No active jobs yet"}
             </h2>
             <p className="mt-3 text-white/70">
               {activeTab === "completed"
@@ -410,7 +475,10 @@ export default function WorkshopWonJobsPage() {
                       <img
                         src={
                           job.request.images[
-                            getCurrentImageIndex(job.offerId, job.request.images.length)
+                            getCurrentImageIndex(
+                              job.offerId,
+                              job.request.images.length,
+                            )
                           ].dataUrl
                         }
                         alt={`${job.request.carBrand} ${job.request.carModel}`}
@@ -418,8 +486,8 @@ export default function WorkshopWonJobsPage() {
                       />
 
                       {job.request.status === "completed" && (
-                    <div className="absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
-                    )}
+                        <div className="absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
+                      )}
 
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
@@ -428,7 +496,10 @@ export default function WorkshopWonJobsPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              goToPrevImage(job.offerId, job.request.images.length)
+                              goToPrevImage(
+                                job.offerId,
+                                job.request.images.length,
+                              )
                             }
                             className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
                           >
@@ -438,7 +509,10 @@ export default function WorkshopWonJobsPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              goToNextImage(job.offerId, job.request.images.length)
+                              goToNextImage(
+                                job.offerId,
+                                job.request.images.length,
+                              )
                             }
                             className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
                           >
@@ -451,7 +525,7 @@ export default function WorkshopWonJobsPage() {
                                 index ===
                                 getCurrentImageIndex(
                                   job.offerId,
-                                  job.request.images.length
+                                  job.request.images.length,
                                 );
 
                               return (
@@ -473,8 +547,11 @@ export default function WorkshopWonJobsPage() {
                           </div>
 
                           <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-xs text-white/80 backdrop-blur">
-                            {getCurrentImageIndex(job.offerId, job.request.images.length) + 1}/
-                            {job.request.images.length}
+                            {getCurrentImageIndex(
+                              job.offerId,
+                              job.request.images.length,
+                            ) + 1}
+                            /{job.request.images.length}
                           </div>
                         </>
                       )}
@@ -486,24 +563,24 @@ export default function WorkshopWonJobsPage() {
                   )}
 
                   <div className="absolute left-4 top-4">
-                <span
-                className={`px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] rounded-full backdrop-blur ${
-                job.request.status === "completed"
-                    ? "bg-green-500 text-black"
-                    : job.request.status === "in_progress"
-                    ? "bg-blue-500 text-black"
-                    : "bg-yellow-400 text-black"
-                }`}
-                >
-                {formatJobStatus(job.request.status)}
-            </span>
-        </div>
+                    <span
+                      className={`px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] rounded-full backdrop-blur ${
+                        job.request.status === "completed"
+                          ? "bg-green-500 text-black"
+                          : job.request.status === "in_progress"
+                            ? "bg-blue-500 text-black"
+                            : "bg-yellow-400 text-black"
+                      }`}
+                    >
+                      {formatJobStatus(job.request.status)}
+                    </span>
+                  </div>
 
                   <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-white/50">
                         {formatJobStatus(job.request.status)} repair
-                    </p>
+                      </p>
                       <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
                         {job.request.carBrand} {job.request.carModel}
                       </h2>
@@ -559,15 +636,49 @@ export default function WorkshopWonJobsPage() {
                       onClick={() => router.push(`/workshops/${job.requestId}`)}
                       className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                     >
-                      View request
+                      Vezi cererea
                     </button>
 
                     <button
                       onClick={() => router.push(`/workshops/${job.requestId}`)}
                       className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90"
                     >
-                      Open job
+                      Deschide lucrarea
                     </button>
+
+                    {job.request.status === "matched" && (
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "Ești sigur că vrei să începi această lucrare?",
+                            )
+                          ) {
+                            startJob(job);
+                          }
+                        }}
+                        className="rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 sm:col-span-2"
+                      >
+                        Începe lucrarea
+                      </button>
+                    )}
+
+                    {job.request.status === "in_progress" && (
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              "Ești sigur că vrei să finalizezi această lucrare?",
+                            )
+                          ) {
+                            markAsCompleted(job);
+                          }
+                        }}
+                        className="rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 sm:col-span-2"
+                      >
+                        Marchează ca finalizată
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
@@ -579,13 +690,7 @@ export default function WorkshopWonJobsPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <p className="text-sm text-white/50">{label}</p>
@@ -597,30 +702,30 @@ function StatCard({
 function formatDamageType(value: string) {
   switch (value) {
     case "scratch":
-      return "Scratch";
+      return "Zgârietură";
     case "dent":
-      return "Dent";
+      return "Îndoitură";
     case "bumper":
-      return "Bumper damage";
+      return "Bară avariată";
     case "paint":
-      return "Paint damage";
+      return "Vopsea afectată";
     case "cracked_part":
-      return "Cracked part";
+      return "Piesă crăpată";
     default:
-      return "Other";
+      return "Altele";
   }
 }
 
 function formatJobStatus(value: string) {
   switch (value) {
     case "completed":
-      return "Completed";
+      return "Finalizată";
     case "in_progress":
-      return "In progress";
+      return "În lucru";
     case "matched":
-      return "Accepted";
+      return "Acceptată";
     default:
-      return "Open";
+      return "Deschisă";
   }
 }
 
