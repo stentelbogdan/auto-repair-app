@@ -13,6 +13,20 @@ type Message = {
   created_at: string;
 };
 
+type RepairImage = {
+  name?: string;
+  url?: string;
+  dataUrl?: string;
+};
+
+type RequestData = {
+  car_brand: string | null;
+  car_model: string | null;
+  city: string | null;
+  status: string | null;
+  images: RepairImage[] | null;
+};
+
 export default function ChatPage() {
   const params = useParams();
   const requestId = params.requestId as string;
@@ -20,12 +34,14 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [userId, setUserId] = useState("");
+  const [requestData, setRequestData] = useState<RequestData | null>(null);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     loadMessages();
     getUser();
+    loadRequest();
 
     const channel = supabase
       .channel(`chat-${requestId}`)
@@ -62,6 +78,26 @@ export default function ChatPage() {
     }
   };
 
+  const loadRequest = async () => {
+    const { data, error } = await supabase
+      .from("repair_requests")
+      .select(
+        `
+        car_brand,
+        car_model,
+        city,
+        status,
+        images
+      `,
+      )
+      .eq("id", requestId)
+      .single<RequestData>();
+
+    if (!error && data) {
+      setRequestData(data);
+    }
+  };
+
   const loadMessages = async () => {
     const { data, error } = await supabase
       .from("messages")
@@ -75,30 +111,66 @@ export default function ChatPage() {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    const text = newMessage.trim();
+    if (!text) return;
 
     const { data: authData } = await supabase.auth.getUser();
 
     if (!authData.user) return;
 
-    await supabase.from("messages").insert({
+    const { error } = await supabase.from("messages").insert({
       request_id: requestId,
       sender_id: authData.user.id,
       sender_role: "user",
-      message: newMessage,
+      message: text,
     });
 
-    setNewMessage("");
+    if (!error) {
+      setNewMessage("");
+    }
   };
+
+  const firstImage =
+    requestData?.images?.[0]?.url || requestData?.images?.[0]?.dataUrl || "";
 
   return (
     <main className="flex h-screen flex-col bg-black text-white">
-      <div className="border-b border-white/10 px-5 py-4">
-        <h1 className="text-xl font-bold">Conversație</h1>
+      <div className="border-b border-white/10 bg-black/80 px-5 py-4 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center gap-4">
+          {firstImage ? (
+            <img
+              src={firstImage}
+              alt="Mașină"
+              className="h-14 w-14 rounded-2xl object-cover"
+            />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 text-sm font-bold text-white/60">
+              AR
+            </div>
+          )}
+
+          <div>
+            <h1 className="text-lg font-bold text-white">
+              {requestData?.car_brand || "Lucrare"}{" "}
+              {requestData?.car_model || ""}
+            </h1>
+
+            <p className="text-sm text-white/50">
+              {requestData?.city || "-"} • {formatStatus(requestData?.status)}
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-5">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
+          {messages.length === 0 && (
+            <div className="mx-auto mt-10 max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55">
+              Conversația a fost creată. Scrie primul mesaj despre această
+              lucrare.
+            </div>
+          )}
+
           {messages.map((message) => {
             const isMine = message.sender_id === userId;
 
@@ -125,8 +197,13 @@ export default function ChatPage() {
           <input
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                sendMessage();
+              }
+            }}
             placeholder="Scrie un mesaj..."
-            className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 outline-none"
+            className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35"
           />
 
           <button
@@ -139,4 +216,17 @@ export default function ChatPage() {
       </div>
     </main>
   );
+}
+
+function formatStatus(status?: string | null) {
+  switch (status) {
+    case "matched":
+      return "Acceptată";
+    case "in_progress":
+      return "În lucru";
+    case "completed":
+      return "Finalizată";
+    default:
+      return "Deschisă";
+  }
 }
