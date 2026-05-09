@@ -485,33 +485,6 @@ export default function WorkshopWonJobsPage() {
 
                         {job.request.images.length > 1 && (
                           <>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                goToPrevImage(
-                                  job.offerId,
-                                  job.request.images.length,
-                                );
-                              }}
-                              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
-                            >
-                              ‹
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                goToNextImage(
-                                  job.offerId,
-                                  job.request.images.length,
-                                );
-                              }}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
-                            >
-                              ›
-                            </button>
 
                             <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
                               {job.request.images.map((_, index) => {
