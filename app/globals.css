@@ -10,3 +10,11 @@ body {
   color: white;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Clean premium lightbox: ascunde zoom buttons */
+.yarl__button[title="Zoom in"],
+.yarl__button[title="Zoom out"],
+.yarl__button[aria-label="Zoom in"],
+.yarl__button[aria-label="Zoom out"] {
+  display: none !important;
+}
