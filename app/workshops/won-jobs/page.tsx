@@ -3,11 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
 
 type JobFilter = "active" | "completed";
 
 type ProfileRow = {
   role: string[] | null;
+};
+
+type JobImage = {
+  name: string;
+  dataUrl: string;
+  url?: string;
 };
 
 type WonJob = {
@@ -27,11 +35,7 @@ type WonJob = {
     city: string;
     damageType: string;
     description: string;
-    images: {
-      name: string;
-      dataUrl: string;
-      url?: string;
-    }[];
+    images: JobImage[];
     status: string;
     acceptedOfferId: string | null;
     createdAt: string;
@@ -48,6 +52,9 @@ export default function WorkshopWonJobsPage() {
   const [search, setSearch] = useState("");
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<JobFilter>("active");
+
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [lightboxImages, setLightboxImages] = useState<{ src: string }[]>([]);
 
   useEffect(() => {
     const checkUserAndLoad = async () => {
@@ -236,6 +243,24 @@ export default function WorkshopWonJobsPage() {
     if (!imagesCount) return 0;
     const current = imageIndexes[jobId] ?? 0;
     return Math.min(current, imagesCount - 1);
+  };
+
+  const openLightbox = (job: WonJob) => {
+    const currentIndex = getCurrentImageIndex(
+      job.offerId,
+      job.request.images.length,
+    );
+
+    const slides = job.request.images
+      .map((image) => ({
+        src: image.dataUrl || image.url || "",
+      }))
+      .filter((image) => image.src);
+
+    if (!slides.length) return;
+
+    setLightboxImages(slides);
+    setLightboxIndex(currentIndex);
   };
 
   const goToPrevImage = (jobId: string, imagesCount: number) => {
@@ -427,237 +452,234 @@ export default function WorkshopWonJobsPage() {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {filteredJobs.map((job) => (
-              <article
-                key={job.offerId}
-                className="group overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.03] shadow-[0_30px_100px_rgba(0,0,0,0.55)] transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
-              >
-                <div className="relative">
-                  {job.request.images &&
-                  job.request.images.length > 0 &&
-                  job.request.images[
-                    getCurrentImageIndex(job.offerId, job.request.images.length)
-                  ]?.dataUrl ? (
-                    <div className="relative h-64 w-full overflow-hidden bg-white/5">
-                      <img
-                        src={
-                          job.request.images[
-                            getCurrentImageIndex(
-                              job.offerId,
-                              job.request.images.length,
-                            )
-                          ].dataUrl
-                        }
-                        alt={`${job.request.carBrand} ${job.request.carModel}`}
-                        className="h-full w-full object-cover transition duration-500"
-                      />
+            {filteredJobs.map((job) => {
+              const currentImageIndex = getCurrentImageIndex(
+                job.offerId,
+                job.request.images.length,
+              );
+              const currentImage = job.request.images[currentImageIndex];
 
-                      {job.request.status === "completed" && (
-                        <div className="absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
-                      )}
+              return (
+                <article
+                  key={job.offerId}
+                  className="group overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.03] shadow-[0_30px_100px_rgba(0,0,0,0.55)] transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
+                >
+                  <div className="relative">
+                    {currentImage?.dataUrl ? (
+                      <div className="relative h-64 w-full overflow-hidden bg-white/5">
+                        <img
+                          src={currentImage.dataUrl}
+                          alt={`${job.request.carBrand} ${job.request.carModel}`}
+                          onClick={() => openLightbox(job)}
+                          className="h-full w-full cursor-zoom-in object-cover transition duration-500"
+                        />
 
-                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                        {job.request.status === "completed" && (
+                          <div className="absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
+                        )}
 
-                      {job.request.images.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              goToPrevImage(
-                                job.offerId,
-                                job.request.images.length,
-                              )
-                            }
-                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
-                          >
-                            ‹
-                          </button>
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              goToNextImage(
-                                job.offerId,
-                                job.request.images.length,
-                              )
-                            }
-                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
-                          >
-                            ›
-                          </button>
-
-                          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-                            {job.request.images.map((_, index) => {
-                              const isActive =
-                                index ===
-                                getCurrentImageIndex(
+                        {job.request.images.length > 1 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                goToPrevImage(
                                   job.offerId,
                                   job.request.images.length,
                                 );
+                              }}
+                              className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
+                            >
+                              ‹
+                            </button>
 
-                              return (
-                                <button
-                                  key={index}
-                                  type="button"
-                                  onClick={() =>
-                                    setImageIndexes((prev) => ({
-                                      ...prev,
-                                      [job.offerId]: index,
-                                    }))
-                                  }
-                                  className={`h-2.5 w-2.5 rounded-full transition ${
-                                    isActive ? "bg-white" : "bg-white/35"
-                                  }`}
-                                />
-                              );
-                            })}
-                          </div>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                goToNextImage(
+                                  job.offerId,
+                                  job.request.images.length,
+                                );
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-white/15 bg-black/50 px-3 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/70"
+                            >
+                              ›
+                            </button>
 
-                          <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-xs text-white/80 backdrop-blur">
-                            {getCurrentImageIndex(
-                              job.offerId,
-                              job.request.images.length,
-                            ) + 1}
-                            /{job.request.images.length}
-                          </div>
-                        </>
+                            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
+                              {job.request.images.map((_, index) => {
+                                const isActive = index === currentImageIndex;
+
+                                return (
+                                  <button
+                                    key={index}
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setImageIndexes((prev) => ({
+                                        ...prev,
+                                        [job.offerId]: index,
+                                      }));
+                                    }}
+                                    className={`h-2.5 w-2.5 rounded-full transition ${
+                                      isActive ? "bg-white" : "bg-white/35"
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+
+                            <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-xs text-white/80 backdrop-blur">
+                              {currentImageIndex + 1}/
+                              {job.request.images.length}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex h-64 items-center justify-center bg-white/5 text-white/40">
+                        Nu există fotografii
+                      </div>
+                    )}
+
+                    <div className="absolute left-4 top-4">
+                      <span
+                        className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] backdrop-blur ${
+                          job.request.status === "completed"
+                            ? "bg-green-500 text-black"
+                            : job.request.status === "in_progress"
+                              ? "bg-blue-500 text-black"
+                              : "bg-yellow-400 text-black"
+                        }`}
+                      >
+                        {formatJobStatus(job.request.status)}
+                      </span>
+                    </div>
+
+                    <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-white/50">
+                          Lucrare{" "}
+                          {formatJobStatus(job.request.status).toLowerCase()}
+                        </p>
+
+                        <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
+                          {job.request.carBrand} {job.request.carModel}
+                        </h2>
+
+                        <p className="mt-1 text-sm text-white/70">
+                          {job.request.carYear} • {job.request.city}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-right backdrop-blur">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                          Oferta ta
+                        </p>
+
+                        <p className="mt-1 text-3xl font-extrabold tracking-tight text-white">
+                          €{job.price}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
+                        {job.request.damageType}
+                      </span>
+
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                        {job.days} {job.days === "1" ? "zi" : "zile"}
+                      </span>
+
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                        {job.workshopName}
+                      </span>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                        Cererea clientului
+                      </p>
+
+                      <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/80">
+                        {job.request.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                        Mesajul tău
+                      </p>
+
+                      <p className="mt-2 text-sm leading-6 text-white/80">
+                        {job.message || "Nu ai adăugat niciun mesaj."}
+                      </p>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <button
+                        onClick={() =>
+                          router.push(`/workshops/${job.requestId}`)
+                        }
+                        className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                      >
+                        Vezi cererea
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          router.push(`/workshops/${job.requestId}`)
+                        }
+                        className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90"
+                      >
+                        Deschide lucrarea
+                      </button>
+
+                      {job.request.status === "matched" && (
+                        <button
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "Ești sigur că vrei să începi această lucrare?",
+                              )
+                            ) {
+                              startJob(job);
+                            }
+                          }}
+                          className="hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 md:block sm:col-span-2"
+                        >
+                          Începe lucrarea
+                        </button>
+                      )}
+
+                      {job.request.status === "in_progress" && (
+                        <button
+                          onClick={() => {
+                            if (
+                              confirm(
+                                "Ești sigur că vrei să finalizezi această lucrare?",
+                              )
+                            ) {
+                              markAsCompleted(job);
+                            }
+                          }}
+                          className="hidden rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
+                        >
+                          Marchează ca finalizată
+                        </button>
                       )}
                     </div>
-                  ) : (
-                    <div className="flex h-64 items-center justify-center bg-white/5 text-white/40">
-                      Nu există fotografii
-                    </div>
-                  )}
-
-                  <div className="absolute left-4 top-4">
-                    <span
-                      className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] backdrop-blur ${
-                        job.request.status === "completed"
-                          ? "bg-green-500 text-black"
-                          : job.request.status === "in_progress"
-                            ? "bg-blue-500 text-black"
-                            : "bg-yellow-400 text-black"
-                      }`}
-                    >
-                      {formatJobStatus(job.request.status)}
-                    </span>
                   </div>
-
-                  <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-white/50">
-                        Lucrare{" "}
-                        {formatJobStatus(job.request.status).toLowerCase()}
-                      </p>
-
-                      <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
-                        {job.request.carBrand} {job.request.carModel}
-                      </h2>
-
-                      <p className="mt-1 text-sm text-white/70">
-                        {job.request.carYear} • {job.request.city}
-                      </p>
-                    </div>
-
-                    <div className="shrink-0 rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-right backdrop-blur">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                        Oferta ta
-                      </p>
-
-                      <p className="mt-1 text-3xl font-extrabold tracking-tight text-white">
-                        €{job.price}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-5">
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
-                      {job.request.damageType}
-                    </span>
-
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                      {job.days} {job.days === "1" ? "zi" : "zile"}
-                    </span>
-
-                    <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                      {job.workshopName}
-                    </span>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                      Cererea clientului
-                    </p>
-
-                    <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/80">
-                      {job.request.description}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                      Mesajul tău
-                    </p>
-
-                    <p className="mt-2 text-sm leading-6 text-white/80">
-                      {job.message || "Nu ai adăugat niciun mesaj."}
-                    </p>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <button
-                      onClick={() => router.push(`/workshops/${job.requestId}`)}
-                      className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-                    >
-                      Vezi cererea
-                    </button>
-
-                    <button
-                      onClick={() => router.push(`/workshops/${job.requestId}`)}
-                      className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90"
-                    >
-                      Deschide lucrarea
-                    </button>
-
-                    {job.request.status === "matched" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              "Ești sigur că vrei să începi această lucrare?",
-                            )
-                          ) {
-                            startJob(job);
-                          }
-                        }}
-                        className="hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 md:block sm:col-span-2"
-                      >
-                        Începe lucrarea
-                      </button>
-                    )}
-
-                    {job.request.status === "in_progress" && (
-                      <button
-                        onClick={() => {
-                          if (
-                            confirm(
-                              "Ești sigur că vrei să finalizezi această lucrare?",
-                            )
-                          ) {
-                            markAsCompleted(job);
-                          }
-                        }}
-                        className="hidden rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
-                      >
-                        Marchează ca finalizată
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
@@ -697,6 +719,13 @@ export default function WorkshopWonJobsPage() {
           </div>
         </div>
       )}
+
+      <Lightbox
+        open={lightboxIndex !== null}
+        close={() => setLightboxIndex(null)}
+        index={lightboxIndex ?? 0}
+        slides={lightboxImages}
+      />
     </main>
   );
 }
