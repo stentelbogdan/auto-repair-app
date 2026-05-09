@@ -497,11 +497,14 @@ export default function WorkshopWonJobsPage() {
                         }}
                       >
                         <img
+                          key={`${job.offerId}-${currentImageIndex}`}
                           src={currentImage.dataUrl}
                           alt={`${job.request.carBrand} ${job.request.carModel}`}
                           onClick={() => openLightbox(job)}
-                          className="h-full w-full cursor-zoom-in object-cover transition duration-500 group-hover:scale-[1.02]"
+                          className="h-full w-full cursor-zoom-in object-cover transition-all duration-500 ease-out group-hover:scale-[1.02]"
                         />
+
+                        <div className="pointer-events-none absolute inset-0 bg-black/0 transition duration-500 group-hover:bg-black/5" />
 
                         <div className="pointer-events-none absolute bottom-3 right-3 hidden rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur md:block"></div>
 
