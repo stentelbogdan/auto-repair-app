@@ -338,16 +338,19 @@ export default function WorkshopWonJobsPage() {
   return (
     <main className="min-h-screen bg-black px-6 pb-10 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
-
         <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Workshop dashboard
+              Dashboard service
             </p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">Won jobs</h1>
+
+            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
+              Lucrări câștigate
+            </h1>
+
             <p className="mt-3 max-w-2xl text-white/70">
-              These are the repair jobs your workshop has won and can now start
-              working on.
+              Acestea sunt lucrările câștigate de service-ul tău pe care le poți
+              începe.
             </p>
           </div>
 
@@ -355,7 +358,7 @@ export default function WorkshopWonJobsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by car, city, damage type..."
+              placeholder="Caută după mașină, oraș, tip daună..."
               className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
             />
           </div>
@@ -371,7 +374,7 @@ export default function WorkshopWonJobsPage() {
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            Active jobs ({activeJobsCount})
+            Lucrări active ({activeJobsCount})
           </button>
 
           <button
@@ -383,7 +386,7 @@ export default function WorkshopWonJobsPage() {
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            Completed jobs ({completedJobsCount})
+            Lucrări finalizate ({completedJobsCount})
           </button>
         </div>
 
@@ -395,8 +398,8 @@ export default function WorkshopWonJobsPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
             <h2 className="text-2xl font-semibold">
               {activeTab === "completed"
-                ? "No completed jobs yet"
-                : "No active jobs yet"}
+                ? "No cLucrări finalizate yet"
+                : "No Lucrări active yet"}
             </h2>
             <p className="mt-3 text-white/70">
               {activeTab === "completed"
@@ -540,7 +543,7 @@ export default function WorkshopWonJobsPage() {
                   <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-white/50">
-                        {formatJobStatus(job.request.status)} repair
+                        {formatJobStatus(job.request.status)} lucrare
                       </p>
                       <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
                         {job.request.carBrand} {job.request.carModel}
@@ -552,7 +555,7 @@ export default function WorkshopWonJobsPage() {
 
                     <div className="shrink-0 rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-right backdrop-blur">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                        Your offer
+                        Oferta ta
                       </p>
                       <p className="mt-1 text-3xl font-extrabold tracking-tight text-white">
                         €{job.price}
@@ -567,7 +570,7 @@ export default function WorkshopWonJobsPage() {
                       {job.request.damageType}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                      {job.days} day{job.days !== "1" ? "s" : ""}
+                      {job.days} zile{job.days !== "1" ? "s" : ""}
                     </span>
                     <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
                       {job.workshopName}
@@ -576,7 +579,7 @@ export default function WorkshopWonJobsPage() {
 
                   <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
                     <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                      Customer request
+                      Cererea clientului
                     </p>
                     <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/80">
                       {job.request.description}
@@ -585,7 +588,7 @@ export default function WorkshopWonJobsPage() {
 
                   <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
                     <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                      Your message
+                      Mesajul tău
                     </p>
                     <p className="mt-2 text-sm leading-6 text-white/80">
                       {job.message || "No message provided."}
