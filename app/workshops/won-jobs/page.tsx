@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
 
 type JobFilter = "active" | "completed";
 
@@ -471,8 +473,11 @@ export default function WorkshopWonJobsPage() {
                           src={currentImage.dataUrl}
                           alt={`${job.request.carBrand} ${job.request.carModel}`}
                           onClick={() => openLightbox(job)}
-                          className="h-full w-full cursor-zoom-in object-cover transition duration-500"
+                          className="h-full w-full cursor-zoom-in object-cover transition duration-500 group-hover:scale-[1.02]"
                         />
+
+                        <div className="pointer-events-none absolute bottom-3 right-3 hidden rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur md:block">
+                        </div>
 
                         {job.request.status === "completed" && (
                           <div className="absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
@@ -725,6 +730,24 @@ export default function WorkshopWonJobsPage() {
         close={() => setLightboxIndex(null)}
         index={lightboxIndex ?? 0}
         slides={lightboxImages}
+        plugins={[Zoom]}
+        carousel={{
+          finite: true,
+        }}
+        animation={{
+          swipe: 320,
+          fade: 220,
+        }}
+        controller={{
+          closeOnBackdropClick: true,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 3,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+          doubleClickMaxStops: 2,
+        }}
       />
     </main>
   );
