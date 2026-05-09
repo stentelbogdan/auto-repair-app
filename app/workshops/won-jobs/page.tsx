@@ -739,6 +739,9 @@ export default function WorkshopWonJobsPage() {
         controller={{
           closeOnBackdropClick: true,
         }}
+        toolbar={{
+          buttons: ["close"],
+        }}
         zoom={{
           maxZoomPixelRatio: 3,
           scrollToZoom: true,
