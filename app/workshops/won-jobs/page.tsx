@@ -543,7 +543,7 @@ export default function WorkshopWonJobsPage() {
                   <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.22em] text-white/50">
-                        {formatJobStatus(job.request.status)} lucrare
+                        Lucrare {formatJobStatus(job.request.status).toLowerCase()}
                       </p>
                       <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
                         {job.request.carBrand} {job.request.carModel}
