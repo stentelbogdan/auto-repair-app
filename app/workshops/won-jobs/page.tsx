@@ -629,21 +629,12 @@ export default function WorkshopWonJobsPage() {
                       </p>
                     </div>
 
-                    <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="mt-5">
                       <button
                         onClick={() =>
                           router.push(`/workshops/${job.requestId}`)
                         }
-                        className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-                      >
-                        Vezi cererea
-                      </button>
-
-                      <button
-                        onClick={() =>
-                          router.push(`/workshops/${job.requestId}`)
-                        }
-                        className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90"
+                        className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
                       >
                         Deschide lucrarea
                       </button>
