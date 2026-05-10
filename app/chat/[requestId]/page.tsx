@@ -518,7 +518,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div ref={bottomRef} />
+          <div ref={bottomRef} className="h-24 shrink-0" />
         </div>
       </div>
 
