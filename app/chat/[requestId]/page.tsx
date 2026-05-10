@@ -264,7 +264,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-black/95 px-4 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+      <div className="sticky bottom-0 left-0 right-0 border-t border-white/10 bg-black/95 px-4 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
         <div className="mx-auto max-w-3xl">
           <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {quickMessages.map((text) => (
