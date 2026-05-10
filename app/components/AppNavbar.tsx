@@ -44,8 +44,9 @@ export default function AppNavbar() {
       return;
     }
 
-    router.push("/login");
-    router.refresh();
+    localStorage.removeItem("activeRole");
+
+    window.location.href = "/login";
   };
 
   const goClient = () => {
