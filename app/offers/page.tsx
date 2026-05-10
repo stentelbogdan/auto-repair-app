@@ -119,11 +119,7 @@ export default function OffersPage() {
       const activeRequests = requestRows.filter((request) => {
         const status = request.status || "open";
 
-        return (
-          status !== "matched" &&
-          status !== "in_progress" &&
-          status !== "completed"
-        );
+        return status !== "completed";
       });
 
       const requestIds = activeRequests.map((request) => request.id);
