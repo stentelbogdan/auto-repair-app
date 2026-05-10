@@ -335,9 +335,9 @@ export default function ChatPage() {
       setNewMessage("");
       setSelectedImages([]);
       sendTypingStatus(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to upload/send message:", error);
-      alert("Pozele sau mesajul nu au putut fi trimise.");
+      alert(error?.message || "Pozele sau mesajul nu au putut fi trimise.");
     } finally {
       setIsSending(false);
     }
