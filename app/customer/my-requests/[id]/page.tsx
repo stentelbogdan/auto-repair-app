@@ -3,6 +3,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
 
 type RepairImage = {
   name?: string;
@@ -30,6 +33,9 @@ export default function CustomerRequestDetailsPage() {
 
   const [request, setRequest] = useState<RepairRequest | null>(null);
   const [loading, setLoading] = useState(true);
+  const [imageIndex, setImageIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     const loadRequest = async () => {
@@ -73,7 +79,25 @@ export default function CustomerRequestDetailsPage() {
   if (!request) return null;
 
   const images = Array.isArray(request.images) ? request.images : [];
-  const mainImage = images[0]?.url || images[0]?.dataUrl || "";
+  const validImages = images
+    .map((image) => image.url || image.dataUrl || "")
+    .filter(Boolean);
+
+  const currentImage = validImages[imageIndex] || "";
+
+  const goToPrevImage = () => {
+    if (validImages.length <= 1) return;
+    setImageIndex((prev) =>
+      prev === 0 ? validImages.length - 1 : prev - 1,
+    );
+  };
+
+  const goToNextImage = () => {
+    if (validImages.length <= 1) return;
+    setImageIndex((prev) =>
+      prev === validImages.length - 1 ? 0 : prev + 1,
+    );
+  };
 
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
@@ -85,13 +109,61 @@ export default function CustomerRequestDetailsPage() {
           Înapoi
         </button>
 
-        <div className="overflow-hidden rounded-[28px] bg-white text-black shadow-xl">
-          {mainImage ? (
-            <img
-              src={mainImage}
-              alt={`${request.car_brand} ${request.car_model}`}
-              className="h-80 w-full object-cover"
-            />
+        <div className="overflow-hidden rounded-[30px] bg-white text-black shadow-xl">
+          {currentImage ? (
+            <div
+              className="relative h-80 w-full overflow-hidden bg-black"
+              onTouchStart={(e) => {
+                setTouchStartX(e.touches[0].clientX);
+              }}
+              onTouchEnd={(e) => {
+                if (touchStartX === null) return;
+
+                const touchEndX = e.changedTouches[0].clientX;
+                const diff = touchStartX - touchEndX;
+
+                if (Math.abs(diff) > 40) {
+                  if (diff > 0) {
+                    goToNextImage();
+                  } else {
+                    goToPrevImage();
+                  }
+                }
+
+                setTouchStartX(null);
+              }}
+            >
+              <img
+                key={currentImage}
+                src={currentImage}
+                alt={`${request.car_brand} ${request.car_model}`}
+                onClick={() => setLightboxOpen(true)}
+                className="h-full w-full cursor-zoom-in object-cover transition-all duration-500 ease-out"
+              />
+
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+
+              {validImages.length > 1 && (
+                <>
+                  <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 gap-2">
+                    {validImages.map((_, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => setImageIndex(index)}
+                        className={`h-2.5 w-2.5 rounded-full transition ${
+                          index === imageIndex ? "bg-white" : "bg-white/40"
+                        }`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="absolute right-4 top-4 rounded-full bg-black/55 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur">
+                    {imageIndex + 1}/{validImages.length}
+                  </div>
+                </>
+              )}
+            </div>
           ) : (
             <div className="flex h-72 items-center justify-center bg-black/10 text-black/40">
               Fără poză
@@ -101,37 +173,43 @@ export default function CustomerRequestDetailsPage() {
           <div className="space-y-5 p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-black">
+                <h1 className="text-4xl font-black leading-tight">
                   {request.car_brand} {request.car_model}
                 </h1>
-                <p className="mt-1 text-black/55">
+                <p className="mt-2 text-lg text-black/55">
                   {request.car_year} • {request.city}
                 </p>
               </div>
 
-              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
+              <span
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
+                  request.status,
+                )}`}
+              >
                 {formatStatus(request.status)}
               </span>
             </div>
 
-            <div className="rounded-2xl bg-black/[0.04] p-4">
-              <p className="text-sm text-black/45">Tip daună</p>
-              <p className="mt-1 font-bold">
-                {formatDamageType(request.damage_type)}
-              </p>
-            </div>
+            <div className="grid gap-4">
+              <div className="rounded-3xl bg-black/[0.04] p-5">
+                <p className="text-sm text-black/45">Tip daună</p>
+                <p className="mt-1 text-xl font-bold">
+                  {formatDamageType(request.damage_type)}
+                </p>
+              </div>
 
-            <div className="rounded-2xl bg-black/[0.04] p-4">
-              <p className="text-sm text-black/45">Descriere</p>
-              <p className="mt-2 text-black/70">
-                {request.description || "Fără descriere."}
-              </p>
+              <div className="rounded-3xl bg-black/[0.04] p-5">
+                <p className="text-sm text-black/45">Descriere</p>
+                <p className="mt-2 text-lg leading-7 text-black/70">
+                  {request.description || "Fără descriere."}
+                </p>
+              </div>
             </div>
 
             {request.status !== "open" && (
               <button
                 onClick={() => router.push(`/chat/${request.id}`)}
-                className="w-full rounded-2xl bg-black px-5 py-4 font-bold text-white"
+                className="w-full rounded-2xl bg-black px-5 py-4 text-lg font-bold text-white"
               >
                 Chat cu service-ul
               </button>
@@ -139,6 +217,37 @@ export default function CustomerRequestDetailsPage() {
           </div>
         </div>
       </div>
+
+      <Lightbox
+        open={lightboxOpen}
+        close={() => setLightboxOpen(false)}
+        index={imageIndex}
+        slides={validImages.map((src) => ({ src }))}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
+      />
     </main>
   );
 }
@@ -153,6 +262,19 @@ function formatStatus(status?: string | null) {
       return "Finalizată";
     default:
       return "Deschisă";
+  }
+}
+
+function getStatusClass(status?: string | null) {
+  switch (status) {
+    case "in_progress":
+      return "bg-blue-100 text-blue-700";
+    case "completed":
+      return "bg-green-100 text-green-700";
+    case "matched":
+      return "bg-orange-100 text-orange-700";
+    default:
+      return "bg-orange-100 text-orange-700";
   }
 }
 
