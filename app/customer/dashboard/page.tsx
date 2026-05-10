@@ -31,6 +31,10 @@ export default function CustomerDashboardPage() {
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
       const savedRole = localStorage.getItem("activeRole");
+      if (savedRole === "workshop" && roles.includes("workshop")) {
+        router.replace("/workshops/dashboard");
+        return;
+      }
 
       setIsWorkshop(savedRole === "workshop" && roles.includes("workshop"));
     };

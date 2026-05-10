@@ -27,6 +27,7 @@ export default function WorkshopDashboardPage() {
   });
 
   useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
     const checkUserAndLoad = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
