@@ -117,7 +117,7 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
-                  onClick={() => router.push(`/chat/${request.id}`)}
+                  onClick={() => router.push(`/customer/my-requests`)}
                   className="overflow-hidden rounded-[26px] bg-white text-black shadow-lg transition active:scale-[0.99]"
                 >
                   <div className="flex gap-4 p-4">
@@ -180,7 +180,7 @@ export default function MyJobsPage() {
                         {request.description || "Fără descriere."}
                       </p>
 
-                      <div className="mt-4 grid grid-cols-1 gap-2">
+                      <div className="mt-4">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -190,17 +190,6 @@ export default function MyJobsPage() {
                           className="rounded-2xl bg-black px-4 py-3 text-sm font-bold text-white"
                         >
                           Chat cu service-ul
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            router.push(`/customer/my-requests`);
-                          }}
-                          className="rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-sm font-bold text-black"
-                        >
-                          Vezi postarea
                         </button>
                       </div>
                     </div>
