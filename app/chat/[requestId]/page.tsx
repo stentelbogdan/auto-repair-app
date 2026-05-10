@@ -139,9 +139,14 @@ export default function ChatPage() {
   }, [requestId, userId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    const timeout = setTimeout(() => {
+      window.scrollBy({
+        top: 140,
+        behavior: "smooth",
+      });
+    }, 150);
+
+    return () => clearTimeout(timeout);
   }, [messages, isOtherTyping]);
 
   useEffect(() => {
@@ -518,7 +523,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div ref={bottomRef} className="h-24 shrink-0" />
+          <div ref={bottomRef} />
         </div>
       </div>
 
