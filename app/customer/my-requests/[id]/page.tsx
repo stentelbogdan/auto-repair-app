@@ -269,23 +269,35 @@ export default function CustomerRequestDetailsPage() {
           closeOnPullDown: true,
         }}
         animation={{
-          fade: 220,
-          swipe: 260,
+          fade: 180,
+          swipe: 320,
           zoom: 260,
+        }}
+        carousel={{
+          finite: true,
+          padding: "0px",
+          spacing: "12px",
         }}
         zoom={{
           maxZoomPixelRatio: 4,
           scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
+          doubleTapDelay: 220,
+          doubleClickDelay: 220,
+          doubleClickMaxStops: 2,
         }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
+        render={{
+          buttonPrev: () => null,
+          buttonNext: () => null,
+          buttonClose: () => null,
+          buttonZoom: () => null,
         }}
         styles={{
-          button: { display: "none" },
+          container: {
+            backgroundColor: "rgba(0,0,0,0.98)",
+          },
+          slide: {
+            padding: "0px",
+          },
         }}
       />
     </main>
