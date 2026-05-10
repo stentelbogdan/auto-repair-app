@@ -27,6 +27,13 @@ type RequestData = {
   images: RepairImage[] | null;
 };
 
+const quickMessages = [
+  "Când pot aduce mașina?",
+  "Cât durează lucrarea?",
+  "Mașina este gata?",
+  "Poți să îmi trimiți poze cu progresul?",
+];
+
 export default function ChatPage() {
   const params = useParams();
   const requestId = params.requestId as string;
@@ -35,6 +42,7 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState("");
   const [userId, setUserId] = useState("");
   const [requestData, setRequestData] = useState<RequestData | null>(null);
+  const [sendingQuickMessage, setSendingQuickMessage] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -125,6 +133,22 @@ export default function ChatPage() {
     });
   };
 
+  const insertMessage = async (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) return;
+
+    const { data: authData } = await supabase.auth.getUser();
+
+    if (!authData.user) return;
+
+    await supabase.from("messages").insert({
+      request_id: requestId,
+      sender_id: authData.user.id,
+      sender_role: "user",
+      message: cleanText,
+    });
+  };
+
   const sendMessage = async () => {
     const text = newMessage.trim();
     if (!text) return;
@@ -142,6 +166,15 @@ export default function ChatPage() {
 
     if (!error) {
       setNewMessage("");
+    }
+  };
+
+  const sendQuickMessage = async (text: string) => {
+    try {
+      setSendingQuickMessage(true);
+      await insertMessage(text);
+    } finally {
+      setSendingQuickMessage(false);
     }
   };
 
@@ -177,7 +210,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-40">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-52">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {messages.length === 0 && (
             <div className="mx-auto mt-10 max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55">
@@ -220,25 +253,41 @@ export default function ChatPage() {
       </div>
 
       <div className="fixed bottom-0 left-0 right-0 border-t border-white/10 bg-black/95 px-4 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl gap-3">
-          <input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                sendMessage();
-              }
-            }}
-            placeholder="Scrie un mesaj..."
-            className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35"
-          />
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {quickMessages.map((text) => (
+              <button
+                key={text}
+                type="button"
+                disabled={sendingQuickMessage}
+                onClick={() => sendQuickMessage(text)}
+                className="shrink-0 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white/80 transition active:scale-[0.98] disabled:opacity-50"
+              >
+                {text}
+              </button>
+            ))}
+          </div>
 
-          <button
-            onClick={sendMessage}
-            className="rounded-2xl bg-white px-5 py-3 font-semibold text-black"
-          >
-            Trimite
-          </button>
+          <div className="flex gap-3">
+            <input
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  sendMessage();
+                }
+              }}
+              placeholder="Scrie un mesaj..."
+              className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35"
+            />
+
+            <button
+              onClick={sendMessage}
+              className="rounded-2xl bg-white px-5 py-3 font-semibold text-black"
+            >
+              Trimite
+            </button>
+          </div>
         </div>
       </div>
     </main>
