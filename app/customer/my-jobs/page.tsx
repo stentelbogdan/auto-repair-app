@@ -49,15 +49,21 @@ export default function MyJobsPage() {
 
   const jobs = useMemo(() => {
     return requests
-      .filter(
-        (request) =>
-          request.status === "matched" || Boolean(request.accepted_offer_id)
-      )
+      .filter((request) => {
+        const status = request.status || "";
+
+        return (
+          status === "matched" ||
+          status === "in_progress" ||
+          status === "completed" ||
+          Boolean(request.accepted_offer_id)
+        );
+      })
       .map((request) => {
         const acceptedOffer = offers.find(
           (offer) =>
             offer.id === request.accepted_offer_id ||
-            (offer.request_id === request.id && offer.status === "accepted")
+            (offer.request_id === request.id && offer.status === "accepted"),
         );
 
         return {

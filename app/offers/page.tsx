@@ -126,6 +126,17 @@ export default function OffersPage() {
       const requestMap = new Map<string, RepairRequest>();
 
       requestRows.forEach((request: RepairRequestRow) => {
+        const status = request.status || "open";
+
+        // Ascundem din Oferte primite lucrările deja acceptate/programate
+        if (
+          status === "matched" ||
+          status === "in_progress" ||
+          status === "completed"
+        ) {
+          return;
+        }
+
         requestMap.set(request.id, {
           id: request.id,
           carBrand: request.car_brand,
@@ -309,7 +320,6 @@ export default function OffersPage() {
                         : "Acceptă oferta"}
                     </button>
                   )}
-                  
                 </div>
               </div>
             );
