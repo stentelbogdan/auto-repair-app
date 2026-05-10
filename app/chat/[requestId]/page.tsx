@@ -105,9 +105,24 @@ export default function ChatPage() {
       .eq("request_id", requestId)
       .order("created_at", { ascending: true });
 
-    if (!error && data) {
+    if (error) return;
+
+    if (data && data.length > 0) {
       setMessages(data);
+      return;
     }
+
+    const { data: authData } = await supabase.auth.getUser();
+
+    if (!authData.user) return;
+
+    await supabase.from("messages").insert({
+      request_id: requestId,
+      sender_id: authData.user.id,
+      sender_role: "system",
+      message:
+        "Conversația a fost începută. Puteți discuta aici despre această lucrare.",
+    });
   };
 
   const sendMessage = async () => {
@@ -172,7 +187,19 @@ export default function ChatPage() {
           )}
 
           {messages.map((message) => {
-            const isMine = message.sender_id === userId;
+            const isSystem = message.sender_role === "system";
+            const isMine = message.sender_id === userId && !isSystem;
+
+            if (isSystem) {
+              return (
+                <div
+                  key={message.id}
+                  className="mx-auto max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55"
+                >
+                  {message.message}
+                </div>
+              );
+            }
 
             return (
               <div
