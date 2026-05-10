@@ -237,13 +237,25 @@ export default function ChatPage() {
             return (
               <div
                 key={message.id}
-                className={`max-w-[80%] rounded-3xl px-4 py-3 text-sm leading-6 ${
-                  isMine
-                    ? "ml-auto bg-white text-black"
-                    : "bg-white/10 text-white"
+                className={`animate-[messageIn_0.25s_ease] max-w-[80%] ${
+                  isMine ? "ml-auto" : ""
                 }`}
               >
-                {message.message}
+                <div
+                  className={`rounded-3xl px-4 py-3 text-sm leading-6 ${
+                    isMine ? "bg-white text-black" : "bg-white/10 text-white"
+                  }`}
+                >
+                  {message.message}
+                </div>
+
+                <p
+                  className={`mt-1 px-2 text-[11px] text-white/35 ${
+                    isMine ? "text-right" : "text-left"
+                  }`}
+                >
+                  {formatTime(message.created_at)}
+                </p>
               </div>
             );
           })}
@@ -305,4 +317,11 @@ function formatStatus(status?: string | null) {
     default:
       return "Deschisă";
   }
+}
+
+function formatTime(date: string) {
+  return new Date(date).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
