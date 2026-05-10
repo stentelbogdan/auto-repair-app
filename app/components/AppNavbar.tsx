@@ -34,19 +34,21 @@ export default function AppNavbar() {
   }
 
   const handleLogout = async () => {
-    setLoggingOut(true);
+    try {
+      setLoggingOut(true);
 
-    const { error } = await supabase.auth.signOut();
+      localStorage.removeItem("activeRole");
+      sessionStorage.clear();
 
-    if (error) {
-      alert(error.message);
-      setLoggingOut(false);
-      return;
+      await supabase.auth.signOut({
+        scope: "local",
+      });
+
+      window.location.replace("/login");
+    } catch (error: any) {
+      console.error("Logout failed:", error);
+      window.location.replace("/login");
     }
-
-    localStorage.removeItem("activeRole");
-
-    window.location.href = "/login";
   };
 
   const goClient = () => {
@@ -111,7 +113,7 @@ export default function AppNavbar() {
             <button
               type="button"
               onClick={handleLogout}
-              disabled={!userEmail || loggingOut}
+              disabled={loggingOut}
               className="rounded-full border border-white/20 px-4 py-2 text-xs font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
             >
               {loggingOut ? "..." : "Ieșire"}
