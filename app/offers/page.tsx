@@ -4,11 +4,7 @@ import { formatOfferStatus } from "@/lib/utils/status";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import {
-  acceptRepairOffer,
-  getOffersForCustomerRequests,
-  type RepairOfferRow,
-} from "@/lib/supabase/repair-offers";
+import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import {
   getOwnRepairRequests,
   type RepairRequestRow,
@@ -118,25 +114,40 @@ export default function OffersPage() {
         }
       }
 
-      const [requestRows, offerRows] = await Promise.all([
-        getOwnRepairRequests(currentUserId),
-        getOffersForCustomerRequests(currentUserId),
-      ]);
+      const requestRows = await getOwnRepairRequests(currentUserId);
+
+      const activeRequests = requestRows.filter((request) => {
+        const status = request.status || "open";
+
+        return (
+          status !== "matched" &&
+          status !== "in_progress" &&
+          status !== "completed"
+        );
+      });
+
+      const requestIds = activeRequests.map((request) => request.id);
+
+      if (requestIds.length === 0) {
+        setItems([]);
+        return;
+      }
+
+      const { data: offerRows, error } = await supabase
+        .from("repair_offers")
+        .select("*")
+        .in("request_id", requestIds)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Failed to load offers:", error);
+        setItems([]);
+        return;
+      }
 
       const requestMap = new Map<string, RepairRequest>();
 
-      requestRows.forEach((request: RepairRequestRow) => {
-        const status = request.status || "open";
-
-        // Ascundem din Oferte primite lucrările deja acceptate/programate
-        if (
-          status === "matched" ||
-          status === "in_progress" ||
-          status === "completed"
-        ) {
-          return;
-        }
-
+      activeRequests.forEach((request) => {
         requestMap.set(request.id, {
           id: request.id,
           carBrand: request.car_brand,
@@ -153,7 +164,7 @@ export default function OffersPage() {
 
       const merged: OfferWithRequest[] = [];
 
-      offerRows.forEach((offer: RepairOfferRow) => {
+      (offerRows || []).forEach((offer) => {
         const matchingRequest = requestMap.get(offer.request_id);
         if (!matchingRequest) return;
 
@@ -161,8 +172,8 @@ export default function OffersPage() {
           offer: {
             id: offer.id,
             requestId: offer.request_id,
-            price: offer.price,
-            days: offer.days,
+            price: String(offer.price),
+            days: String(offer.days),
             message: offer.message || "",
             workshopName: offer.workshop_name,
             createdAt: offer.created_at,
@@ -173,7 +184,8 @@ export default function OffersPage() {
       });
 
       setItems(merged);
-    } catch {
+    } catch (error) {
+      console.error("Failed to load customer offers:", error);
       setItems([]);
     } finally {
       setLoadingOffers(false);
