@@ -4,12 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
+type ChatImage = {
+  url: string;
+  path?: string;
+  name?: string;
+};
+
 type Message = {
   id: string;
   request_id: string;
   sender_id: string;
   sender_role: string;
   message: string;
+  images?: ChatImage[] | null;
   created_at: string;
   delivered_at?: string | null;
   read_at?: string | null;
@@ -47,10 +54,14 @@ export default function ChatPage() {
   const [sendingQuickMessage, setSendingQuickMessage] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [activeRole, setActiveRole] = useState<string>("customer");
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [isSending, setIsSending] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const channelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
@@ -136,6 +147,15 @@ export default function ChatPage() {
     markIncomingMessagesAsRead();
   }, [messages, userId]);
 
+  useEffect(() => {
+    const previews = selectedImages.map((file) => URL.createObjectURL(file));
+    setImagePreviews(previews);
+
+    return () => {
+      previews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [selectedImages]);
+
   const getUser = async () => {
     const { data } = await supabase.auth.getUser();
 
@@ -188,6 +208,7 @@ export default function ChatPage() {
       sender_role: "system",
       message:
         "Conversația a fost începută. Puteți discuta aici despre această lucrare.",
+      images: [],
     });
   };
 
@@ -225,9 +246,43 @@ export default function ChatPage() {
     });
   };
 
-  const insertMessage = async (text: string) => {
+  const uploadSelectedImages = async (senderId: string) => {
+    const uploadedImages: ChatImage[] = [];
+
+    for (const file of selectedImages) {
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const filePath = `${requestId}/${senderId}/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from("chat-images")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      const { data } = supabase.storage
+        .from("chat-images")
+        .getPublicUrl(filePath);
+
+      uploadedImages.push({
+        url: data.publicUrl,
+        path: filePath,
+        name: file.name,
+      });
+    }
+
+    return uploadedImages;
+  };
+
+  const insertMessage = async (text: string, images: ChatImage[] = []) => {
     const cleanText = text.trim();
-    if (!cleanText) return;
+
+    if (!cleanText && images.length === 0) return;
 
     const { data: authData } = await supabase.auth.getUser();
 
@@ -238,6 +293,7 @@ export default function ChatPage() {
       sender_id: authData.user.id,
       sender_role: "user",
       message: cleanText,
+      images,
     });
 
     if (!error) {
@@ -247,7 +303,8 @@ export default function ChatPage() {
 
   const sendMessage = async () => {
     const text = newMessage.trim();
-    if (!text) return;
+
+    if (!text && selectedImages.length === 0) return;
 
     const { data: authData } = await supabase.auth.getUser();
 
@@ -256,21 +313,34 @@ export default function ChatPage() {
       return;
     }
 
-    const { error } = await supabase.from("messages").insert({
-      request_id: requestId,
-      sender_id: authData.user.id,
-      sender_role: "user",
-      message: text,
-    });
+    try {
+      setIsSending(true);
 
-    if (error) {
-      console.error("Failed to send message:", error);
-      alert("Mesajul nu a putut fi trimis.");
-      return;
+      const uploadedImages = await uploadSelectedImages(authData.user.id);
+
+      const { error } = await supabase.from("messages").insert({
+        request_id: requestId,
+        sender_id: authData.user.id,
+        sender_role: "user",
+        message: text,
+        images: uploadedImages,
+      });
+
+      if (error) {
+        console.error("Failed to send message:", error);
+        alert("Mesajul nu a putut fi trimis.");
+        return;
+      }
+
+      setNewMessage("");
+      setSelectedImages([]);
+      sendTypingStatus(false);
+    } catch (error) {
+      console.error("Failed to upload/send message:", error);
+      alert("Pozele sau mesajul nu au putut fi trimise.");
+    } finally {
+      setIsSending(false);
     }
-
-    setNewMessage("");
-    sendTypingStatus(false);
   };
 
   const sendQuickMessage = async (text: string) => {
@@ -293,6 +363,24 @@ export default function ChatPage() {
     typingTimeoutRef.current = setTimeout(() => {
       sendTypingStatus(false);
     }, 1200);
+  };
+
+  const handleImageSelect = (files: FileList | null) => {
+    if (!files) return;
+
+    const imageFiles = Array.from(files).filter((file) =>
+      file.type.startsWith("image/"),
+    );
+
+    setSelectedImages((prev) => [...prev, ...imageFiles].slice(0, 8));
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removeSelectedImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const firstImage =
@@ -334,7 +422,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-52">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-60">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {messages.length === 0 && (
             <div className="mx-auto mt-10 max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55">
@@ -347,6 +435,7 @@ export default function ChatPage() {
             const isSystem = message.sender_role === "system";
             const isMine = message.sender_id === userId && !isSystem;
             const isLastOwnMessage = message.id === lastOwnMessageId;
+            const images = message.images || [];
 
             if (isSystem) {
               return (
@@ -367,11 +456,39 @@ export default function ChatPage() {
                 }`}
               >
                 <div
-                  className={`rounded-3xl px-4 py-3 text-sm leading-6 ${
+                  className={`overflow-hidden rounded-3xl ${
                     isMine ? "bg-white text-black" : "bg-white/10 text-white"
                   }`}
                 >
-                  {message.message}
+                  {images.length > 0 && (
+                    <div
+                      className={`grid gap-1 p-1 ${
+                        images.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                      }`}
+                    >
+                      {images.map((image, index) => (
+                        <a
+                          key={`${image.url}-${index}`}
+                          href={image.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block overflow-hidden rounded-2xl bg-black/20"
+                        >
+                          <img
+                            src={image.url}
+                            alt={image.name || "Poză chat"}
+                            className="h-40 w-full object-cover"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {message.message && (
+                    <div className="px-4 py-3 text-sm leading-6">
+                      {message.message}
+                    </div>
+                  )}
                 </div>
 
                 <p
@@ -405,7 +522,7 @@ export default function ChatPage() {
               <button
                 key={text}
                 type="button"
-                disabled={sendingQuickMessage}
+                disabled={sendingQuickMessage || isSending}
                 onClick={() => sendQuickMessage(text)}
                 className="shrink-0 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white/80 transition active:scale-[0.98] disabled:opacity-50"
               >
@@ -414,9 +531,54 @@ export default function ChatPage() {
             ))}
           </div>
 
+          {imagePreviews.length > 0 && (
+            <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {imagePreviews.map((preview, index) => (
+                <div
+                  key={preview}
+                  className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/10"
+                >
+                  <img
+                    src={preview}
+                    alt="Preview"
+                    className="h-full w-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => removeSelectedImage(index)}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-xs font-bold text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleImageSelect(e.target.files)}
+          />
+
           <div className="flex gap-3">
+            <button
+              type="button"
+              disabled={isSending}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-2xl text-white active:scale-[0.98] disabled:opacity-50"
+              aria-label="Adaugă poze"
+            >
+              +
+            </button>
+
             <input
               value={newMessage}
+              disabled={isSending}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -425,18 +587,21 @@ export default function ChatPage() {
                 }
               }}
               placeholder="Scrie un mesaj..."
-              className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none placeholder:text-white/35"
+              className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none placeholder:text-white/35 disabled:opacity-60"
             />
 
             <button
               type="button"
+              disabled={
+                isSending || (!newMessage.trim() && selectedImages.length === 0)
+              }
               onClick={(e) => {
                 e.preventDefault();
                 sendMessage();
               }}
-              className="rounded-2xl bg-white px-5 py-3 font-semibold text-black active:scale-[0.98]"
+              className="rounded-2xl bg-white px-5 py-3 font-semibold text-black active:scale-[0.98] disabled:opacity-50"
             >
-              Trimite
+              {isSending ? "..." : "Trimite"}
             </button>
           </div>
         </div>
