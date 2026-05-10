@@ -87,16 +87,12 @@ export default function CustomerRequestDetailsPage() {
 
   const goToPrevImage = () => {
     if (validImages.length <= 1) return;
-    setImageIndex((prev) =>
-      prev === 0 ? validImages.length - 1 : prev - 1,
-    );
+    setImageIndex((prev) => (prev === 0 ? validImages.length - 1 : prev - 1));
   };
 
   const goToNextImage = () => {
     if (validImages.length <= 1) return;
-    setImageIndex((prev) =>
-      prev === validImages.length - 1 ? 0 : prev + 1,
-    );
+    setImageIndex((prev) => (prev === validImages.length - 1 ? 0 : prev + 1));
   };
 
   return (
@@ -190,6 +186,8 @@ export default function CustomerRequestDetailsPage() {
               </span>
             </div>
 
+            <StatusTimeline status={request.status} />
+
             <div className="grid gap-4">
               <div className="rounded-3xl bg-black/[0.04] p-5">
                 <p className="text-sm text-black/45">Tip daună</p>
@@ -250,6 +248,88 @@ export default function CustomerRequestDetailsPage() {
       />
     </main>
   );
+}
+
+function StatusTimeline({ status }: { status?: string | null }) {
+  const steps = [
+    { key: "open", label: "Postată" },
+    { key: "matched", label: "Acceptată" },
+    { key: "in_progress", label: "În lucru" },
+    { key: "completed", label: "Finalizată" },
+  ];
+
+  const currentIndex = getStatusIndex(status);
+
+  return (
+    <div className="rounded-3xl bg-black/[0.04] p-5">
+      <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-black/35">
+        Status lucrare
+      </p>
+
+      <div className="relative">
+        <div className="absolute left-4 right-4 top-4 h-[2px] bg-black/10" />
+
+        <div
+          className="absolute left-4 top-4 h-[2px] bg-black transition-all duration-500"
+          style={{
+            width:
+              currentIndex <= 0
+                ? "0%"
+                : currentIndex === 1
+                  ? "33%"
+                  : currentIndex === 2
+                    ? "66%"
+                    : "calc(100% - 2rem)",
+          }}
+        />
+
+        <div className="relative grid grid-cols-4 gap-2">
+          {steps.map((step, index) => {
+            const isDone = index < currentIndex;
+            const isActive = index === currentIndex;
+            const isFuture = index > currentIndex;
+
+            return (
+              <div key={step.key} className="flex flex-col items-center">
+                <div
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-black transition ${
+                    isDone
+                      ? "border-black bg-black text-white"
+                      : isActive
+                        ? "border-black bg-white text-black"
+                        : "border-black/10 bg-white text-black/30"
+                  }`}
+                >
+                  {isDone ? "✓" : isActive ? "●" : ""}
+                </div>
+
+                <p
+                  className={`mt-2 text-center text-[11px] font-bold leading-tight ${
+                    isFuture ? "text-black/30" : "text-black"
+                  }`}
+                >
+                  {step.label}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getStatusIndex(status?: string | null) {
+  switch (status) {
+    case "matched":
+      return 1;
+    case "in_progress":
+      return 2;
+    case "completed":
+      return 3;
+    default:
+      return 0;
+  }
 }
 
 function formatStatus(status?: string | null) {
