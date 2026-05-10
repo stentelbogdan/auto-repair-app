@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import imageCompression from "browser-image-compression";
 
 type ChatImage = {
   url: string;
@@ -250,13 +251,19 @@ export default function ChatPage() {
     const uploadedImages: ChatImage[] = [];
 
     for (const file of selectedImages) {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      const compressedFile = await imageCompression(file, {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1600,
+        useWebWorker: true,
+      });
+
+      const fileName = `${crypto.randomUUID()}.jpg`;
       const filePath = `${requestId}/${senderId}/${fileName}`;
 
       const { error } = await supabase.storage
         .from("chat-images")
-        .upload(filePath, file, {
+        .upload(filePath, compressedFile, {
+          contentType: "image/jpeg",
           cacheControl: "3600",
           upsert: false,
         });
