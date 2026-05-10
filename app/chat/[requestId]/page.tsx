@@ -11,6 +11,8 @@ type Message = {
   sender_role: string;
   message: string;
   created_at: string;
+  delivered_at?: string | null;
+  read_at?: string | null;
 };
 
 type RepairImage = {
@@ -43,10 +45,18 @@ export default function ChatPage() {
   const [userId, setUserId] = useState("");
   const [requestData, setRequestData] = useState<RequestData | null>(null);
   const [sendingQuickMessage, setSendingQuickMessage] = useState(false);
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [activeRole, setActiveRole] = useState<string>("customer");
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const channelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const stopTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    const savedRole = localStorage.getItem("activeRole");
+    if (savedRole) setActiveRole(savedRole);
+
     loadMessages();
     getUser();
     loadRequest();
@@ -62,21 +72,68 @@ export default function ChatPage() {
           filter: `request_id=eq.${requestId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as Message]);
+          const newMessage = payload.new as Message;
+
+          setMessages((prev) => {
+            if (prev.some((message) => message.id === newMessage.id)) {
+              return prev;
+            }
+
+            return [...prev, newMessage];
+          });
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `request_id=eq.${requestId}`,
+        },
+        (payload) => {
+          const updatedMessage = payload.new as Message;
+
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === updatedMessage.id ? updatedMessage : message,
+            ),
+          );
+        },
+      )
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.payload?.senderId === userId) return;
+
+        setIsOtherTyping(Boolean(payload.payload?.isTyping));
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsOtherTyping(false);
+        }, 1800);
+      })
       .subscribe();
 
+    channelRef.current = channel;
+
     return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      if (stopTypingTimeoutRef.current) clearTimeout(stopTypingTimeoutRef.current);
       supabase.removeChannel(channel);
     };
-  }, [requestId]);
+  }, [requestId, userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
     });
-  }, [messages]);
+  }, [messages, isOtherTyping]);
+
+  useEffect(() => {
+    markIncomingMessagesAsRead();
+  }, [messages, userId]);
 
   const getUser = async () => {
     const { data } = await supabase.auth.getUser();
@@ -133,6 +190,26 @@ export default function ChatPage() {
     });
   };
 
+  const markIncomingMessagesAsRead = async () => {
+    if (!userId || messages.length === 0) return;
+
+    const unreadMessageIds = messages
+      .filter(
+        (message) =>
+          message.sender_id !== userId &&
+          message.sender_role !== "system" &&
+          !message.read_at,
+      )
+      .map((message) => message.id);
+
+    if (unreadMessageIds.length === 0) return;
+
+    await supabase
+      .from("messages")
+      .update({ read_at: new Date().toISOString() })
+      .in("id", unreadMessageIds);
+  };
+
   const insertMessage = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
@@ -166,6 +243,7 @@ export default function ChatPage() {
 
     if (!error) {
       setNewMessage("");
+      sendTypingStatus(false);
     }
   };
 
@@ -178,8 +256,41 @@ export default function ChatPage() {
     }
   };
 
+  const sendTypingStatus = async (isTyping: boolean) => {
+    if (!channelRef.current || !userId) return;
+
+    await channelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: {
+        senderId: userId,
+        role: activeRole,
+        isTyping,
+      },
+    });
+  };
+
+  const handleInputChange = (value: string) => {
+    setNewMessage(value);
+    sendTypingStatus(value.trim().length > 0);
+
+    if (stopTypingTimeoutRef.current) {
+      clearTimeout(stopTypingTimeoutRef.current);
+    }
+
+    stopTypingTimeoutRef.current = setTimeout(() => {
+      sendTypingStatus(false);
+    }, 1200);
+  };
+
   const firstImage =
     requestData?.images?.[0]?.url || requestData?.images?.[0]?.dataUrl || "";
+
+  const lastOwnMessageId = [...messages]
+    .reverse()
+    .find(
+      (message) => message.sender_id === userId && message.sender_role !== "system",
+    )?.id;
 
   return (
     <main className="flex h-[calc(100svh-245px)] flex-col bg-black text-white md:h-[calc(100vh-150px)]">
@@ -222,6 +333,7 @@ export default function ChatPage() {
           {messages.map((message) => {
             const isSystem = message.sender_role === "system";
             const isMine = message.sender_id === userId && !isSystem;
+            const isLastOwnMessage = message.id === lastOwnMessageId;
 
             if (isSystem) {
               return (
@@ -255,10 +367,19 @@ export default function ChatPage() {
                   }`}
                 >
                   {formatTime(message.created_at)}
+                  {isMine && isLastOwnMessage && (
+                    <span> · {message.read_at ? "Văzut" : "Livrat"}</span>
+                  )}
                 </p>
               </div>
             );
           })}
+
+          {isOtherTyping && (
+            <div className="animate-[messageIn_0.25s_ease] max-w-[80%] rounded-3xl bg-white/10 px-4 py-3 text-sm text-white/60">
+              {activeRole === "workshop" ? "Clientul" : "Service-ul"} scrie...
+            </div>
+          )}
 
           <div ref={bottomRef} />
         </div>
@@ -283,7 +404,7 @@ export default function ChatPage() {
           <div className="flex gap-3">
             <input
               value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
+              onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   sendMessage();
