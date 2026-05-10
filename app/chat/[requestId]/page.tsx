@@ -264,9 +264,9 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 left-0 right-0 border-t border-white/10 bg-black/95 px-4 pb-[calc(0.9rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/95 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-3 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {quickMessages.map((text) => (
               <button
                 key={text}
@@ -290,7 +290,7 @@ export default function ChatPage() {
                 }
               }}
               placeholder="Scrie un mesaj..."
-              className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none placeholder:text-white/35"
+              className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/5 px-4 text-white outline-none placeholder:text-white/35"
             />
 
             <button
