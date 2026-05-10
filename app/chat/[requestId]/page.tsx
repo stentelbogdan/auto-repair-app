@@ -63,6 +63,7 @@ export default function ChatPage() {
   const channelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
@@ -139,12 +140,16 @@ export default function ChatPage() {
   }, [requestId, userId]);
 
   useEffect(() => {
+    const container = messagesContainerRef.current;
+
+    if (!container) return;
+
     const timeout = setTimeout(() => {
-      window.scrollBy({
-        top: 140,
+      container.scrollTo({
+        top: container.scrollHeight,
         behavior: "smooth",
       });
-    }, 150);
+    }, 100);
 
     return () => clearTimeout(timeout);
   }, [messages, isOtherTyping]);
@@ -434,7 +439,10 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-60">
+      <div
+        ref={messagesContainerRef}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-72"
+      >
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {messages.length === 0 && (
             <div className="mx-auto mt-10 max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55">
