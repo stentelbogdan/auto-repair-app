@@ -134,7 +134,7 @@ export default function ChatPage() {
     requestData?.images?.[0]?.url || requestData?.images?.[0]?.dataUrl || "";
 
   return (
-    <main className="flex h-screen flex-col bg-black text-white">
+    <main className="flex h-[calc(100svh-245px)] flex-col bg-black text-white md:h-[calc(100vh-150px)]">
       <div className="border-b border-white/10 bg-black/80 px-5 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-4">
           {firstImage ? (
@@ -162,7 +162,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
           {messages.length === 0 && (
             <div className="mx-auto mt-10 max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55">
@@ -192,7 +192,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <div className="border-t border-white/10 bg-black/90 p-4">
+      <div className="border-t border-white/10 bg-black/90 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
         <div className="mx-auto flex max-w-3xl gap-3">
           <input
             value={newMessage}
