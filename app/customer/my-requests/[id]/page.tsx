@@ -26,12 +26,25 @@ type RepairRequest = {
   images: RepairImage[] | null;
 };
 
+type AcceptedOffer = {
+  id: string;
+  request_id: string;
+  workshop_name: string | null;
+  price: number | string | null;
+  days: number | string | null;
+  message: string | null;
+  status: string | null;
+};
+
 export default function CustomerRequestDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
 
   const [request, setRequest] = useState<RepairRequest | null>(null);
+  const [acceptedOffer, setAcceptedOffer] = useState<AcceptedOffer | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [imageIndex, setImageIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -56,6 +69,33 @@ export default function CustomerRequestDetailsPage() {
         if (error) throw error;
 
         setRequest(data);
+
+        if (data.accepted_offer_id) {
+          const { data: offerData, error: offerError } = await supabase
+            .from("repair_offers")
+            .select(
+              "id, request_id, workshop_name, price, days, message, status",
+            )
+            .eq("id", data.accepted_offer_id)
+            .single<AcceptedOffer>();
+
+          if (!offerError && offerData) {
+            setAcceptedOffer(offerData);
+          }
+        } else {
+          const { data: offerData, error: offerError } = await supabase
+            .from("repair_offers")
+            .select(
+              "id, request_id, workshop_name, price, days, message, status",
+            )
+            .eq("request_id", id)
+            .eq("status", "accepted")
+            .maybeSingle<AcceptedOffer>();
+
+          if (!offerError && offerData) {
+            setAcceptedOffer(offerData);
+          }
+        }
       } catch (error) {
         console.error("Failed to load request:", error);
         alert("Nu am putut încărca dauna.");
@@ -188,6 +228,8 @@ export default function CustomerRequestDetailsPage() {
 
             <StatusTimeline status={request.status} />
 
+            {acceptedOffer && <ServiceCard offer={acceptedOffer} />}
+
             <div className="grid gap-4">
               <div className="rounded-3xl bg-black/[0.04] p-5">
                 <p className="text-sm text-black/45">Tip daună</p>
@@ -247,6 +289,62 @@ export default function CustomerRequestDetailsPage() {
         }}
       />
     </main>
+  );
+}
+
+function ServiceCard({ offer }: { offer: AcceptedOffer }) {
+  return (
+    <div className="rounded-3xl bg-black text-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-xl font-black text-black">
+            {(offer.workshop_name || "S").slice(0, 1).toUpperCase()}
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/35">
+              Service ales
+            </p>
+            <h2 className="mt-1 text-2xl font-black">
+              {offer.workshop_name || "Service"}
+            </h2>
+            <p className="mt-1 text-sm font-semibold text-green-300">
+              Verificat ✓
+            </p>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <p className="text-xs uppercase tracking-[0.18em] text-white/35">
+            Ofertă
+          </p>
+          <p className="mt-1 text-3xl font-black">€{offer.price}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-white/10 p-4">
+          <p className="text-xs text-white/45">Durată estimată</p>
+          <p className="mt-1 text-lg font-bold">
+            {offer.days} {String(offer.days) === "1" ? "zi" : "zile"}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-white/10 p-4">
+          <p className="text-xs text-white/45">Status ofertă</p>
+          <p className="mt-1 text-lg font-bold">Acceptată</p>
+        </div>
+      </div>
+
+      {offer.message && (
+        <div className="mt-3 rounded-2xl bg-white/10 p-4">
+          <p className="text-xs text-white/45">Mesaj service</p>
+          <p className="mt-2 text-sm leading-6 text-white/80">
+            {offer.message}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
