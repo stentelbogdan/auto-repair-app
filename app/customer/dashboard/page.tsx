@@ -19,7 +19,7 @@ export default function CustomerDashboardPage() {
       } = await supabase.auth.getSession();
 
       if (!session) {
-        router.push("/login");
+        router.replace("/login");
         return;
       }
 
@@ -36,6 +36,18 @@ export default function CustomerDashboardPage() {
     };
 
     loadRole();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session?.user) {
+        setIsWorkshop(null);
+        router.replace("/login");
+        router.refresh();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   if (isWorkshop === null) {

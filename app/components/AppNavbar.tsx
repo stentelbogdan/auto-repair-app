@@ -34,21 +34,13 @@ export default function AppNavbar() {
   }
 
   const handleLogout = async () => {
-    try {
-      setLoggingOut(true);
+    setLoggingOut(true);
 
-      localStorage.removeItem("activeRole");
-      sessionStorage.clear();
+    localStorage.removeItem("activeRole");
 
-      await supabase.auth.signOut({
-        scope: "local",
-      });
+    await supabase.auth.signOut();
 
-      window.location.replace("/login");
-    } catch (error: any) {
-      console.error("Logout failed:", error);
-      window.location.replace("/login");
-    }
+    window.location.replace("/login");
   };
 
   const goClient = () => {
