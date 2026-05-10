@@ -120,7 +120,8 @@ export default function ChatPage() {
 
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      if (stopTypingTimeoutRef.current) clearTimeout(stopTypingTimeoutRef.current);
+      if (stopTypingTimeoutRef.current)
+        clearTimeout(stopTypingTimeoutRef.current);
       supabase.removeChannel(channel);
     };
   }, [requestId, userId]);
@@ -232,7 +233,10 @@ export default function ChatPage() {
 
     const { data: authData } = await supabase.auth.getUser();
 
-    if (!authData.user) return;
+    if (!authData.user) {
+      alert("Nu ești logat.");
+      return;
+    }
 
     const { error } = await supabase.from("messages").insert({
       request_id: requestId,
@@ -241,10 +245,14 @@ export default function ChatPage() {
       message: text,
     });
 
-    if (!error) {
-      setNewMessage("");
-      sendTypingStatus(false);
+    if (error) {
+      console.error("Failed to send message:", error);
+      alert("Mesajul nu a putut fi trimis.");
+      return;
     }
+
+    setNewMessage("");
+    sendTypingStatus(false);
   };
 
   const sendQuickMessage = async (text: string) => {
@@ -289,7 +297,8 @@ export default function ChatPage() {
   const lastOwnMessageId = [...messages]
     .reverse()
     .find(
-      (message) => message.sender_id === userId && message.sender_role !== "system",
+      (message) =>
+        message.sender_id === userId && message.sender_role !== "system",
     )?.id;
 
   return (
@@ -407,6 +416,7 @@ export default function ChatPage() {
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
+                  e.preventDefault();
                   sendMessage();
                 }
               }}
@@ -415,8 +425,12 @@ export default function ChatPage() {
             />
 
             <button
-              onClick={sendMessage}
-              className="rounded-2xl bg-white px-5 py-3 font-semibold text-black"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                sendMessage();
+              }}
+              className="rounded-2xl bg-white px-5 py-3 font-semibold text-black active:scale-[0.98]"
             >
               Trimite
             </button>
