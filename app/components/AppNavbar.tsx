@@ -15,18 +15,30 @@ export default function AppNavbar() {
   const isClientMode = !isWorkshopMode;
 
   useEffect(() => {
+    let mounted = true;
+
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserEmail(data.user?.email ?? null);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (mounted) {
+        setUserEmail(session?.user?.email ?? null);
+      }
     };
 
     loadUser();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(loadUser);
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user?.email ?? null);
+    });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (pathname === "/" || pathname === "/login") {
@@ -36,11 +48,20 @@ export default function AppNavbar() {
   const handleLogout = async () => {
     setLoggingOut(true);
 
-    localStorage.removeItem("activeRole");
+    try {
+      localStorage.removeItem("activeRole");
 
-    await supabase.auth.signOut();
+      await supabase.auth.signOut();
 
-    window.location.replace("/login");
+      setUserEmail(null);
+
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 100);
+    } catch (error: any) {
+      console.error("Logout failed:", error);
+      window.location.href = "/login";
+    }
   };
 
   const goClient = () => {
