@@ -51,7 +51,6 @@ export default function ChatPage() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const channelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const stopTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
@@ -72,14 +71,14 @@ export default function ChatPage() {
           filter: `request_id=eq.${requestId}`,
         },
         (payload) => {
-          const newMessage = payload.new as Message;
+          const insertedMessage = payload.new as Message;
 
           setMessages((prev) => {
-            if (prev.some((message) => message.id === newMessage.id)) {
+            if (prev.some((message) => message.id === insertedMessage.id)) {
               return prev;
             }
 
-            return [...prev, newMessage];
+            return [...prev, insertedMessage];
           });
         },
       )
@@ -119,9 +118,10 @@ export default function ChatPage() {
     channelRef.current = channel;
 
     return () => {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      if (stopTypingTimeoutRef.current)
-        clearTimeout(stopTypingTimeoutRef.current);
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
       supabase.removeChannel(channel);
     };
   }, [requestId, userId]);
@@ -211,6 +211,20 @@ export default function ChatPage() {
       .in("id", unreadMessageIds);
   };
 
+  const sendTypingStatus = async (isTyping: boolean) => {
+    if (!channelRef.current || !userId) return;
+
+    await channelRef.current.send({
+      type: "broadcast",
+      event: "typing",
+      payload: {
+        senderId: userId,
+        role: activeRole,
+        isTyping,
+      },
+    });
+  };
+
   const insertMessage = async (text: string) => {
     const cleanText = text.trim();
     if (!cleanText) return;
@@ -219,12 +233,16 @@ export default function ChatPage() {
 
     if (!authData.user) return;
 
-    await supabase.from("messages").insert({
+    const { error } = await supabase.from("messages").insert({
       request_id: requestId,
       sender_id: authData.user.id,
       sender_role: "user",
       message: cleanText,
     });
+
+    if (!error) {
+      sendTypingStatus(false);
+    }
   };
 
   const sendMessage = async () => {
@@ -264,29 +282,15 @@ export default function ChatPage() {
     }
   };
 
-  const sendTypingStatus = async (isTyping: boolean) => {
-    if (!channelRef.current || !userId) return;
-
-    await channelRef.current.send({
-      type: "broadcast",
-      event: "typing",
-      payload: {
-        senderId: userId,
-        role: activeRole,
-        isTyping,
-      },
-    });
-  };
-
   const handleInputChange = (value: string) => {
     setNewMessage(value);
     sendTypingStatus(value.trim().length > 0);
 
-    if (stopTypingTimeoutRef.current) {
-      clearTimeout(stopTypingTimeoutRef.current);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
     }
 
-    stopTypingTimeoutRef.current = setTimeout(() => {
+    typingTimeoutRef.current = setTimeout(() => {
       sendTypingStatus(false);
     }, 1200);
   };
