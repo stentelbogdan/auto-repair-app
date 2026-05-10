@@ -117,7 +117,7 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
-                  onClick={() => router.push(`/customer/my-requests`)}
+                  onClick={() => router.push(`/customer/my-requests/${request.id}`)}
                   className="overflow-hidden rounded-[26px] bg-white text-black shadow-lg transition active:scale-[0.99]"
                 >
                   <div className="flex gap-4 p-4">
