@@ -71,6 +71,19 @@ export default function AppNavbar() {
 
     loadUnreadMessages();
 
+    const interval = window.setInterval(() => {
+      loadUnreadMessages();
+    }, 3000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadUnreadMessages();
+      }
+    };
+
+    window.addEventListener("focus", loadUnreadMessages);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     const channel = supabase
       .channel(`navbar-unread-${userId}`)
       .on(
@@ -98,6 +111,9 @@ export default function AppNavbar() {
       .subscribe();
 
     return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", loadUnreadMessages);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [userId]);
