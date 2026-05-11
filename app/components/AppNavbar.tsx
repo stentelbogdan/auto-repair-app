@@ -9,7 +9,9 @@ export default function AppNavbar() {
   const router = useRouter();
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isWorkshopMode = pathname.startsWith("/workshops");
   const isClientMode = !isWorkshopMode;
@@ -24,6 +26,7 @@ export default function AppNavbar() {
 
       if (mounted) {
         setUserEmail(session?.user?.email ?? null);
+        setUserId(session?.user?.id ?? null);
       }
     };
 
@@ -33,6 +36,7 @@ export default function AppNavbar() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
     });
 
     return () => {
@@ -40,6 +44,47 @@ export default function AppNavbar() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!userId) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const loadUnreadMessages = async () => {
+      const { count, error } = await supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .neq("sender_id", userId)
+        .neq("sender_role", "system")
+        .is("read_at", null);
+
+      if (!error) {
+        setUnreadCount(count || 0);
+      }
+    };
+
+    loadUnreadMessages();
+
+    const channel = supabase
+      .channel(`navbar-unread-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+        },
+        () => {
+          loadUnreadMessages();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
 
   if (pathname === "/" || pathname === "/login") {
     return null;
@@ -54,6 +99,8 @@ export default function AppNavbar() {
       await supabase.auth.signOut();
 
       setUserEmail(null);
+      setUserId(null);
+      setUnreadCount(0);
 
       setTimeout(() => {
         window.location.href = "/login";
@@ -78,8 +125,14 @@ export default function AppNavbar() {
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 py-4">
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-black text-black shadow-sm">
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-black text-black shadow-sm">
             AR
+
+            {unreadCount > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </div>
 
           <div className="min-w-0 text-center">
