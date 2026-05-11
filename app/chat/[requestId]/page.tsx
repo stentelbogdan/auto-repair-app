@@ -418,6 +418,10 @@ export default function ChatPage() {
         message.sender_id === userId && message.sender_role !== "system",
     )?.id;
 
+  const getAllChatImages = () => {
+    return messages.flatMap((message) => message.images || []);
+  };
+
   return (
     <main className="flex h-[calc(100svh-245px)] flex-col bg-black text-white md:h-[calc(100vh-150px)]">
       <div className="border-b border-white/10 bg-black/80 px-5 py-4 backdrop-blur">
@@ -498,12 +502,18 @@ export default function ChatPage() {
                         <button
                           key={`${image.url}-${index}`}
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
+                            const allImages = getAllChatImages();
+
+                            const imageIndex = allImages.findIndex(
+                              (item) => item.url === image.url,
+                            );
+
                             setSelectedChatGallery({
-                              images,
-                              index,
-                            })
-                          }
+                              images: allImages,
+                              index: imageIndex >= 0 ? imageIndex : 0,
+                            });
+                          }}
                           className="block overflow-hidden rounded-2xl bg-black/20"
                         >
                           <img
@@ -641,7 +651,10 @@ export default function ChatPage() {
 
       <Lightbox
         open={!!selectedChatGallery}
-        close={() => setSelectedChatGallery(null)}
+        close={() => {
+          setSelectedChatGallery(null);
+          window.history.replaceState(null, "", window.location.pathname);
+        }}
         index={selectedChatGallery?.index || 0}
         slides={
           selectedChatGallery?.images.map((image) => ({
