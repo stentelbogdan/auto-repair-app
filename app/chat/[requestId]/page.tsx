@@ -7,6 +7,7 @@ import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
+import { motion, AnimatePresence } from "framer-motion";
 
 type ChatImage = {
   url: string;
@@ -649,19 +650,11 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <Lightbox
+      <PremiumImageViewer
         open={!!selectedChatGallery}
-        close={() => {
-          setSelectedChatGallery(null);
-          window.history.replaceState(null, "", window.location.pathname);
-        }}
-        index={selectedChatGallery?.index || 0}
-        slides={
-          selectedChatGallery?.images.map((image) => ({
-            src: image.url,
-          })) || []
-        }
-        plugins={[Zoom]}
+        images={selectedChatGallery?.images || []}
+        initialIndex={selectedChatGallery?.index || 0}
+        onClose={() => setSelectedChatGallery(null)}
       />
     </main>
   );
@@ -685,4 +678,113 @@ function formatTime(date: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function PremiumImageViewer({
+  open,
+  images,
+  initialIndex,
+  onClose,
+}: {
+  open: boolean;
+  images: ChatImage[];
+  initialIndex: number;
+  onClose: () => void;
+}) {
+  const [index, setIndex] = useState(initialIndex);
+
+  useEffect(() => {
+    if (open) {
+      setIndex(initialIndex);
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open, initialIndex]);
+
+  const currentImage = images[index];
+
+  const goNext = () => {
+    setIndex((prev) => Math.min(prev + 1, images.length - 1));
+  };
+
+  const goPrev = () => {
+    setIndex((prev) => Math.max(prev - 1, 0));
+  };
+
+  if (!open || !currentImage) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-6 top-12 z-20 text-5xl font-light text-white/80"
+        >
+          ×
+        </button>
+
+        <div className="absolute left-0 right-0 top-14 z-10 text-center text-sm font-semibold text-white/60">
+          {index + 1} / {images.length}
+        </div>
+
+        <motion.img
+          key={currentImage.url}
+          src={currentImage.url}
+          alt={currentImage.name || "Poză"}
+          className="max-h-[82svh] max-w-full select-none object-contain"
+          drag
+          dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+          dragElastic={0.18}
+          onDragEnd={(_, info) => {
+            if (info.offset.y > 120) {
+              onClose();
+              return;
+            }
+
+            if (info.offset.x < -90) {
+              goNext();
+              return;
+            }
+
+            if (info.offset.x > 90) {
+              goPrev();
+            }
+          }}
+          initial={{ opacity: 0, scale: 0.96, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.96, y: 20 }}
+          transition={{ type: "spring", stiffness: 260, damping: 28 }}
+        />
+
+        {index > 0 && (
+          <button
+            type="button"
+            onClick={goPrev}
+            className="absolute left-4 top-1/2 z-10 -translate-y-1/2 text-5xl text-white/70"
+          >
+            ‹
+          </button>
+        )}
+
+        {index < images.length - 1 && (
+          <button
+            type="button"
+            onClick={goNext}
+            className="absolute right-4 top-1/2 z-10 -translate-y-1/2 text-5xl text-white/70"
+          >
+            ›
+          </button>
+        )}
+      </motion.div>
+    </AnimatePresence>
+  );
 }
