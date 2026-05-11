@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
@@ -17,7 +17,6 @@ type ChatImage = {
 type Message = {
   id: string;
   request_id: string;
-  offer_id?: string | null;
   sender_id: string;
   sender_role: string;
   message: string;
@@ -34,8 +33,6 @@ type RepairImage = {
 };
 
 type RequestData = {
-  id: string;
-  user_id: string;
   car_brand: string | null;
   car_model: string | null;
   city: string | null;
@@ -52,11 +49,7 @@ const quickMessages = [
 
 export default function ChatPage() {
   const params = useParams();
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
   const requestId = params.requestId as string;
-  const offerId = searchParams.get("offerId");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -84,12 +77,12 @@ export default function ChatPage() {
     const savedRole = localStorage.getItem("activeRole");
     if (savedRole) setActiveRole(savedRole);
 
+    loadMessages();
     getUser();
     loadRequest();
-    loadMessages();
 
     const channel = supabase
-      .channel(`chat-${requestId}-${offerId || "request"}`)
+      .channel(`chat-${requestId}`)
       .on(
         "postgres_changes",
         {
@@ -100,9 +93,6 @@ export default function ChatPage() {
         },
         (payload) => {
           const insertedMessage = payload.new as Message;
-
-          if (offerId && insertedMessage.offer_id !== offerId) return;
-          if (!offerId && insertedMessage.offer_id) return;
 
           setMessages((prev) => {
             if (prev.some((message) => message.id === insertedMessage.id)) {
@@ -124,9 +114,6 @@ export default function ChatPage() {
         (payload) => {
           const updatedMessage = payload.new as Message;
 
-          if (offerId && updatedMessage.offer_id !== offerId) return;
-          if (!offerId && updatedMessage.offer_id) return;
-
           setMessages((prev) =>
             prev.map((message) =>
               message.id === updatedMessage.id ? updatedMessage : message,
@@ -136,7 +123,6 @@ export default function ChatPage() {
       )
       .on("broadcast", { event: "typing" }, (payload) => {
         if (payload.payload?.senderId === userId) return;
-        if (payload.payload?.offerId !== (offerId || null)) return;
 
         setIsOtherTyping(Boolean(payload.payload?.isTyping));
 
@@ -159,7 +145,7 @@ export default function ChatPage() {
 
       supabase.removeChannel(channel);
     };
-  }, [requestId, offerId, userId]);
+  }, [requestId, userId]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -178,7 +164,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     markConversationAsRead();
-  }, [messages, userId, requestId, offerId]);
+  }, [messages, userId, requestId]);
 
   useEffect(() => {
     const previews = selectedImages.map((file) => URL.createObjectURL(file));
@@ -198,21 +184,10 @@ export default function ChatPage() {
   };
 
   const loadRequest = async () => {
-    const { data: authData } = await supabase.auth.getUser();
-
-    if (!authData.user) {
-      router.replace("/login");
-      return;
-    }
-
-    const currentUserId = authData.user.id;
-
     const { data, error } = await supabase
       .from("repair_requests")
       .select(
         `
-        id,
-        user_id,
         car_brand,
         car_model,
         city,
@@ -223,45 +198,17 @@ export default function ChatPage() {
       .eq("id", requestId)
       .single<RequestData>();
 
-    if (error || !data) {
-      router.replace("/customer/dashboard");
-      return;
+    if (!error && data) {
+      setRequestData(data);
     }
-
-    const isOwner = data.user_id === currentUserId;
-
-    const { data: offerData } = await supabase
-      .from("repair_offers")
-      .select("id")
-      .eq("request_id", requestId)
-      .eq("workshop_user_id", currentUserId)
-      .limit(1);
-
-    const isWorkshopParticipant =
-      Array.isArray(offerData) && offerData.length > 0;
-
-    if (!isOwner && !isWorkshopParticipant) {
-      router.replace("/customer/dashboard");
-      return;
-    }
-
-    setRequestData(data);
   };
 
   const loadMessages = async () => {
-    let query = supabase
+    const { data, error } = await supabase
       .from("messages")
       .select("*")
       .eq("request_id", requestId)
       .order("created_at", { ascending: true });
-
-    if (offerId) {
-      query = query.eq("offer_id", offerId);
-    } else {
-      query = query.is("offer_id", null);
-    }
-
-    const { data, error } = await query;
 
     if (error) return;
 
@@ -276,7 +223,6 @@ export default function ChatPage() {
 
     await supabase.from("messages").insert({
       request_id: requestId,
-      offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "system",
       message:
@@ -328,7 +274,6 @@ export default function ChatPage() {
       payload: {
         senderId: userId,
         role: activeRole,
-        offerId: offerId || null,
         isTyping,
       },
     });
@@ -384,7 +329,6 @@ export default function ChatPage() {
 
     const { error } = await supabase.from("messages").insert({
       request_id: requestId,
-      offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "user",
       message: cleanText,
@@ -415,7 +359,6 @@ export default function ChatPage() {
 
       const { error } = await supabase.from("messages").insert({
         request_id: requestId,
-        offer_id: offerId,
         sender_id: authData.user.id,
         sender_role: "user",
         message: text,
