@@ -11,7 +11,7 @@ export default function AppNavbar() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(3);
 
   const isWorkshopMode = pathname.startsWith("/workshops");
   const isClientMode = !isWorkshopMode;
