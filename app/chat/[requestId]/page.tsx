@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
@@ -17,6 +17,7 @@ type ChatImage = {
 type Message = {
   id: string;
   request_id: string;
+  offer_id?: string | null;
   sender_id: string;
   sender_role: string;
   message: string;
@@ -51,8 +52,11 @@ const quickMessages = [
 
 export default function ChatPage() {
   const params = useParams();
-  const requestId = params.requestId as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const requestId = params.requestId as string;
+  const offerId = searchParams.get("offerId");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -85,7 +89,7 @@ export default function ChatPage() {
     loadMessages();
 
     const channel = supabase
-      .channel(`chat-${requestId}`)
+      .channel(`chat-${requestId}-${offerId || "request"}`)
       .on(
         "postgres_changes",
         {
@@ -96,6 +100,9 @@ export default function ChatPage() {
         },
         (payload) => {
           const insertedMessage = payload.new as Message;
+
+          if (offerId && insertedMessage.offer_id !== offerId) return;
+          if (!offerId && insertedMessage.offer_id) return;
 
           setMessages((prev) => {
             if (prev.some((message) => message.id === insertedMessage.id)) {
@@ -117,6 +124,9 @@ export default function ChatPage() {
         (payload) => {
           const updatedMessage = payload.new as Message;
 
+          if (offerId && updatedMessage.offer_id !== offerId) return;
+          if (!offerId && updatedMessage.offer_id) return;
+
           setMessages((prev) =>
             prev.map((message) =>
               message.id === updatedMessage.id ? updatedMessage : message,
@@ -126,6 +136,7 @@ export default function ChatPage() {
       )
       .on("broadcast", { event: "typing" }, (payload) => {
         if (payload.payload?.senderId === userId) return;
+        if (payload.payload?.offerId !== (offerId || null)) return;
 
         setIsOtherTyping(Boolean(payload.payload?.isTyping));
 
@@ -148,7 +159,7 @@ export default function ChatPage() {
 
       supabase.removeChannel(channel);
     };
-  }, [requestId, userId]);
+  }, [requestId, offerId, userId]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -167,7 +178,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     markConversationAsRead();
-  }, [messages, userId, requestId]);
+  }, [messages, userId, requestId, offerId]);
 
   useEffect(() => {
     const previews = selectedImages.map((file) => URL.createObjectURL(file));
@@ -200,14 +211,14 @@ export default function ChatPage() {
       .from("repair_requests")
       .select(
         `
-      id,
-      user_id,
-      car_brand,
-      car_model,
-      city,
-      status,
-      images
-    `,
+        id,
+        user_id,
+        car_brand,
+        car_model,
+        city,
+        status,
+        images
+      `,
       )
       .eq("id", requestId)
       .single<RequestData>();
@@ -238,11 +249,19 @@ export default function ChatPage() {
   };
 
   const loadMessages = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("messages")
       .select("*")
       .eq("request_id", requestId)
       .order("created_at", { ascending: true });
+
+    if (offerId) {
+      query = query.eq("offer_id", offerId);
+    } else {
+      query = query.is("offer_id", null);
+    }
+
+    const { data, error } = await query;
 
     if (error) return;
 
@@ -257,6 +276,7 @@ export default function ChatPage() {
 
     await supabase.from("messages").insert({
       request_id: requestId,
+      offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "system",
       message:
@@ -308,6 +328,7 @@ export default function ChatPage() {
       payload: {
         senderId: userId,
         role: activeRole,
+        offerId: offerId || null,
         isTyping,
       },
     });
@@ -363,6 +384,7 @@ export default function ChatPage() {
 
     const { error } = await supabase.from("messages").insert({
       request_id: requestId,
+      offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "user",
       message: cleanText,
@@ -393,6 +415,7 @@ export default function ChatPage() {
 
       const { error } = await supabase.from("messages").insert({
         request_id: requestId,
+        offer_id: offerId,
         sender_id: authData.user.id,
         sender_role: "user",
         message: text,
