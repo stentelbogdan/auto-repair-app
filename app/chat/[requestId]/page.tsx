@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
@@ -33,6 +33,8 @@ type RepairImage = {
 };
 
 type RequestData = {
+  id: string;
+  user_id: string;
   car_brand: string | null;
   car_model: string | null;
   city: string | null;
@@ -50,6 +52,7 @@ const quickMessages = [
 export default function ChatPage() {
   const params = useParams();
   const requestId = params.requestId as string;
+  const router = useRouter();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -77,9 +80,9 @@ export default function ChatPage() {
     const savedRole = localStorage.getItem("activeRole");
     if (savedRole) setActiveRole(savedRole);
 
-    loadMessages();
     getUser();
     loadRequest();
+    loadMessages();
 
     const channel = supabase
       .channel(`chat-${requestId}`)
@@ -184,23 +187,54 @@ export default function ChatPage() {
   };
 
   const loadRequest = async () => {
+    const { data: authData } = await supabase.auth.getUser();
+
+    if (!authData.user) {
+      router.replace("/login");
+      return;
+    }
+
+    const currentUserId = authData.user.id;
+
     const { data, error } = await supabase
       .from("repair_requests")
       .select(
         `
-        car_brand,
-        car_model,
-        city,
-        status,
-        images
-      `,
+      id,
+      user_id,
+      car_brand,
+      car_model,
+      city,
+      status,
+      images
+    `,
       )
       .eq("id", requestId)
       .single<RequestData>();
 
-    if (!error && data) {
-      setRequestData(data);
+    if (error || !data) {
+      router.replace("/customer/dashboard");
+      return;
     }
+
+    const isOwner = data.user_id === currentUserId;
+
+    const { data: offerData } = await supabase
+      .from("repair_offers")
+      .select("id")
+      .eq("request_id", requestId)
+      .eq("workshop_user_id", currentUserId)
+      .limit(1);
+
+    const isWorkshopParticipant =
+      Array.isArray(offerData) && offerData.length > 0;
+
+    if (!isOwner && !isWorkshopParticipant) {
+      router.replace("/customer/dashboard");
+      return;
+    }
+
+    setRequestData(data);
   };
 
   const loadMessages = async () => {
