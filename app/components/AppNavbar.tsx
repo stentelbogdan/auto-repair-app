@@ -11,7 +11,7 @@ export default function AppNavbar() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(3);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const isWorkshopMode = pathname.startsWith("/workshops");
   const isClientMode = !isWorkshopMode;
@@ -53,6 +53,12 @@ export default function AppNavbar() {
 
     const loadUnreadMessages = async () => {
       const { data, error } = await supabase.rpc("get_unread_messages_count");
+
+      console.log("UNREAD RPC DEBUG:", {
+        data,
+        error,
+        userId,
+      });
 
       if (error) {
         console.error("Failed to load unread count:", error);
