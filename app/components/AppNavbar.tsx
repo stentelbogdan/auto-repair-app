@@ -52,52 +52,21 @@ export default function AppNavbar() {
     }
 
     const loadUnreadMessages = async () => {
-      const { data: messagesData, error: messagesError } = await supabase
-        .from("messages")
-        .select("id, request_id, sender_id, sender_role, created_at")
-        .neq("sender_id", userId)
-        .neq("sender_role", "system");
+      const { data, error } = await supabase.rpc("get_unread_messages_count");
 
-      if (messagesError) {
-        console.error("Failed to load unread messages:", messagesError);
+      if (error) {
+        console.error("Failed to load unread count:", error);
         setUnreadCount(0);
         return;
       }
 
-      const { data: readsData, error: readsError } = await supabase
-        .from("conversation_reads")
-        .select("request_id, last_read_at")
-        .eq("user_id", userId);
-
-      if (readsError) {
-        console.error("Failed to load conversation reads:", readsError);
-        setUnreadCount(0);
-        return;
-      }
-
-      const readMap = new Map<string, string>();
-
-      (readsData || []).forEach((read) => {
-        readMap.set(read.request_id, read.last_read_at);
-      });
-
-      const unread = (messagesData || []).filter((message) => {
-        const lastReadAt = readMap.get(message.request_id);
-
-        if (!lastReadAt) {
-          return true;
-        }
-
-        return new Date(message.created_at) > new Date(lastReadAt);
-      });
-
-      setUnreadCount(unread.length);
+      setUnreadCount(data || 0);
     };
 
     loadUnreadMessages();
 
     const channel = supabase
-      .channel(`navbar-conversation-unread-${userId}`)
+      .channel(`navbar-unread-${userId}`)
       .on(
         "postgres_changes",
         {
