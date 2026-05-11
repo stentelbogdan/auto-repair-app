@@ -659,6 +659,29 @@ export default function ChatPage() {
           })) || []
         }
         plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
       />
     </main>
   );
