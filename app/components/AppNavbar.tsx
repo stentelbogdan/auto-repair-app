@@ -52,35 +52,69 @@ export default function AppNavbar() {
     }
 
     const loadUnreadMessages = async () => {
-      const { data, error } = await supabase
+      const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
-        .select("id, sender_id, sender_role, read_at")
+        .select("id, request_id, sender_id, sender_role, created_at")
         .neq("sender_id", userId)
-        .neq("sender_role", "system")
-        .is("read_at", null);
+        .neq("sender_role", "system");
 
-      console.log("UNREAD DEBUG:", {
-        userId,
-        data,
-        error,
-        count: data?.length,
+      if (messagesError) {
+        console.error("Failed to load unread messages:", messagesError);
+        setUnreadCount(0);
+        return;
+      }
+
+      const { data: readsData, error: readsError } = await supabase
+        .from("conversation_reads")
+        .select("request_id, last_read_at")
+        .eq("user_id", userId);
+
+      if (readsError) {
+        console.error("Failed to load conversation reads:", readsError);
+        setUnreadCount(0);
+        return;
+      }
+
+      const readMap = new Map<string, string>();
+
+      (readsData || []).forEach((read) => {
+        readMap.set(read.request_id, read.last_read_at);
       });
 
-      if (!error) {
-        setUnreadCount(data?.length || 0);
-      }
+      const unread = (messagesData || []).filter((message) => {
+        const lastReadAt = readMap.get(message.request_id);
+
+        if (!lastReadAt) {
+          return true;
+        }
+
+        return new Date(message.created_at) > new Date(lastReadAt);
+      });
+
+      setUnreadCount(unread.length);
     };
 
     loadUnreadMessages();
 
     const channel = supabase
-      .channel(`navbar-unread-${userId}`)
+      .channel(`navbar-conversation-unread-${userId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
           table: "messages",
+        },
+        () => {
+          loadUnreadMessages();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversation_reads",
         },
         () => {
           loadUnreadMessages();

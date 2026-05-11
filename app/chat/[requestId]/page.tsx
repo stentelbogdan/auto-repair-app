@@ -163,8 +163,8 @@ export default function ChatPage() {
   }, [messages, isOtherTyping]);
 
   useEffect(() => {
-    markIncomingMessagesAsRead();
-  }, [messages, userId]);
+    markConversationAsRead();
+  }, [messages, userId, requestId]);
 
   useEffect(() => {
     const previews = selectedImages.map((file) => URL.createObjectURL(file));
@@ -231,8 +231,22 @@ export default function ChatPage() {
     });
   };
 
-  const markIncomingMessagesAsRead = async () => {
-    if (!userId || messages.length === 0) return;
+  const markConversationAsRead = async () => {
+    if (!userId || !requestId || messages.length === 0) return;
+
+    const now = new Date().toISOString();
+
+    await supabase.from("conversation_reads").upsert(
+      {
+        request_id: requestId,
+        user_id: userId,
+        last_read_at: now,
+        updated_at: now,
+      },
+      {
+        onConflict: "request_id,user_id",
+      },
+    );
 
     const unreadMessageIds = messages
       .filter(
@@ -243,12 +257,12 @@ export default function ChatPage() {
       )
       .map((message) => message.id);
 
-    if (unreadMessageIds.length === 0) return;
-
-    await supabase
-      .from("messages")
-      .update({ read_at: new Date().toISOString() })
-      .in("id", unreadMessageIds);
+    if (unreadMessageIds.length > 0) {
+      await supabase
+        .from("messages")
+        .update({ read_at: now })
+        .in("id", unreadMessageIds);
+    }
   };
 
   const sendTypingStatus = async (isTyping: boolean) => {
