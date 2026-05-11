@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
 
 type ChatImage = {
   url: string;
@@ -64,6 +67,11 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [selectedChatGallery, setSelectedChatGallery] = useState<{
+    images: ChatImage[];
+    index: number;
+  } | null>(null);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
@@ -487,11 +495,15 @@ export default function ChatPage() {
                       }`}
                     >
                       {images.map((image, index) => (
-                        <a
+                        <button
                           key={`${image.url}-${index}`}
-                          href={image.url}
-                          target="_blank"
-                          rel="noreferrer"
+                          type="button"
+                          onClick={() =>
+                            setSelectedChatGallery({
+                              images,
+                              index,
+                            })
+                          }
                           className="block overflow-hidden rounded-2xl bg-black/20"
                         >
                           <img
@@ -499,7 +511,7 @@ export default function ChatPage() {
                             alt={image.name || "Poză chat"}
                             className="h-40 w-full object-cover"
                           />
-                        </a>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -626,6 +638,18 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      <Lightbox
+        open={!!selectedChatGallery}
+        close={() => setSelectedChatGallery(null)}
+        index={selectedChatGallery?.index || 0}
+        slides={
+          selectedChatGallery?.images.map((image) => ({
+            src: image.url,
+          })) || []
+        }
+        plugins={[Zoom]}
+      />
     </main>
   );
 }
