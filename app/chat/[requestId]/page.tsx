@@ -7,7 +7,6 @@ import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
-import { motion, AnimatePresence } from "framer-motion";
 
 type ChatImage = {
   url: string;
@@ -650,11 +649,16 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <PremiumImageViewer
+      <Lightbox
         open={!!selectedChatGallery}
-        images={selectedChatGallery?.images || []}
-        initialIndex={selectedChatGallery?.index || 0}
-        onClose={() => setSelectedChatGallery(null)}
+        close={() => setSelectedChatGallery(null)}
+        index={selectedChatGallery?.index || 0}
+        slides={
+          selectedChatGallery?.images.map((image) => ({
+            src: image.url,
+          })) || []
+        }
+        plugins={[Zoom]}
       />
     </main>
   );
