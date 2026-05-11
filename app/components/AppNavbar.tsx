@@ -52,15 +52,22 @@ export default function AppNavbar() {
     }
 
     const loadUnreadMessages = async () => {
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("messages")
-        .select("id", { count: "exact", head: true })
+        .select("id, sender_id, sender_role, read_at")
         .neq("sender_id", userId)
         .neq("sender_role", "system")
         .is("read_at", null);
 
+      console.log("UNREAD DEBUG:", {
+        userId,
+        data,
+        error,
+        count: data?.length,
+      });
+
       if (!error) {
-        setUnreadCount(count || 0);
+        setUnreadCount(data?.length || 0);
       }
     };
 
@@ -127,7 +134,6 @@ export default function AppNavbar() {
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-black text-black shadow-sm">
             AR
-
             {unreadCount > 0 && (
               <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
                 {unreadCount > 9 ? "9+" : unreadCount}
