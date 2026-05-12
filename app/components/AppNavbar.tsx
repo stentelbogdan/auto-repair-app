@@ -13,10 +13,12 @@ export default function AppNavbar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const activeRole =
-    typeof window !== "undefined"
-      ? localStorage.getItem("activeRole")
-      : "customer";
+  const [activeRole, setActiveRole] = useState<string>("customer");
+
+  useEffect(() => {
+    const savedRole = localStorage.getItem("activeRole");
+    setActiveRole(savedRole || "customer");
+  }, [pathname]);
 
   const isWorkshopMode =
     pathname.startsWith("/workshops") ||
