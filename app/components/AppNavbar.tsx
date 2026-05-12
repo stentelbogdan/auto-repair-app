@@ -54,12 +54,6 @@ export default function AppNavbar() {
     const loadUnreadMessages = async () => {
       const { data, error } = await supabase.rpc("get_unread_messages_count");
 
-      console.log("UNREAD RPC DEBUG:", {
-        data,
-        error,
-        userId,
-      });
-
       if (error) {
         console.error("Failed to load unread count:", error);
         setUnreadCount(0);
