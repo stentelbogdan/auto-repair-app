@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
@@ -17,6 +17,7 @@ type ChatImage = {
 type Message = {
   id: string;
   request_id: string;
+  offer_id?: string | null;
   sender_id: string;
   sender_role: string;
   message: string;
@@ -50,6 +51,8 @@ const quickMessages = [
 export default function ChatPage() {
   const params = useParams();
   const requestId = params.requestId as string;
+  const searchParams = useSearchParams();
+  const offerId = searchParams.get("offerId");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -204,11 +207,19 @@ export default function ChatPage() {
   };
 
   const loadMessages = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from("messages")
       .select("*")
       .eq("request_id", requestId)
       .order("created_at", { ascending: true });
+
+    if (offerId) {
+      query = query.eq("offer_id", offerId);
+    } else {
+      query = query.is("offer_id", null);
+    }
+
+    const { data, error } = await query;
 
     if (error) return;
 
@@ -223,6 +234,7 @@ export default function ChatPage() {
 
     await supabase.from("messages").insert({
       request_id: requestId,
+      offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "system",
       message:
