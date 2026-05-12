@@ -117,7 +117,9 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
-                  onClick={() => router.push(`/customer/my-requests/${request.id}`)}
+                  onClick={() =>
+                    router.push(`/customer/my-requests/${request.id}`)
+                  }
                   className="overflow-hidden rounded-[26px] bg-white text-black shadow-lg transition active:scale-[0.99]"
                 >
                   <div className="flex gap-4 p-4">
@@ -183,11 +185,20 @@ export default function MyJobsPage() {
                       <div className="mt-4">
                         <button
                           type="button"
+                          disabled={!acceptedOffer}
                           onClick={(event) => {
                             event.stopPropagation();
-                            router.push(`/chat/${request.id}`);
+
+                            if (!acceptedOffer) {
+                              alert("Oferta acceptată nu a fost găsită.");
+                              return;
+                            }
+
+                            router.push(
+                              `/chat/${request.id}?offerId=${acceptedOffer.id}`,
+                            );
                           }}
-                          className="rounded-2xl bg-black px-4 py-3 text-sm font-bold text-white"
+                          className="rounded-2xl bg-black px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
                         >
                           Chat cu service-ul
                         </button>
