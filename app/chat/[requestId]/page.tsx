@@ -341,12 +341,12 @@ export default function ChatPage() {
 
     const { error } = await supabase.from("messages").insert({
       request_id: requestId,
+      offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "user",
       message: cleanText,
       images,
     });
-
     if (!error) {
       sendTypingStatus(false);
     }
@@ -371,6 +371,7 @@ export default function ChatPage() {
 
       const { error } = await supabase.from("messages").insert({
         request_id: requestId,
+        offer_id: offerId,
         sender_id: authData.user.id,
         sender_role: "user",
         message: text,
