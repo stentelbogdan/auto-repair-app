@@ -13,7 +13,15 @@ export default function AppNavbar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const isWorkshopMode = pathname.startsWith("/workshops");
+  const activeRole =
+    typeof window !== "undefined"
+      ? localStorage.getItem("activeRole")
+      : "customer";
+
+  const isWorkshopMode =
+    pathname.startsWith("/workshops") ||
+    (pathname.startsWith("/chat") && activeRole === "workshop");
+
   const isClientMode = !isWorkshopMode;
 
   useEffect(() => {
