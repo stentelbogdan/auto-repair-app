@@ -170,9 +170,14 @@ export default function AppNavbar() {
   };
 
   const goMessages = () => {
-    localStorage.setItem("activeRole", currentRole);
-    setActiveRole(currentRole);
-    window.location.href = `/messages?role=${currentRole}&t=${Date.now()}`;
+    if (isWorkshopMode) {
+      localStorage.setItem("activeRole", "workshop");
+      router.push("/workshops/messages");
+      return;
+    }
+
+    localStorage.setItem("activeRole", "customer");
+    router.push("/customer/messages");
   };
 
   return (
