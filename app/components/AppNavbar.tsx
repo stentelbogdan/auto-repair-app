@@ -163,11 +163,6 @@ export default function AppNavbar() {
         <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
           <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-black text-black shadow-sm">
             AR
-            {unreadCount > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
           </div>
 
           <div className="min-w-0 text-center">
@@ -220,13 +215,30 @@ export default function AppNavbar() {
               {loggingOut ? "..." : "Ieșire"}
             </button>
 
-            <button
-              type="button"
-              onClick={() => router.push("/account")}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
-            >
-              ⚙
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => router.push("/messages")}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+                aria-label="Mesaje"
+              >
+                💬
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => router.push("/account")}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+                aria-label="Setări"
+              >
+                ⚙
+              </button>
+            </div>
           </div>
         </div>
       </div>
