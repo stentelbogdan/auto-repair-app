@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type Conversation = {
@@ -19,16 +19,23 @@ type Conversation = {
 
 export default function MessagesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeRole, setActiveRole] = useState("customer");
 
   useEffect(() => {
-    const role = localStorage.getItem("activeRole") || "customer";
+    const roleFromUrl = searchParams.get("role");
+    const role =
+      roleFromUrl === "workshop" || roleFromUrl === "customer"
+        ? roleFromUrl
+        : localStorage.getItem("activeRole") || "customer";
+
+    localStorage.setItem("activeRole", role);
     setActiveRole(role);
     loadConversations(role);
-  }, []);
+  }, [searchParams]);
 
   const loadConversations = async (role: string) => {
     try {
@@ -77,7 +84,9 @@ export default function MessagesPage() {
       if (requestsError) throw requestsError;
 
       const requests = requestsData || [];
-      const requestMap = new Map(requests.map((request: any) => [request.id, request]));
+      const requestMap = new Map(
+        requests.map((request: any) => [request.id, request]),
+      );
 
       const { data: readsData } = await supabase
         .from("conversation_reads")
@@ -235,7 +244,8 @@ export default function MessagesPage() {
                         {conversation.title}
                       </h2>
                       <p className="mt-0.5 text-sm text-white/45">
-                        {conversation.city} • {formatStatus(conversation.status)}
+                        {conversation.city} •{" "}
+                        {formatStatus(conversation.status)}
                       </p>
                     </div>
 
