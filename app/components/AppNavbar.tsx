@@ -242,18 +242,12 @@ export default function AppNavbar() {
               <button
                 type="button"
                 onClick={() => {
-                  const roleToOpen = pathname.startsWith("/workshops")
-                    ? "workshop"
-                    : pathname.startsWith("/customer")
-                      ? "customer"
-                      : activeRole === "workshop"
-                        ? "workshop"
-                        : "customer";
+                  const roleToOpen = isWorkshopMode ? "workshop" : "customer";
 
                   localStorage.setItem("activeRole", roleToOpen);
                   setActiveRole(roleToOpen);
 
-                  window.location.assign(`/messages?role=${roleToOpen}`);
+                  window.location.href = `/messages?role=${roleToOpen}&from=${roleToOpen}&t=${Date.now()}`;
                 }}
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
                 aria-label="Mesaje"
