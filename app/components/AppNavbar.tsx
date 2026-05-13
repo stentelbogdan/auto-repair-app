@@ -170,14 +170,22 @@ export default function AppNavbar() {
   };
 
   const goMessages = () => {
-    if (isWorkshopMode) {
+    const savedRole = localStorage.getItem("activeRole");
+
+    if (
+      pathname.startsWith("/workshops") ||
+      savedRole === "workshop" ||
+      currentRole === "workshop"
+    ) {
       localStorage.setItem("activeRole", "workshop");
-      router.push("/workshops/messages");
+      setActiveRole("workshop");
+      window.location.href = "/workshops/messages";
       return;
     }
 
     localStorage.setItem("activeRole", "customer");
-    router.push("/customer/messages");
+    setActiveRole("customer");
+    window.location.href = "/customer/messages";
   };
 
   return (
