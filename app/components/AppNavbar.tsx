@@ -1,56 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+
+type Role = "customer" | "workshop";
 
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const roleParam = searchParams.get("role");
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeRole, setActiveRole] = useState<Role>("customer");
 
-  const [activeRole, setActiveRole] = useState<string>("customer");
+  const currentRole: Role = useMemo(() => {
+    if (pathname.startsWith("/workshops")) return "workshop";
+    if (pathname.startsWith("/customer")) return "customer";
+
+    if (roleParam === "workshop") return "workshop";
+    if (roleParam === "customer") return "customer";
+
+    return activeRole;
+  }, [pathname, roleParam, activeRole]);
+
+  const isWorkshopMode = currentRole === "workshop";
+  const isClientMode = currentRole === "customer";
 
   useEffect(() => {
-    if (pathname.startsWith("/workshops")) {
-      localStorage.setItem("activeRole", "workshop");
-      setActiveRole("workshop");
-      return;
-    }
+    localStorage.setItem("activeRole", currentRole);
+    setActiveRole(currentRole);
+  }, [currentRole]);
 
-    if (pathname.startsWith("/customer")) {
-      localStorage.setItem("activeRole", "customer");
-      setActiveRole("customer");
-      return;
-    }
-
-    if (roleParam === "workshop" || roleParam === "customer") {
-      localStorage.setItem("activeRole", roleParam);
-      setActiveRole(roleParam);
-      return;
-    }
-
+  useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
-    setActiveRole(savedRole || "customer");
-  }, [pathname, roleParam]);
 
-  const currentRole =
-    roleParam === "workshop" || roleParam === "customer"
-      ? roleParam
-      : activeRole;
-
-  const isWorkshopMode =
-    pathname.startsWith("/workshops") ||
-    ((pathname.startsWith("/chat") || pathname.startsWith("/messages")) &&
-      currentRole === "workshop");
-
-  const isClientMode = !isWorkshopMode;
+    if (savedRole === "workshop" || savedRole === "customer") {
+      setActiveRole(savedRole);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -101,9 +94,7 @@ export default function AppNavbar() {
 
     loadUnreadMessages();
 
-    const interval = window.setInterval(() => {
-      loadUnreadMessages();
-    }, 3000);
+    const interval = window.setInterval(loadUnreadMessages, 3000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -123,9 +114,7 @@ export default function AppNavbar() {
           schema: "public",
           table: "messages",
         },
-        () => {
-          loadUnreadMessages();
-        },
+        loadUnreadMessages,
       )
       .on(
         "postgres_changes",
@@ -134,9 +123,7 @@ export default function AppNavbar() {
           schema: "public",
           table: "conversation_reads",
         },
-        () => {
-          loadUnreadMessages();
-        },
+        loadUnreadMessages,
       )
       .subscribe();
 
@@ -157,17 +144,14 @@ export default function AppNavbar() {
 
     try {
       localStorage.removeItem("activeRole");
-
       await supabase.auth.signOut();
 
       setUserEmail(null);
       setUserId(null);
       setUnreadCount(0);
 
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 100);
-    } catch (error: any) {
+      window.location.href = "/login";
+    } catch (error) {
       console.error("Logout failed:", error);
       window.location.href = "/login";
     }
@@ -183,6 +167,12 @@ export default function AppNavbar() {
     localStorage.setItem("activeRole", "workshop");
     setActiveRole("workshop");
     router.push("/workshops/dashboard");
+  };
+
+  const goMessages = () => {
+    localStorage.setItem("activeRole", currentRole);
+    setActiveRole(currentRole);
+    window.location.href = `/messages?role=${currentRole}&t=${Date.now()}`;
   };
 
   return (
@@ -246,14 +236,7 @@ export default function AppNavbar() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  const roleToOpen = isWorkshopMode ? "workshop" : "customer";
-
-                  localStorage.setItem("activeRole", roleToOpen);
-                  setActiveRole(roleToOpen);
-
-                  window.location.href = `/messages?role=${roleToOpen}&from=${roleToOpen}&t=${Date.now()}`;
-                }}
+                onClick={goMessages}
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
                 aria-label="Mesaje"
               >
