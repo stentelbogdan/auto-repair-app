@@ -22,7 +22,8 @@ export default function AppNavbar() {
 
   const isWorkshopMode =
     pathname.startsWith("/workshops") ||
-    (pathname.startsWith("/chat") && activeRole === "workshop");
+    ((pathname.startsWith("/chat") || pathname.startsWith("/messages")) &&
+      activeRole === "workshop");
 
   const isClientMode = !isWorkshopMode;
 
@@ -219,8 +220,14 @@ export default function AppNavbar() {
               <button
                 type="button"
                 onClick={() => {
-                  const roleToOpen = isWorkshopMode ? "workshop" : "customer";
+                  const roleToOpen =
+                    pathname.startsWith("/workshops") ||
+                    activeRole === "workshop"
+                      ? "workshop"
+                      : "customer";
+
                   localStorage.setItem("activeRole", roleToOpen);
+                  setActiveRole(roleToOpen);
                   router.push(`/messages?role=${roleToOpen}`);
                 }}
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
