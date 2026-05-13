@@ -40,10 +40,15 @@ export default function AppNavbar() {
     setActiveRole(savedRole || "customer");
   }, [pathname, roleParam]);
 
+  const currentRole =
+    roleParam === "workshop" || roleParam === "customer"
+      ? roleParam
+      : activeRole;
+
   const isWorkshopMode =
     pathname.startsWith("/workshops") ||
     ((pathname.startsWith("/chat") || pathname.startsWith("/messages")) &&
-      activeRole === "workshop");
+      currentRole === "workshop");
 
   const isClientMode = !isWorkshopMode;
 
