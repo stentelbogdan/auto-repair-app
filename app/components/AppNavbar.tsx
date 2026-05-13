@@ -218,7 +218,11 @@ export default function AppNavbar() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => router.push("/messages")}
+                onClick={() => {
+                  const roleToOpen = isWorkshopMode ? "workshop" : "customer";
+                  localStorage.setItem("activeRole", roleToOpen);
+                  router.push("/messages");
+                }}
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
                 aria-label="Mesaje"
               >
