@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
+type Role = "customer" | "workshop";
+
 type Conversation = {
   requestId: string;
   offerId: string;
@@ -20,24 +22,27 @@ type Conversation = {
 export default function MessagesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const roleParam = searchParams.get("role");
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeRole, setActiveRole] = useState("customer");
+  const [activeRole, setActiveRole] = useState<Role | null>(null);
 
   useEffect(() => {
-    const roleFromUrl = searchParams.get("role");
-    const role =
-      roleFromUrl === "workshop" || roleFromUrl === "customer"
-        ? roleFromUrl
-        : localStorage.getItem("activeRole") || "customer";
+    const role: Role =
+      roleParam === "workshop" || roleParam === "customer"
+        ? roleParam
+        : localStorage.getItem("activeRole") === "workshop"
+          ? "workshop"
+          : "customer";
 
     localStorage.setItem("activeRole", role);
     setActiveRole(role);
+    setLoading(true);
     loadConversations(role);
-  }, [searchParams]);
+  }, [roleParam]);
 
-  const loadConversations = async (role: string) => {
+  const loadConversations = async (role: Role) => {
     try {
       const { data: authData } = await supabase.auth.getUser();
 
@@ -115,13 +120,11 @@ export default function MessagesPage() {
 
         const messages = messagesData || [];
         const lastMessage = messages[0];
-
         const lastReadAt = readMap.get(offer.request_id);
 
         const unreadCount = messages.filter((message: any) => {
           if (message.sender_id === userId) return false;
           if (message.sender_role === "system") return false;
-
           if (!lastReadAt) return true;
 
           return new Date(message.created_at) > new Date(lastReadAt);
