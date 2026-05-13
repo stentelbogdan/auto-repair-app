@@ -150,11 +150,13 @@ export default function AppNavbar() {
 
   const goClient = () => {
     localStorage.setItem("activeRole", "customer");
+    setActiveRole("customer");
     router.push("/customer/dashboard");
   };
 
   const goWorkshop = () => {
     localStorage.setItem("activeRole", "workshop");
+    setActiveRole("workshop");
     router.push("/workshops/dashboard");
   };
 
@@ -220,12 +222,13 @@ export default function AppNavbar() {
               <button
                 type="button"
                 onClick={() => {
-                  const roleToOpen = isWorkshopMode ? "workshop" : "customer";
+                  const roleToOpen =
+                    activeRole === "workshop" ? "workshop" : "customer";
 
                   localStorage.setItem("activeRole", roleToOpen);
                   setActiveRole(roleToOpen);
 
-                  window.location.href = `/messages?role=${roleToOpen}`;
+                  window.location.href = `/messages?role=${roleToOpen}&t=${Date.now()}`;
                 }}
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
                 aria-label="Mesaje"
