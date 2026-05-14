@@ -401,22 +401,23 @@ export default function AccountPage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-2xl bg-orange-500 px-6 py-3 font-semibold text-black shadow-[0_0_35px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 disabled:opacity-60"
+              className="w-full rounded-2xl bg-orange-500 px-6 py-3 font-semibold text-black shadow-[0_0_35px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 disabled:opacity-60 md:w-auto"
             >
               {saving ? "Saving..." : "Save profile"}
             </button>
 
-            {accountMode === "workshop" && workshopName && (
+            {accountMode === "workshop" && workshopName.trim() && (
               <button
+                type="button"
                 onClick={() => {
                   const slug = createSlug(workshopName);
-                  window.open(`/workshops/profile/${slug}`, "_blank");
+                  router.push(`/workshops/profile/${slug}`);
                 }}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+                className="w-full rounded-2xl border border-white/15 bg-white/[0.04] px-6 py-3 font-semibold text-white transition hover:bg-white/10 md:w-auto"
               >
                 View public profile
               </button>
