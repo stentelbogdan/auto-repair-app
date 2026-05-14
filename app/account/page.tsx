@@ -58,6 +58,7 @@ export default function AccountPage() {
   const [workshopHours, setWorkshopHours] = useState("");
   const [workshopDescription, setWorkshopDescription] = useState("");
   const [workshopLogoUrl, setWorkshopLogoUrl] = useState("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   useEffect(() => {
     const loadAccount = async () => {
@@ -113,6 +114,45 @@ export default function AccountPage() {
 
       return Array.from(new Set([...prev, role]));
     });
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    try {
+      setUploadingLogo(true);
+
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        router.push("/login");
+        return;
+      }
+
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${authData.user.id}/logo-${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("workshop-assets")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadError) {
+        alert(uploadError.message);
+        return;
+      }
+
+      const { data } = supabase.storage
+        .from("workshop-assets")
+        .getPublicUrl(fileName);
+
+      setWorkshopLogoUrl(data.publicUrl);
+    } catch (error) {
+      console.error("Logo upload failed:", error);
+      alert("Logo upload failed.");
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const handleSave = async () => {
@@ -345,13 +385,32 @@ export default function AccountPage() {
                 icon={<Clock size={17} />}
               />
 
-              <Field
-                label="Logo / avatar URL"
-                value={workshopLogoUrl}
-                onChange={setWorkshopLogoUrl}
-                placeholder="https://..."
-                icon={<Camera size={17} />}
-              />
+              <div>
+                <label className="mb-2 block text-sm font-medium text-white/70">
+                  Logo / avatar
+                </label>
+
+                <label className="flex min-h-[52px] cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-black/35 px-4 py-3 font-semibold text-white transition hover:border-orange-400/60 hover:bg-orange-500/10">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      handleLogoUpload(file);
+                    }}
+                  />
+
+                  {uploadingLogo ? "Uploading..." : "Upload logo"}
+                </label>
+
+                {workshopLogoUrl && (
+                  <p className="mt-2 truncate text-xs text-white/35">
+                    Logo uploaded successfully
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="mt-4">

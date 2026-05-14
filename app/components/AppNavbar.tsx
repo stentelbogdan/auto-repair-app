@@ -122,7 +122,6 @@ export default function AppNavbar() {
       const { data, error } = await supabase.rpc("get_unread_messages_count");
 
       if (error) {
-        console.error("Failed to load unread count:", error);
         setUnreadCount(0);
         return;
       }
@@ -132,10 +131,23 @@ export default function AppNavbar() {
 
     loadUnreadMessages();
 
-    const interval = window.setInterval(loadUnreadMessages, 3000);
+    const channel = supabase
+      .channel("navbar-unread-messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        async () => {
+          await loadUnreadMessages();
+        },
+      )
+      .subscribe();
 
     return () => {
-      window.clearInterval(interval);
+      channel.unsubscribe();
     };
   }, [userId]);
 
