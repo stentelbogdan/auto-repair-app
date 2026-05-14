@@ -27,6 +27,7 @@ type ProfileRow = {
   workshop_hours?: string | null;
   workshop_description?: string | null;
   workshop_logo_url?: string | null;
+  workshop_gallery_urls?: string[] | null;
 };
 
 export default function AccountPage() {
@@ -59,6 +60,8 @@ export default function AccountPage() {
   const [workshopDescription, setWorkshopDescription] = useState("");
   const [workshopLogoUrl, setWorkshopLogoUrl] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [workshopGalleryUrls, setWorkshopGalleryUrls] = useState<string[]>([]);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
 
   useEffect(() => {
     const loadAccount = async () => {
@@ -73,7 +76,7 @@ export default function AccountPage() {
         const { data: profile, error } = await supabase
           .from("profiles")
           .select(
-            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url",
+            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url, workshop_gallery_urls",
           )
           .eq("id", authData.user.id)
           .single<ProfileRow>();
@@ -94,6 +97,12 @@ export default function AccountPage() {
         setWorkshopHours(profile?.workshop_hours || "");
         setWorkshopDescription(profile?.workshop_description || "");
         setWorkshopLogoUrl(profile?.workshop_logo_url || "");
+
+        setWorkshopGalleryUrls(
+          Array.isArray(profile?.workshop_gallery_urls)
+            ? profile.workshop_gallery_urls
+            : [],
+        );
       } catch (error) {
         console.error("Failed to load account:", error);
         router.push("/");
@@ -155,6 +164,59 @@ export default function AccountPage() {
     }
   };
 
+  const handleGalleryUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploadingGallery(true);
+
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        router.push("/login");
+        return;
+      }
+
+      const uploadedUrls: string[] = [];
+
+      for (const file of Array.from(files)) {
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${authData.user.id}/gallery-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("workshop-assets")
+          .upload(fileName, file, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) {
+          alert(uploadError.message);
+          continue;
+        }
+
+        const { data } = supabase.storage
+          .from("workshop-assets")
+          .getPublicUrl(fileName);
+
+        uploadedUrls.push(data.publicUrl);
+      }
+
+      setWorkshopGalleryUrls((prev) => [...prev, ...uploadedUrls].slice(0, 8));
+    } catch (error) {
+      console.error("Gallery upload failed:", error);
+      alert("Gallery upload failed.");
+    } finally {
+      setUploadingGallery(false);
+    }
+  };
+
+  const removeGalleryImage = (url: string) => {
+    setWorkshopGalleryUrls((prev) => prev.filter((item) => item !== url));
+  };
+
   const handleSave = async () => {
     setSaving(true);
 
@@ -179,6 +241,7 @@ export default function AccountPage() {
           workshop_hours: workshopHours,
           workshop_description: workshopDescription,
           workshop_logo_url: workshopLogoUrl,
+          workshop_gallery_urls: workshopGalleryUrls,
         })
         .eq("id", authData.user.id);
 
@@ -427,17 +490,55 @@ export default function AccountPage() {
             </div>
 
             <div className="mt-5 rounded-[1.5rem] border border-dashed border-white/15 bg-black/25 p-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-400">
-                  <ImagePlus size={22} />
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-400">
+                    <ImagePlus size={22} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white">Workshop gallery</p>
+                    <p className="text-sm text-white/45">
+                      Upload up to 8 workshop photos.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-white">Workshop gallery</p>
-                  <p className="text-sm text-white/45">
-                    We add photo upload in the next step.
-                  </p>
-                </div>
+
+                <label className="cursor-pointer rounded-2xl bg-orange-500 px-4 py-2 text-sm font-bold text-black transition hover:bg-orange-400">
+                  {uploadingGallery ? "Uploading..." : "Add photos"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => handleGalleryUpload(e.target.files)}
+                  />
+                </label>
               </div>
+
+              {workshopGalleryUrls.length > 0 && (
+                <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {workshopGalleryUrls.map((url) => (
+                    <div
+                      key={url}
+                      className="group relative aspect-square overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                    >
+                      <img
+                        src={url}
+                        alt="Workshop gallery"
+                        className="h-full w-full object-cover"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => removeGalleryImage(url)}
+                        className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-1 text-xs font-bold text-white opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
