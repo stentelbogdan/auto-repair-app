@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   Camera,
   Check,
@@ -31,9 +31,20 @@ type ProfileRow = {
 
 export default function AccountPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const roleParam = searchParams.get("role");
-  const accountMode = roleParam === "workshop" ? "workshop" : "customer";
+  const [accountMode, setAccountMode] = useState<"customer" | "workshop">(
+    "customer",
+  );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const role = params.get("role");
+
+    if (role === "workshop") {
+      setAccountMode("workshop");
+    } else {
+      setAccountMode("customer");
+    }
+  }, []);
 
   const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<string[]>([]);

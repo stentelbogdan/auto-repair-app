@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type Role = "customer" | "workshop";
@@ -9,8 +9,6 @@ type Role = "customer" | "workshop";
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const roleParam = searchParams.get("role");
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -18,6 +16,18 @@ export default function AppNavbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeRole, setActiveRole] = useState<Role>("customer");
   const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [roleParam, setRoleParam] = useState<Role | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const role = params.get("role");
+
+    if (role === "workshop" || role === "customer") {
+      setRoleParam(role);
+    } else {
+      setRoleParam(null);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (pathname.startsWith("/account")) {
