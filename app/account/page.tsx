@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Camera,
   Check,
@@ -31,6 +31,9 @@ type ProfileRow = {
 
 export default function AccountPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleParam = searchParams.get("role");
+  const accountMode = roleParam === "workshop" ? "workshop" : "customer";
 
   const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
@@ -58,7 +61,7 @@ export default function AccountPage() {
         const { data: profile, error } = await supabase
           .from("profiles")
           .select(
-            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url"
+            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url",
           )
           .eq("id", authData.user.id)
           .single<ProfileRow>();
@@ -134,6 +137,19 @@ export default function AccountPage() {
       }
 
       alert("Account updated successfully.");
+
+      if (accountMode === "workshop" && safeRoles.includes("workshop")) {
+        localStorage.setItem("activeRole", "workshop");
+        router.push("/workshops/dashboard");
+        return;
+      }
+
+      if (accountMode === "customer" && safeRoles.includes("customer")) {
+        localStorage.setItem("activeRole", "customer");
+        router.push("/customer/dashboard");
+        return;
+      }
+
       router.refresh();
     } catch (error) {
       console.error("Failed to save account:", error);
@@ -166,11 +182,14 @@ export default function AccountPage() {
               Account
             </p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight md:text-5xl">
-              Service profile
+              {accountMode === "workshop"
+                ? "Service profile"
+                : "Customer profile"}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55 md:text-base">
-              Build your workshop identity. This information will later appear
-              on your public service profile.
+              {accountMode === "workshop"
+                ? "Build your workshop identity. This information will later appear on your public service profile."
+                : "Manage your customer account and access settings."}
             </p>
           </div>
 

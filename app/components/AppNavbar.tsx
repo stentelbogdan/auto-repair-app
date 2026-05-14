@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type Role = "customer" | "workshop";
@@ -9,14 +9,25 @@ type Role = "customer" | "workshop";
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleParam = searchParams.get("role");
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeRole, setActiveRole] = useState<Role>("customer");
+  const [userRoles, setUserRoles] = useState<string[]>([]);
 
   useEffect(() => {
+    if (pathname.startsWith("/account")) {
+      if (roleParam === "workshop" || roleParam === "customer") {
+        localStorage.setItem("activeRole", roleParam);
+        setActiveRole(roleParam);
+        return;
+      }
+    }
+
     if (pathname.startsWith("/workshops")) {
       localStorage.setItem("activeRole", "workshop");
       setActiveRole("workshop");
@@ -34,13 +45,17 @@ export default function AppNavbar() {
     if (savedRole === "workshop" || savedRole === "customer") {
       setActiveRole(savedRole);
     }
-  }, [pathname]);
+  }, [pathname, roleParam]);
 
   const isWorkshopMode =
     pathname.startsWith("/workshops") ||
+    roleParam === "workshop" ||
     (pathname.startsWith("/chat") && activeRole === "workshop");
 
-  const isClientMode = !isWorkshopMode;
+  const isClientMode =
+    pathname.startsWith("/customer") ||
+    roleParam === "customer" ||
+    !isWorkshopMode;
 
   useEffect(() => {
     let mounted = true;
@@ -50,9 +65,21 @@ export default function AppNavbar() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (mounted) {
-        setUserEmail(session?.user?.email ?? null);
-        setUserId(session?.user?.id ?? null);
+      if (!mounted) return;
+
+      setUserEmail(session?.user?.email ?? null);
+      setUserId(session?.user?.id ?? null);
+
+      if (session?.user?.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        setUserRoles(Array.isArray(profile?.role) ? profile.role : []);
+      } else {
+        setUserRoles([]);
       }
     };
 
@@ -63,6 +90,10 @@ export default function AppNavbar() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email ?? null);
       setUserId(session?.user?.id ?? null);
+
+      if (!session?.user?.id) {
+        setUserRoles([]);
+      }
     });
 
     return () => {
@@ -111,13 +142,49 @@ export default function AppNavbar() {
     window.location.href = "/login";
   };
 
-  const goClient = () => {
+  const getFreshRoles = async () => {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      router.push("/login");
+      return [];
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const freshRoles = Array.isArray(profile?.role) ? profile.role : [];
+    setUserRoles(freshRoles);
+
+    return freshRoles;
+  };
+
+  const goClient = async () => {
+    const freshRoles = await getFreshRoles();
+
+    if (!freshRoles.includes("customer")) {
+      router.push("/account?role=customer");
+      return;
+    }
+
     localStorage.setItem("activeRole", "customer");
     setActiveRole("customer");
     router.push("/customer/dashboard");
   };
 
-  const goWorkshop = () => {
+  const goWorkshop = async () => {
+    const freshRoles = await getFreshRoles();
+
+    if (!freshRoles.includes("workshop")) {
+      router.push("/account?role=workshop");
+      return;
+    }
+
     localStorage.setItem("activeRole", "workshop");
     setActiveRole("workshop");
     router.push("/workshops/dashboard");
@@ -209,7 +276,16 @@ export default function AppNavbar() {
 
               <button
                 type="button"
-                onClick={() => router.push("/account")}
+                onClick={() => {
+                  if (isWorkshopMode) {
+                    localStorage.setItem("activeRole", "workshop");
+                    router.push("/account?role=workshop");
+                    return;
+                  }
+
+                  localStorage.setItem("activeRole", "customer");
+                  router.push("/account?role=customer");
+                }}
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
                 aria-label="Setări"
               >
