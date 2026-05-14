@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type Role = "customer" | "workshop";
@@ -9,9 +9,6 @@ type Role = "customer" | "workshop";
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const roleParam = searchParams.get("role");
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -19,31 +16,31 @@ export default function AppNavbar() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeRole, setActiveRole] = useState<Role>("customer");
 
-  const currentRole: Role = useMemo(() => {
-    if (pathname.startsWith("/workshops")) return "workshop";
-    if (pathname.startsWith("/customer")) return "customer";
-
-    if (roleParam === "workshop") return "workshop";
-    if (roleParam === "customer") return "customer";
-
-    return activeRole;
-  }, [pathname, roleParam, activeRole]);
-
-  const isWorkshopMode = currentRole === "workshop";
-  const isClientMode = currentRole === "customer";
-
   useEffect(() => {
-    localStorage.setItem("activeRole", currentRole);
-    setActiveRole(currentRole);
-  }, [currentRole]);
+    if (pathname.startsWith("/workshops")) {
+      localStorage.setItem("activeRole", "workshop");
+      setActiveRole("workshop");
+      return;
+    }
 
-  useEffect(() => {
+    if (pathname.startsWith("/customer")) {
+      localStorage.setItem("activeRole", "customer");
+      setActiveRole("customer");
+      return;
+    }
+
     const savedRole = localStorage.getItem("activeRole");
 
     if (savedRole === "workshop" || savedRole === "customer") {
       setActiveRole(savedRole);
     }
-  }, []);
+  }, [pathname]);
+
+  const isWorkshopMode =
+    pathname.startsWith("/workshops") ||
+    (pathname.startsWith("/chat") && activeRole === "workshop");
+
+  const isClientMode = !isWorkshopMode;
 
   useEffect(() => {
     let mounted = true;
@@ -96,42 +93,8 @@ export default function AppNavbar() {
 
     const interval = window.setInterval(loadUnreadMessages, 3000);
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        loadUnreadMessages();
-      }
-    };
-
-    window.addEventListener("focus", loadUnreadMessages);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    const channel = supabase
-      .channel(`navbar-unread-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "messages",
-        },
-        loadUnreadMessages,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversation_reads",
-        },
-        loadUnreadMessages,
-      )
-      .subscribe();
-
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("focus", loadUnreadMessages);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      supabase.removeChannel(channel);
     };
   }, [userId]);
 
@@ -142,19 +105,10 @@ export default function AppNavbar() {
   const handleLogout = async () => {
     setLoggingOut(true);
 
-    try {
-      localStorage.removeItem("activeRole");
-      await supabase.auth.signOut();
+    localStorage.removeItem("activeRole");
+    await supabase.auth.signOut();
 
-      setUserEmail(null);
-      setUserId(null);
-      setUnreadCount(0);
-
-      window.location.href = "/login";
-    } catch (error) {
-      console.error("Logout failed:", error);
-      window.location.href = "/login";
-    }
+    window.location.href = "/login";
   };
 
   const goClient = () => {
@@ -170,21 +124,13 @@ export default function AppNavbar() {
   };
 
   const goMessages = () => {
-    const savedRole = localStorage.getItem("activeRole");
-
-    if (
-      pathname.startsWith("/workshops") ||
-      savedRole === "workshop" ||
-      currentRole === "workshop"
-    ) {
+    if (isWorkshopMode) {
       localStorage.setItem("activeRole", "workshop");
-      setActiveRole("workshop");
       window.location.href = "/workshops/messages";
       return;
     }
 
     localStorage.setItem("activeRole", "customer");
-    setActiveRole("customer");
     window.location.href = "/customer/messages";
   };
 
