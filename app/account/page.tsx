@@ -164,6 +164,74 @@ export default function AccountPage() {
     }
   };
 
+  const compressImage = (
+    file: File,
+    maxSize = 1200,
+    quality = 0.85,
+  ): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        image.src = reader.result as string;
+      };
+
+      image.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = image.width;
+        let height = image.height;
+
+        if (width > height && width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        } else if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          reject(new Error("Canvas not supported"));
+          return;
+        }
+
+        ctx.drawImage(image, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error("Image compression failed"));
+              return;
+            }
+
+            const compressedFile = new File(
+              [blob],
+              file.name.replace(/\.[^/.]+$/, ".jpg"),
+              {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              },
+            );
+
+            resolve(compressedFile);
+          },
+          "image/jpeg",
+          quality,
+        );
+      };
+
+      image.onerror = () => reject(new Error("Image load failed"));
+      reader.onerror = () => reject(new Error("File read failed"));
+
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleGalleryUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
@@ -180,14 +248,15 @@ export default function AccountPage() {
       const uploadedUrls: string[] = [];
 
       for (const file of Array.from(files)) {
-        const fileExt = file.name.split(".").pop();
+        const compressedFile = await compressImage(file);
+        const fileExt = "jpg";
         const fileName = `${authData.user.id}/gallery-${Date.now()}-${Math.random()
           .toString(36)
           .slice(2)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from("workshop-assets")
-          .upload(fileName, file, {
+          .upload(fileName, compressedFile, {
             cacheControl: "3600",
             upsert: true,
           });
