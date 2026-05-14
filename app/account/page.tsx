@@ -2,20 +2,48 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Camera,
+  Check,
+  Clock,
+  ImagePlus,
+  Mail,
+  MapPin,
+  Phone,
+  Shield,
+  Store,
+  User,
+  Wrench,
+} from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 
 type ProfileRow = {
   email: string | null;
   role: string[] | null;
+  workshop_name?: string | null;
+  workshop_phone?: string | null;
+  workshop_address?: string | null;
+  workshop_city?: string | null;
+  workshop_hours?: string | null;
+  workshop_description?: string | null;
+  workshop_logo_url?: string | null;
 };
 
 export default function AccountPage() {
   const router = useRouter();
 
-  const [email, setEmail] = useState<string>("");
+  const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [workshopName, setWorkshopName] = useState("");
+  const [workshopPhone, setWorkshopPhone] = useState("");
+  const [workshopAddress, setWorkshopAddress] = useState("");
+  const [workshopCity, setWorkshopCity] = useState("");
+  const [workshopHours, setWorkshopHours] = useState("");
+  const [workshopDescription, setWorkshopDescription] = useState("");
+  const [workshopLogoUrl, setWorkshopLogoUrl] = useState("");
 
   useEffect(() => {
     const loadAccount = async () => {
@@ -29,7 +57,9 @@ export default function AccountPage() {
 
         const { data: profile, error } = await supabase
           .from("profiles")
-          .select("email, role")
+          .select(
+            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url"
+          )
           .eq("id", authData.user.id)
           .single<ProfileRow>();
 
@@ -41,6 +71,14 @@ export default function AccountPage() {
 
         setEmail(profile?.email || authData.user.email || "");
         setRoles(Array.isArray(profile?.role) ? profile.role : []);
+
+        setWorkshopName(profile?.workshop_name || "");
+        setWorkshopPhone(profile?.workshop_phone || "");
+        setWorkshopAddress(profile?.workshop_address || "");
+        setWorkshopCity(profile?.workshop_city || "");
+        setWorkshopHours(profile?.workshop_hours || "");
+        setWorkshopDescription(profile?.workshop_description || "");
+        setWorkshopLogoUrl(profile?.workshop_logo_url || "");
       } catch (error) {
         console.error("Failed to load account:", error);
         router.push("/");
@@ -78,7 +116,16 @@ export default function AccountPage() {
 
       const { error } = await supabase
         .from("profiles")
-        .update({ role: safeRoles })
+        .update({
+          role: safeRoles,
+          workshop_name: workshopName,
+          workshop_phone: workshopPhone,
+          workshop_address: workshopAddress,
+          workshop_city: workshopCity,
+          workshop_hours: workshopHours,
+          workshop_description: workshopDescription,
+          workshop_logo_url: workshopLogoUrl,
+        })
         .eq("id", authData.user.id);
 
       if (error) {
@@ -86,11 +133,11 @@ export default function AccountPage() {
         return;
       }
 
-      alert("Account roles updated successfully.");
+      alert("Account updated successfully.");
       router.refresh();
     } catch (error) {
-      console.error("Failed to save roles:", error);
-      alert("Something went wrong while saving roles.");
+      console.error("Failed to save account:", error);
+      alert("Something went wrong while saving.");
     } finally {
       setSaving(false);
     }
@@ -98,9 +145,9 @@ export default function AccountPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-black px-6 py-10 text-white">
-        <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center">
-          <p className="text-white/70">Loading account...</p>
+      <main className="min-h-screen bg-black px-5 py-10 text-white">
+        <div className="mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center">
+          <p className="text-white/60">Loading account...</p>
         </div>
       </main>
     );
@@ -111,160 +158,334 @@ export default function AccountPage() {
   const hasAdmin = roles.includes("admin");
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8">
-          <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-            Account
-          </p>
-          <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-            Manage your access
-          </h1>
-          <p className="mt-3 max-w-2xl text-white/70">
-            Enable customer and workshop access on the same account and jump
-            directly into the area you want to use.
-          </p>
+    <main className="min-h-screen bg-black px-5 py-8 text-white md:px-8">
+      <div className="mx-auto max-w-6xl">
+        <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-400">
+              Account
+            </p>
+            <h1 className="mt-3 text-3xl font-bold tracking-tight md:text-5xl">
+              Service profile
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55 md:text-base">
+              Build your workshop identity. This information will later appear
+              on your public service profile.
+            </p>
+          </div>
+
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-2xl bg-orange-500 px-6 py-3 font-semibold text-black shadow-[0_0_35px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 disabled:opacity-60"
+          >
+            {saving ? "Saving..." : "Save profile"}
+          </button>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
-          <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-            <p className="text-sm text-white/50">Email</p>
-            <p className="mt-1 text-lg font-semibold text-white">{email}</p>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
-            <p className="text-sm text-white/50">Current roles</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {roles.length > 0 ? (
-                roles.map((role) => (
-                  <span
-                    key={role}
-                    className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm text-white"
-                  >
-                    {role}
-                  </span>
-                ))
-              ) : (
-                <span className="text-white/60">No roles assigned</span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-6 space-y-4">
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-semibold text-white">Customer access</p>
-                  <p className="mt-1 text-sm text-white/60">
-                    Post repair jobs and review offers.
-                  </p>
+        <div className="grid gap-5 lg:grid-cols-[0.9fr_1.4fr]">
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
+            <div className="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-white/10 to-white/[0.03] p-5">
+              <div className="flex items-center gap-4">
+                <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-orange-400/30 bg-orange-500/10">
+                  {workshopLogoUrl ? (
+                    <img
+                      src={workshopLogoUrl}
+                      alt="Workshop logo"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Store className="h-9 w-9 text-orange-400" />
+                  )}
                 </div>
 
-                <button
-                  onClick={() => toggleRole("customer")}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    hasCustomer
-                      ? "bg-white text-black"
-                      : "bg-white/10 text-white hover:bg-white/20"
-                  }`}
-                >
-                  {hasCustomer ? "Enabled" : "Enable"}
-                </button>
+                <div>
+                  <p className="text-sm text-white/45">Signed in as</p>
+                  <p className="mt-1 break-all font-semibold text-white">
+                    {email}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-3">
+                <InfoCard
+                  icon={<Mail size={17} />}
+                  label="Email"
+                  value={email || "Not set"}
+                />
+                <InfoCard
+                  icon={<Store size={17} />}
+                  label="Service name"
+                  value={workshopName || "Add your workshop name"}
+                />
+                <InfoCard
+                  icon={<MapPin size={17} />}
+                  label="City"
+                  value={workshopCity || "Add your city"}
+                />
+                <InfoCard
+                  icon={<Phone size={17} />}
+                  label="Phone"
+                  value={workshopPhone || "Add your phone number"}
+                />
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="font-semibold text-white">Workshop access</p>
-                  <p className="mt-1 text-sm text-white/60">
-                    Browse jobs and send repair offers.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => toggleRole("workshop")}
-                  className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-                    hasWorkshop
-                      ? "bg-white text-black"
-                      : "bg-white/10 text-white hover:bg-white/20"
-                  }`}
-                >
-                  {hasWorkshop ? "Enabled" : "Enable"}
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-              <p className="font-semibold text-white">Admin access</p>
-              <p className="mt-1 text-sm text-white/60">
-                Admin remains managed manually in Supabase.
+            <div className="mt-5 rounded-[1.5rem] border border-white/10 bg-black/30 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/35">
+                Access
               </p>
 
-              <div className="mt-3">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    hasAdmin
-                      ? "border border-green-500/20 bg-green-500/15 text-green-300"
-                      : "border border-white/10 bg-white/10 text-white/70"
-                  }`}
-                >
-                  {hasAdmin ? "Admin enabled" : "Admin not enabled"}
-                </span>
+              <div className="mt-4 space-y-3">
+                <RoleButton
+                  active={hasCustomer}
+                  title="Customer"
+                  description="Post repair jobs"
+                  icon={<User size={18} />}
+                  onClick={() => toggleRole("customer")}
+                />
+
+                <RoleButton
+                  active={hasWorkshop}
+                  title="Workshop"
+                  description="Browse jobs and send offers"
+                  icon={<Wrench size={18} />}
+                  onClick={() => toggleRole("workshop")}
+                />
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="flex items-center gap-3">
+                    <Shield className="h-5 w-5 text-white/45" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-white">Admin</p>
+                      <p className="text-sm text-white/45">
+                        Managed manually in Supabase
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        hasAdmin
+                          ? "bg-green-500/15 text-green-300"
+                          : "bg-white/10 text-white/50"
+                      }`}
+                    >
+                      {hasAdmin ? "Enabled" : "Off"}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-lg bg-white px-6 py-3 font-semibold text-black disabled:opacity-60"
-            >
-              {saving ? "Saving..." : "Save access"}
-            </button>
+          <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
+                label="Service name"
+                value={workshopName}
+                onChange={setWorkshopName}
+                placeholder="Example: DW Werkplaats"
+              />
 
-            <button
-              onClick={() => router.push("/")}
-              className="rounded-lg border border-white/20 px-6 py-3 font-semibold text-white"
-            >
-              Back to app
-            </button>
-          </div>
+              <Field
+                label="Phone"
+                value={workshopPhone}
+                onChange={setWorkshopPhone}
+                placeholder="+49..."
+              />
 
-          <div className="mt-8 border-t border-white/10 pt-6">
-            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Quick access
-            </p>
+              <Field
+                label="Address"
+                value={workshopAddress}
+                onChange={setWorkshopAddress}
+                placeholder="Street and number"
+              />
 
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <Field
+                label="City"
+                value={workshopCity}
+                onChange={setWorkshopCity}
+                placeholder="Kleve"
+              />
+
+              <Field
+                label="Opening hours"
+                value={workshopHours}
+                onChange={setWorkshopHours}
+                placeholder="Mon - Fri, 08:00 - 17:00"
+                icon={<Clock size={17} />}
+              />
+
+              <Field
+                label="Logo / avatar URL"
+                value={workshopLogoUrl}
+                onChange={setWorkshopLogoUrl}
+                placeholder="https://..."
+                icon={<Camera size={17} />}
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-medium text-white/70">
+                Service description
+              </label>
+              <textarea
+                value={workshopDescription}
+                onChange={(e) => setWorkshopDescription(e.target.value)}
+                placeholder="Describe your workshop, experience, paint/body repair services, specialties..."
+                rows={7}
+                className="w-full resize-none rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-orange-400/60"
+              />
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-dashed border-white/15 bg-black/25 p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500/10 text-orange-400">
+                  <ImagePlus size={22} />
+                </div>
+                <div>
+                  <p className="font-semibold text-white">Workshop gallery</p>
+                  <p className="text-sm text-white/45">
+                    We add photo upload in the next step.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <button
                 onClick={() => router.push("/")}
                 disabled={!hasCustomer}
-                className="rounded-lg border border-white/20 px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
               >
-                Go to customer area
+                Customer area
               </button>
 
               <button
                 onClick={() => router.push("/workshops")}
                 disabled={!hasWorkshop}
-                className="rounded-lg border border-white/20 px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
               >
-                Go to workshop area
+                Workshop area
               </button>
 
               <button
                 onClick={() => router.push("/admin")}
                 disabled={!hasAdmin}
-                className="rounded-lg border border-white/20 px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
               >
-                Go to admin area
+                Admin area
               </button>
             </div>
-          </div>
+          </section>
         </div>
       </div>
     </main>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  icon,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-white/70">
+        {label}
+      </label>
+      <div className="relative">
+        {icon && (
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/35">
+            {icon}
+          </div>
+        )}
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full rounded-2xl border border-white/10 bg-black/35 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-orange-400/60 ${
+            icon ? "pl-11 pr-4" : "px-4"
+          }`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function InfoCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+      <div className="flex items-center gap-3 text-white/45">
+        {icon}
+        <p className="text-xs uppercase tracking-[0.16em]">{label}</p>
+      </div>
+      <p className="mt-2 break-words text-sm font-semibold text-white">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RoleButton({
+  active,
+  title,
+  description,
+  icon,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full rounded-2xl border p-4 text-left transition ${
+        active
+          ? "border-orange-400/40 bg-orange-500/10"
+          : "border-white/10 bg-white/[0.04] hover:bg-white/10"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className={`flex h-10 w-10 items-center justify-center rounded-2xl ${
+            active ? "bg-orange-500 text-black" : "bg-white/10 text-white/60"
+          }`}
+        >
+          {active ? <Check size={18} /> : icon}
+        </div>
+
+        <div className="flex-1">
+          <p className="font-semibold text-white">{title}</p>
+          <p className="text-sm text-white/45">{description}</p>
+        </div>
+
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            active ? "bg-orange-500 text-black" : "bg-white/10 text-white/50"
+          }`}
+        >
+          {active ? "On" : "Off"}
+        </span>
+      </div>
+    </button>
   );
 }
