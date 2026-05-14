@@ -31,6 +31,7 @@ type ProfileRow = {
   workshop_description?: string | null;
   workshop_logo_url?: string | null;
   workshop_gallery_urls?: string[] | null;
+  workshop_slug?: string | null;
 };
 
 export default function AccountPage() {
@@ -292,6 +293,21 @@ export default function AccountPage() {
     setWorkshopGalleryUrls((prev) => prev.filter((item) => item !== url));
   };
 
+  const createSlug = (value: string) => {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/ă/g, "a")
+      .replace(/â/g, "a")
+      .replace(/î/g, "i")
+      .replace(/ș/g, "s")
+      .replace(/ş/g, "s")
+      .replace(/ț/g, "t")
+      .replace(/ţ/g, "t")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  };
+
   const handleSave = async () => {
     setSaving(true);
 
@@ -305,6 +321,8 @@ export default function AccountPage() {
 
       const safeRoles = roles.length ? roles : ["customer"];
 
+      const workshopSlug = workshopName ? createSlug(workshopName) : null;
+
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -317,6 +335,7 @@ export default function AccountPage() {
           workshop_description: workshopDescription,
           workshop_logo_url: workshopLogoUrl,
           workshop_gallery_urls: workshopGalleryUrls,
+          workshop_slug: workshopSlug,
         })
         .eq("id", authData.user.id);
 
@@ -382,13 +401,27 @@ export default function AccountPage() {
             </p>
           </div>
 
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="rounded-2xl bg-orange-500 px-6 py-3 font-semibold text-black shadow-[0_0_35px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 disabled:opacity-60"
-          >
-            {saving ? "Saving..." : "Save profile"}
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-2xl bg-orange-500 px-6 py-3 font-semibold text-black shadow-[0_0_35px_rgba(249,115,22,0.35)] transition hover:bg-orange-400 disabled:opacity-60"
+            >
+              {saving ? "Saving..." : "Save profile"}
+            </button>
+
+            {accountMode === "workshop" && workshopName && (
+              <button
+                onClick={() => {
+                  const slug = createSlug(workshopName);
+                  window.open(`/workshops/profile/${slug}`, "_blank");
+                }}
+                className="rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+              >
+                View public profile
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[0.9fr_1.4fr]">
