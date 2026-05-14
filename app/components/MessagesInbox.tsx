@@ -201,7 +201,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 onClick={() => {
                   localStorage.setItem("activeRole", role);
                   router.push(
-                    `/chat/${conversation.requestId}?offerId=${conversation.offerId}`,
+                    `/chat/${conversation.requestId}?offerId=${conversation.offerId}&role=${role}`,
                   );
                 }}
                 className="flex w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.04] p-4 text-left transition active:scale-[0.99] hover:bg-white/[0.07]"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type Role = "customer" | "workshop";
@@ -9,6 +9,8 @@ type Role = "customer" | "workshop";
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const roleParam = searchParams.get("role");
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export default function AppNavbar() {
 
   const isWorkshopMode =
     pathname.startsWith("/workshops") ||
-    (pathname.startsWith("/chat") && activeRole === "workshop");
+    (pathname.startsWith("/chat") && roleParam === "workshop");
 
   const isClientMode = !isWorkshopMode;
 
