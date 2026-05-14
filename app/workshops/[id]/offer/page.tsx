@@ -32,6 +32,7 @@ export default function MakeOfferPage() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
     const loadRequest = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();

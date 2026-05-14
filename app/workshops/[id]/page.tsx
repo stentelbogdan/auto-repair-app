@@ -41,6 +41,7 @@ export default function WorkshopRequestDetailsPage() {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
   useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
     const loadRequest = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();

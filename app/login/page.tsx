@@ -41,6 +41,13 @@ export default function LoginPage() {
         return;
       }
 
+      const savedRole = localStorage.getItem("activeRole");
+
+      if (savedRole === "workshop" && roles.includes("workshop")) {
+        router.push("/workshops/dashboard");
+        return;
+      }
+
       router.push("/customer/dashboard");
     };
 
@@ -48,12 +55,21 @@ export default function LoginPage() {
   }, [router]);
 
   const goToDashboard = (selectedRole: UserRole, roles: string[]) => {
-    setActiveRole(selectedRole);
-
-    localStorage.setItem("activeRole", selectedRole); // 🔥 IMPORTANT
-
     if (roles.includes("admin")) {
       router.push("/admin");
+      return;
+    }
+
+    if (selectedRole === "workshop" && !roles.includes("workshop")) {
+      alert("Acest cont nu are acces de service auto.");
+      return;
+    }
+
+    setActiveRole(selectedRole);
+    localStorage.setItem("activeRole", selectedRole);
+
+    if (selectedRole === "workshop") {
+      router.push("/workshops/dashboard");
       return;
     }
 

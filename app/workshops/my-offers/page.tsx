@@ -60,6 +60,7 @@ export default function WorkshopMyOffersPage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
     let isMounted = true;
 
     async function loadPage() {

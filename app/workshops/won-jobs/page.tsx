@@ -59,6 +59,7 @@ export default function WorkshopWonJobsPage() {
   const [lightboxImages, setLightboxImages] = useState<{ src: string }[]>([]);
 
   useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
     const checkUserAndLoad = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
@@ -640,11 +641,12 @@ export default function WorkshopWonJobsPage() {
                       </button>
 
                       <button
-                        onClick={() =>
+                        onClick={() => {
+                          localStorage.setItem("activeRole", "workshop");
                           router.push(
-                            `/chat/${job.requestId}?offerId=${job.offerId}`,
-                          )
-                        }
+                            `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,
+                          );
+                        }}
                         className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
                       >
                         Chat cu clientul

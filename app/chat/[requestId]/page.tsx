@@ -53,6 +53,7 @@ export default function ChatPage() {
   const requestId = params.requestId as string;
   const searchParams = useSearchParams();
   const offerId = searchParams.get("offerId");
+  const roleParam = searchParams.get("role");
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -78,7 +79,16 @@ export default function ChatPage() {
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
-    if (savedRole) setActiveRole(savedRole);
+
+    if (roleParam === "workshop") {
+      localStorage.setItem("activeRole", "workshop");
+      setActiveRole("workshop");
+    } else if (roleParam === "customer") {
+      localStorage.setItem("activeRole", "customer");
+      setActiveRole("customer");
+    } else if (savedRole) {
+      setActiveRole(savedRole);
+    }
 
     loadMessages();
     getUser();
@@ -148,7 +158,7 @@ export default function ChatPage() {
 
       supabase.removeChannel(channel);
     };
-  }, [requestId, userId]);
+  }, [requestId, userId, roleParam]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -158,7 +168,7 @@ export default function ChatPage() {
     const timeout = setTimeout(() => {
       container.scrollTo({
         top: container.scrollHeight,
-        behavior: "smooth",
+        behavior: "auto",
       });
     }, 100);
 
@@ -516,14 +526,18 @@ export default function ChatPage() {
               >
                 <div
                   className={`overflow-hidden rounded-3xl ${
-                    isMine ? "bg-white text-black" : "bg-white/10 text-white"
+                    images.length > 0 && !message.message
+                      ? "bg-transparent"
+                      : isMine
+                        ? "bg-white text-black"
+                        : "bg-white/10 text-white"
                   }`}
                 >
                   {images.length > 0 && (
                     <div
                       className={`grid gap-1 p-1 ${
                         images.length === 1 ? "grid-cols-1" : "grid-cols-2"
-                      }`}
+                      } ${isMine ? "justify-items-end" : "justify-items-start"}`}
                     >
                       {images.map((image, index) => (
                         <button
@@ -546,7 +560,7 @@ export default function ChatPage() {
                           <img
                             src={image.url}
                             alt={image.name || "Poză chat"}
-                            className="h-40 w-full object-cover"
+                            className="h-40 w-64 max-w-full object-cover"
                           />
                         </button>
                       ))}
