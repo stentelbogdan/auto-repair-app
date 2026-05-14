@@ -16,6 +16,9 @@ import {
   Wrench,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
 
 type ProfileRow = {
   email: string | null;
@@ -62,6 +65,9 @@ export default function AccountPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [workshopGalleryUrls, setWorkshopGalleryUrls] = useState<string[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     const loadAccount = async () => {
@@ -586,16 +592,22 @@ export default function AccountPage() {
 
               {workshopGalleryUrls.length > 0 && (
                 <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-                  {workshopGalleryUrls.map((url) => (
+                  {workshopGalleryUrls.map((url, index) => (
                     <div
                       key={url}
                       className="group relative aspect-square overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                     >
-                      <img
-                        src={url}
-                        alt="Workshop gallery"
-                        className="h-full w-full object-cover"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setActiveGalleryIndex(index)}
+                        className="h-full w-full"
+                      >
+                        <img
+                          src={url}
+                          alt="Workshop gallery"
+                          className="h-full w-full object-cover"
+                        />
+                      </button>
 
                       <button
                         type="button"
@@ -638,6 +650,37 @@ export default function AccountPage() {
           </section>
         </div>
       </div>
+
+      <Lightbox
+        open={activeGalleryIndex !== null}
+        close={() => setActiveGalleryIndex(null)}
+        slides={workshopGalleryUrls.map((src) => ({ src }))}
+        index={activeGalleryIndex ?? 0}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
+      />
     </main>
   );
 }
