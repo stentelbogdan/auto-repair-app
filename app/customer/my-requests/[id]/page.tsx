@@ -29,6 +29,7 @@ type RepairRequest = {
 type AcceptedOffer = {
   id: string;
   request_id: string;
+  workshop_user_id: string | null;
   workshop_name: string | null;
   price: number | string | null;
   days: number | string | null;
@@ -45,6 +46,10 @@ export default function CustomerRequestDetailsPage() {
   const [acceptedOffer, setAcceptedOffer] = useState<AcceptedOffer | null>(
     null,
   );
+  const [workshopProfile, setWorkshopProfile] = useState<{
+    workshop_name: string | null;
+    workshop_slug: string | null;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [imageIndex, setImageIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -74,19 +79,31 @@ export default function CustomerRequestDetailsPage() {
           const { data: offerData, error: offerError } = await supabase
             .from("repair_offers")
             .select(
-              "id, request_id, workshop_name, price, days, message, status",
+              "id, request_id, workshop_user_id, workshop_name, price, days, message, status",
             )
             .eq("id", data.accepted_offer_id)
             .single<AcceptedOffer>();
 
           if (!offerError && offerData) {
             setAcceptedOffer(offerData);
+            if (offerData.workshop_user_id) {
+              const { data: profileData } = await supabase
+                .from("profiles")
+                .select("workshop_name, workshop_slug")
+                .eq("id", offerData.workshop_user_id)
+                .single();
+
+              setWorkshopProfile({
+                workshop_name: profileData?.workshop_name || null,
+                workshop_slug: profileData?.workshop_slug || null,
+              });
+            }
           }
         } else {
           const { data: offerData, error: offerError } = await supabase
             .from("repair_offers")
             .select(
-              "id, request_id, workshop_name, price, days, message, status",
+              "id, request_id, workshop_user_id, workshop_name, price, days, message, status",
             )
             .eq("request_id", id)
             .eq("status", "accepted")
@@ -94,6 +111,18 @@ export default function CustomerRequestDetailsPage() {
 
           if (!offerError && offerData) {
             setAcceptedOffer(offerData);
+            if (offerData.workshop_user_id) {
+              const { data: profileData } = await supabase
+                .from("profiles")
+                .select("workshop_name, workshop_slug")
+                .eq("id", offerData.workshop_user_id)
+                .single();
+
+              setWorkshopProfile({
+                workshop_name: profileData?.workshop_name || null,
+                workshop_slug: profileData?.workshop_slug || null,
+              });
+            }
           }
         }
       } catch (error) {
@@ -228,7 +257,18 @@ export default function CustomerRequestDetailsPage() {
 
             <StatusTimeline status={request.status} />
 
-            {acceptedOffer && <ServiceCard offer={acceptedOffer} />}
+            {acceptedOffer && (
+              <ServiceCard
+                offer={acceptedOffer}
+                workshopProfile={workshopProfile}
+                onOpenProfile={() => {
+                  if (!workshopProfile?.workshop_slug) return;
+                  router.push(
+                    `/workshops/profile/${workshopProfile.workshop_slug}`,
+                  );
+                }}
+              />
+            )}
 
             <div className="grid gap-4">
               <div className="rounded-3xl bg-black/[0.04] p-5">
@@ -304,22 +344,44 @@ export default function CustomerRequestDetailsPage() {
   );
 }
 
-function ServiceCard({ offer }: { offer: AcceptedOffer }) {
+function ServiceCard({
+  offer,
+  workshopProfile,
+  onOpenProfile,
+}: {
+  offer: AcceptedOffer;
+  workshopProfile: {
+    workshop_name: string | null;
+    workshop_slug: string | null;
+  } | null;
+  onOpenProfile: () => void;
+}) {
+  const publicName =
+    workshopProfile?.workshop_name || offer.workshop_name || "Service";
+
+  const canOpenProfile = Boolean(workshopProfile?.workshop_slug);
+
   return (
-    <div className="rounded-3xl bg-black text-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+    <button
+      type="button"
+      onClick={canOpenProfile ? onOpenProfile : undefined}
+      className={`w-full rounded-3xl bg-black p-5 text-left text-white shadow-[0_20px_60px_rgba(0,0,0,0.25)] transition ${
+        canOpenProfile
+          ? "cursor-pointer hover:bg-black/90 active:scale-[0.99]"
+          : ""
+      }`}
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-xl font-black text-black">
-            {(offer.workshop_name || "S").slice(0, 1).toUpperCase()}
+            {publicName.slice(0, 1).toUpperCase()}
           </div>
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/35">
               Service ales
             </p>
-            <h2 className="mt-1 text-2xl font-black">
-              {offer.workshop_name || "Service"}
-            </h2>
+            <h2 className="mt-1 text-2xl font-black">{publicName}</h2>
             <p className="mt-1 text-sm font-semibold text-green-300">
               Verificat ✓
             </p>
@@ -356,7 +418,13 @@ function ServiceCard({ offer }: { offer: AcceptedOffer }) {
           </p>
         </div>
       )}
-    </div>
+
+      {canOpenProfile && (
+        <p className="mt-4 text-center text-xs font-semibold text-orange-300/90">
+          Apasă pentru profilul service-ului →
+        </p>
+      )}
+    </button>
   );
 }
 

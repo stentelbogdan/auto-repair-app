@@ -33,6 +33,8 @@ type RepairRequest = {
 type RepairOffer = {
   id: string;
   requestId: string;
+  workshopUserId: string;
+  workshopSlug: string | null;
   price: string;
   days: string;
   message: string;
@@ -141,6 +143,36 @@ export default function OffersPage() {
         return;
       }
 
+      const workshopUserIds = Array.from(
+        new Set(
+          (offerRows || [])
+            .map((offer) => offer.workshop_user_id)
+            .filter(Boolean),
+        ),
+      );
+
+      let workshopProfileMap = new Map<
+        string,
+        { workshop_slug: string | null; workshop_name: string | null }
+      >();
+
+      if (workshopUserIds.length > 0) {
+        const { data: workshopProfiles } = await supabase
+          .from("profiles")
+          .select("id, workshop_slug, workshop_name")
+          .in("id", workshopUserIds);
+
+        workshopProfileMap = new Map(
+          (workshopProfiles || []).map((profile) => [
+            profile.id,
+            {
+              workshop_slug: profile.workshop_slug || null,
+              workshop_name: profile.workshop_name || null,
+            },
+          ]),
+        );
+      }
+
       const requestMap = new Map<string, RepairRequest>();
 
       activeRequests.forEach((request) => {
@@ -168,10 +200,17 @@ export default function OffersPage() {
           offer: {
             id: offer.id,
             requestId: offer.request_id,
+            workshopUserId: offer.workshop_user_id,
+            workshopSlug:
+              workshopProfileMap.get(offer.workshop_user_id)?.workshop_slug ||
+              null,
             price: String(offer.price),
             days: String(offer.days),
             message: offer.message || "",
-            workshopName: offer.workshop_name,
+            workshopName:
+              workshopProfileMap.get(offer.workshop_user_id)?.workshop_name ||
+              offer.workshop_name ||
+              "Service",
             createdAt: offer.created_at,
             status: offer.status,
           },
@@ -297,9 +336,24 @@ export default function OffersPage() {
                   <div className="grid gap-3">
                     <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                       <p className="text-sm text-white/45">Service</p>
-                      <p className="mt-1 text-xl font-bold">
-                        {offer.workshopName}
-                      </p>
+
+                      {offer.workshopSlug ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/workshops/profile/${offer.workshopSlug}`,
+                            )
+                          }
+                          className="mt-1 text-left text-xl font-bold text-white underline decoration-orange-400/50 underline-offset-4 transition hover:text-orange-300"
+                        >
+                          {offer.workshopName}
+                        </button>
+                      ) : (
+                        <p className="mt-1 text-xl font-bold">
+                          {offer.workshopName}
+                        </p>
+                      )}
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-black/30 p-4">

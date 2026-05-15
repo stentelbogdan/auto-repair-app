@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
@@ -50,6 +50,7 @@ const quickMessages = [
 
 export default function ChatPage() {
   const params = useParams();
+  const router = useRouter();
   const requestId = params.requestId as string;
   const searchParams = useSearchParams();
   const offerId = searchParams.get("offerId");
@@ -77,6 +78,11 @@ export default function ChatPage() {
     index: number;
   } | null>(null);
 
+  const [workshopProfile, setWorkshopProfile] = useState<{
+    workshop_name: string | null;
+    workshop_slug: string | null;
+  } | null>(null);
+
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
 
@@ -93,6 +99,7 @@ export default function ChatPage() {
     loadMessages();
     getUser();
     loadRequest();
+    loadWorkshopProfile();
 
     const channel = supabase
       .channel(`chat-${requestId}`)
@@ -214,6 +221,35 @@ export default function ChatPage() {
     if (!error && data) {
       setRequestData(data);
     }
+  };
+
+  const loadWorkshopProfile = async () => {
+    let offerQuery = supabase
+      .from("repair_offers")
+      .select("workshop_user_id, workshop_name")
+      .eq("request_id", requestId);
+
+    if (offerId) {
+      offerQuery = offerQuery.eq("id", offerId);
+    } else {
+      offerQuery = offerQuery.eq("status", "accepted");
+    }
+
+    const { data: offerData } = await offerQuery.maybeSingle();
+
+    if (!offerData?.workshop_user_id) return;
+
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("workshop_name, workshop_slug")
+      .eq("id", offerData.workshop_user_id)
+      .single();
+
+    setWorkshopProfile({
+      workshop_name:
+        profileData?.workshop_name || offerData.workshop_name || "Service",
+      workshop_slug: profileData?.workshop_slug || null,
+    });
   };
 
   const loadMessages = async () => {
@@ -475,13 +511,31 @@ export default function ChatPage() {
             </div>
           )}
 
-          <div>
-            <h1 className="text-lg font-bold text-white">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-bold text-white">
               {requestData?.car_brand || "Lucrare"}{" "}
               {requestData?.car_model || ""}
             </h1>
 
-            <p className="text-sm text-white/50">
+            {workshopProfile?.workshop_slug ? (
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    `/workshops/profile/${workshopProfile.workshop_slug}`,
+                  )
+                }
+                className="mt-0.5 block truncate text-left text-sm font-semibold text-orange-300 underline decoration-orange-400/50 underline-offset-4"
+              >
+                {workshopProfile.workshop_name || "Service"}
+              </button>
+            ) : (
+              <p className="text-sm text-white/50">
+                {requestData?.city || "-"} • {formatStatus(requestData?.status)}
+              </p>
+            )}
+
+            <p className="text-xs text-white/35">
               {requestData?.city || "-"} • {formatStatus(requestData?.status)}
             </p>
           </div>
