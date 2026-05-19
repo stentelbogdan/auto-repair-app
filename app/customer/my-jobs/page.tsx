@@ -225,6 +225,10 @@ function formatJobStatus(status?: string | null) {
       return "Programată";
     default:
       return "Programată";
+    case "painting":
+      return "La vopsit";
+    case "polishing":
+      return "La polish";
   }
 }
 
@@ -238,5 +242,9 @@ function getStatusClass(status?: string | null) {
       return "bg-orange-100 text-orange-700";
     default:
       return "bg-orange-100 text-orange-700";
+    case "painting":
+      return "bg-orange-100 text-orange-700";
+    case "polishing":
+      return "bg-purple-100 text-purple-700";
   }
 }

@@ -433,9 +433,10 @@ function StatusTimeline({ status }: { status?: string | null }) {
     { key: "open", label: "Postată" },
     { key: "matched", label: "Acceptată" },
     { key: "in_progress", label: "În lucru" },
+    { key: "painting", label: "Vopsire" },
+    { key: "polishing", label: "Polish" },
     { key: "completed", label: "Finalizată" },
   ];
-
   const currentIndex = getStatusIndex(status);
 
   return (
@@ -461,7 +462,7 @@ function StatusTimeline({ status }: { status?: string | null }) {
           }}
         />
 
-        <div className="relative grid grid-cols-4 gap-2">
+        <div className="relative grid grid-cols-6 gap-2">
           {steps.map((step, index) => {
             const isDone = index < currentIndex;
             const isActive = index === currentIndex;
