@@ -90,36 +90,38 @@ export default function WorkshopRequestDetailsPage() {
   }, [id, router]);
 
   const updateJobStatus = async (status: string) => {
-  if (!request) return;
+    if (!request) return;
 
-  try {
-    setUpdatingStatus(true);
+    try {
+      setUpdatingStatus(true);
 
-    const { error } = await supabase
-      .from("repair_requests")
-      .update({ status })
-      .eq("id", request.id);
+      const { data, error } = await supabase
+        .from("repair_requests")
+        .update({ status })
+        .eq("id", request.id)
+        .select("id, status")
+        .single();
 
-    if (error) {
-      alert(error.message);
-      return;
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      setRequest((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: data.status,
+            }
+          : prev,
+      );
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      alert("Statusul nu a putut fi actualizat.");
+    } finally {
+      setUpdatingStatus(false);
     }
-
-    setRequest((prev) =>
-      prev
-        ? {
-            ...prev,
-            status,
-          }
-        : prev,
-    );
-  } catch (error) {
-    console.error("Failed to update status:", error);
-    alert("Statusul nu a putut fi actualizat.");
-  } finally {
-    setUpdatingStatus(false);
-  }
-};
+  };
 
   if (loading) {
     return (
@@ -327,7 +329,7 @@ function formatDamageType(value: string) {
     default:
       return "Altă daună";
     case "painting":
-      return "La vopsit"; 
+      return "La vopsit";
     case "polishing":
       return "La polish";
   }
