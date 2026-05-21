@@ -138,6 +138,24 @@ export default function CustomerRequestDetailsPage() {
   }, [id, router]);
 
   useEffect(() => {
+    const interval = window.setInterval(async () => {
+      const { data } = await supabase
+        .from("repair_requests")
+        .select("*")
+        .eq("id", id)
+        .single<RepairRequest>();
+
+      if (data) {
+        setRequest(data);
+      }
+    }, 3000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [id]);
+
+  useEffect(() => {
     const channel = supabase
       .channel(`repair-request-${id}`)
       .on(
