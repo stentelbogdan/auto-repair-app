@@ -137,6 +137,28 @@ export default function CustomerRequestDetailsPage() {
     loadRequest();
   }, [id, router]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel(`repair-request-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "repair_requests",
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          setRequest(payload.new as RepairRequest);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id]);
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
