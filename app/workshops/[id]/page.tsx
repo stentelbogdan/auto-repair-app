@@ -95,38 +95,10 @@ export default function WorkshopRequestDetailsPage() {
     try {
       setUpdatingStatus(true);
 
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (!authData.user) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: acceptedOffer, error: offerError } = await supabase
-        .from("repair_offers")
-        .select("id")
-        .eq("request_id", request.id)
-        .eq("workshop_user_id", authData.user.id)
-        .eq("status", "accepted")
-        .maybeSingle();
-
-      if (offerError) {
-        alert(offerError.message);
-        return;
-      }
-
-      if (!acceptedOffer) {
-        alert(
-          "Doar service-ul care a câștigat lucrarea poate schimba statusul.",
-        );
-        return;
-      }
-
       const { data, error } = await supabase
         .from("repair_requests")
         .update({ status })
         .eq("id", request.id)
-        .eq("accepted_offer_id", acceptedOffer.id)
         .select("id, status")
         .single();
 
