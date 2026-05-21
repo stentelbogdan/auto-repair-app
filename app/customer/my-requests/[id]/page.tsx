@@ -152,6 +152,20 @@ export default function CustomerRequestDetailsPage() {
           setRequest(payload.new as RepairRequest);
         },
       )
+      .on("broadcast", { event: "status-updated" }, (payload) => {
+        const status = payload.payload?.status;
+
+        if (!status) return;
+
+        setRequest((prev) =>
+          prev
+            ? {
+                ...prev,
+                status,
+              }
+            : prev,
+        );
+      })
       .subscribe();
 
     return () => {

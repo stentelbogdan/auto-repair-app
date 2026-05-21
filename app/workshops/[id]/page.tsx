@@ -115,6 +115,15 @@ export default function WorkshopRequestDetailsPage() {
             }
           : prev,
       );
+
+      await supabase.channel(`repair-request-${request.id}`).send({
+        type: "broadcast",
+        event: "status-updated",
+        payload: {
+          status: data.status,
+        },
+      });
+      
     } catch (error) {
       console.error("Failed to update status:", error);
       alert("Statusul nu a putut fi actualizat.");
