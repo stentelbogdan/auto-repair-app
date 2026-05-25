@@ -122,21 +122,22 @@ export default function AppNavbar() {
       const { data, error } = await supabase.rpc("get_unread_messages_count");
 
       if (error) {
+        console.error("Failed to load unread count:", error);
         setUnreadCount(0);
         return;
       }
 
-      setUnreadCount(data || 0);
+      setUnreadCount(Number(data || 0));
     };
 
     loadUnreadMessages();
 
     const channel = supabase
-      .channel("navbar-unread-messages")
+      .channel(`navbar-unread-messages-${userId}`)
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "messages",
         },
@@ -144,10 +145,37 @@ export default function AppNavbar() {
           await loadUnreadMessages();
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversation_reads",
+        },
+        async () => {
+          await loadUnreadMessages();
+        },
+      )
       .subscribe();
 
+    const handleFocus = () => {
+      loadUnreadMessages();
+    };
+
+    const handleMessagesReadUpdated = () => {
+      loadUnreadMessages();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("messages-read-updated", handleMessagesReadUpdated);
+
     return () => {
-      channel.unsubscribe();
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(
+        "messages-read-updated",
+        handleMessagesReadUpdated,
+      );
+      supabase.removeChannel(channel);
     };
   }, [userId]);
 

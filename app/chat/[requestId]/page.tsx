@@ -321,6 +321,8 @@ export default function ChatPage() {
         .update({ read_at: now })
         .in("id", unreadMessageIds);
     }
+
+    window.dispatchEvent(new Event("messages-read-updated"));
   };
 
   const sendTypingStatus = async (isTyping: boolean) => {
