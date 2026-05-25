@@ -508,11 +508,7 @@ function StatusTimeline({ status }: { status?: string | null }) {
             width:
               currentIndex <= 0
                 ? "0%"
-                : currentIndex === 1
-                  ? "33%"
-                  : currentIndex === 2
-                    ? "66%"
-                    : "calc(100% - 2rem)",
+                : `${(currentIndex / (steps.length - 1)) * 100}%`,
           }}
         />
 
@@ -558,8 +554,12 @@ function getStatusIndex(status?: string | null) {
       return 1;
     case "in_progress":
       return 2;
-    case "completed":
+    case "painting":
       return 3;
+    case "polishing":
+      return 4;
+    case "completed":
+      return 5;
     default:
       return 0;
   }
@@ -571,6 +571,10 @@ function formatStatus(status?: string | null) {
       return "Programată";
     case "in_progress":
       return "În lucru";
+    case "painting":
+      return "La vopsit";
+    case "polishing":
+      return "La polish";
     case "completed":
       return "Finalizată";
     default:
@@ -582,6 +586,10 @@ function getStatusClass(status?: string | null) {
   switch (status) {
     case "in_progress":
       return "bg-blue-100 text-blue-700";
+    case "painting":
+      return "bg-orange-100 text-orange-700";
+    case "polishing":
+      return "bg-purple-100 text-purple-700";
     case "completed":
       return "bg-green-100 text-green-700";
     case "matched":

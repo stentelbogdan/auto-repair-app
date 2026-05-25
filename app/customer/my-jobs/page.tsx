@@ -19,33 +19,45 @@ export default function MyJobsPage() {
   const [offers, setOffers] = useState<RepairOfferRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadJobs = async () => {
-      try {
-        const { data: authData } = await supabase.auth.getUser();
+  const loadJobs = async () => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
 
-        if (!authData.user) {
-          router.push("/login");
-          return;
-        }
-
-        const [requestRows, offerRows] = await Promise.all([
-          getOwnRepairRequests(authData.user.id),
-          getOffersForCustomerRequests(authData.user.id),
-        ]);
-
-        setRequests(requestRows);
-        setOffers(offerRows);
-      } catch (error) {
-        console.error("Failed to load jobs:", error);
-        alert("Nu am putut încărca programările.");
-      } finally {
-        setLoading(false);
+      if (!authData.user) {
+        router.push("/login");
+        return;
       }
+
+      const [requestRows, offerRows] = await Promise.all([
+        getOwnRepairRequests(authData.user.id),
+        getOffersForCustomerRequests(authData.user.id),
+      ]);
+
+      setRequests(requestRows);
+      setOffers(offerRows);
+    } catch (error) {
+      console.error("Failed to load jobs:", error);
+      alert("Nu am putut încărca programările.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadJobs();
+  }, []);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      loadJobs();
     };
 
-    loadJobs();
-  }, [router]);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   const jobs = useMemo(() => {
     return requests
@@ -219,16 +231,16 @@ function formatJobStatus(status?: string | null) {
   switch (status) {
     case "in_progress":
       return "În lucru";
+    case "painting":
+      return "La vopsit";
+    case "polishing":
+      return "La polish";
     case "completed":
       return "Finalizată";
     case "matched":
       return "Programată";
     default:
       return "Programată";
-    case "painting":
-      return "La vopsit";
-    case "polishing":
-      return "La polish";
   }
 }
 
@@ -236,15 +248,20 @@ function getStatusClass(status?: string | null) {
   switch (status) {
     case "in_progress":
       return "bg-blue-100 text-blue-700";
-    case "completed":
-      return "bg-green-100 text-green-700";
-    case "matched":
-      return "bg-orange-100 text-orange-700";
-    default:
-      return "bg-orange-100 text-orange-700";
+
     case "painting":
       return "bg-orange-100 text-orange-700";
+
     case "polishing":
       return "bg-purple-100 text-purple-700";
+
+    case "completed":
+      return "bg-green-100 text-green-700";
+
+    case "matched":
+      return "bg-orange-100 text-orange-700";
+
+    default:
+      return "bg-orange-100 text-orange-700";
   }
 }
