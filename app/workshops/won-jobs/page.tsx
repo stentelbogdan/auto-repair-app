@@ -57,6 +57,7 @@ export default function WorkshopWonJobsPage() {
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [lightboxImages, setLightboxImages] = useState<{ src: string }[]>([]);
+  const [progressUnreadCount, setProgressUnreadCount] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -465,7 +466,10 @@ export default function WorkshopWonJobsPage() {
               return (
                 <article
                   key={job.offerId}
-                  className="group overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.07] to-white/[0.03] shadow-[0_30px_100px_rgba(0,0,0,0.55)] transition duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_40px_120px_rgba(0,0,0,0.7)]"
+                  onClick={() =>
+                    router.push(`/workshops/won-jobs/${job.requestId}`)
+                  }
+                  className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 ..."
                 >
                   <div className="relative">
                     {currentImage?.dataUrl ? (

@@ -5,6 +5,13 @@ import { Home } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
+type WorkProgressUpdate = {
+  id: string;
+  status: string | null;
+  message: string | null;
+  images: string[] | null;
+  created_at: string;
+};
 
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
@@ -28,6 +35,9 @@ function ReviewContent() {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
     null,
   );
+  const [progressUpdates, setProgressUpdates] = useState<WorkProgressUpdate[]>(
+    [],
+  );
 
   useEffect(() => {
     const loadRequest = async () => {
@@ -50,6 +60,18 @@ function ReviewContent() {
       }
 
       setRequest(data);
+
+      const { data: progressData, error: progressError } = await supabase
+        .from("work_progress_updates")
+        .select("*")
+        .eq("request_id", requestId)
+        .order("created_at", { ascending: false });
+
+      if (progressError) {
+        console.error(progressError);
+      } else {
+        setProgressUpdates(progressData || []);
+      }
       setLoading(false);
     };
 
@@ -102,7 +124,78 @@ function ReviewContent() {
             <InfoCard label="Status" value={formatStatus(request.status)} />
           </div>
 
-          <div className="mt-4 rounded-2xl bg-black/[0.04] p-4">
+          <div className="mt-8">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.25em] text-orange-500">
+                  Service updates
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black text-black">
+                  Progres lucrare
+                </h2>
+              </div>
+
+              <div className="rounded-full bg-orange-100 px-4 py-2 text-xs font-bold text-orange-600">
+                {progressUpdates.length} update-uri
+              </div>
+            </div>
+
+            {progressUpdates.length === 0 ? (
+              <div className="rounded-3xl bg-black/[0.04] p-6 text-center text-sm text-black/50">
+                Service-ul nu a trimis încă update-uri.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {progressUpdates.map((update, index) => (
+                  <div
+                    key={update.id}
+                    className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-sm"
+                  >
+                    <div className="border-b border-black/5 bg-orange-50 px-5 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
+                            {update.status || "Update"}
+                          </p>
+
+                          <p className="mt-1 text-xs text-black/45">
+                            #{progressUpdates.length - index}
+                          </p>
+                        </div>
+
+                        <div className="rounded-full bg-black px-4 py-2 text-xs font-bold text-white">
+                          Service
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-5">
+                      <p className="text-sm leading-relaxed text-black/75">
+                        {update.message || "Fără mesaj."}
+                      </p>
+
+                      {Array.isArray(update.images) &&
+                        update.images.length > 0 && (
+                          <div className="mt-4 grid grid-cols-2 gap-3">
+                            {update.images.slice(0, 2).map((imageUrl) => (
+                              <img
+                                key={imageUrl}
+                                src={imageUrl}
+                                alt=""
+                                className="h-32 w-full rounded-2xl object-cover"
+                              />
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-8 rounded-2xl bg-black/[0.04] p-4">
             <p className="text-sm font-medium text-black/50">Descriere</p>
             <p className="mt-1 text-sm text-black/75">
               {request.description || "Nu ai adăugat descriere."}

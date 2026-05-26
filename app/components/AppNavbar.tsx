@@ -14,6 +14,7 @@ export default function AppNavbar() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [progressUnreadCount, setProgressUnreadCount] = useState(0);
   const [activeRole, setActiveRole] = useState<Role>("customer");
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [roleParam, setRoleParam] = useState<Role | null>(null);
@@ -115,6 +116,7 @@ export default function AppNavbar() {
   useEffect(() => {
     if (!userId) {
       setUnreadCount(0);
+      setProgressUnreadCount(0);
       return;
     }
 
@@ -130,10 +132,26 @@ export default function AppNavbar() {
       setUnreadCount(Number(data || 0));
     };
 
+    const loadUnreadProgress = async () => {
+      const { data, error } = await supabase.rpc(
+        "get_unread_progress_updates_count",
+      );
+
+      if (error) {
+        console.error("Failed to load progress unread:", error);
+        setProgressUnreadCount(0);
+        return;
+      }
+
+      setProgressUnreadCount(Number(data || 0));
+    };
+
     loadUnreadMessages();
+    loadUnreadProgress();
 
     const channel = supabase
-      .channel(`navbar-unread-messages-${userId}`)
+      .channel(`navbar-live-badges-${userId}`)
+
       .on(
         "postgres_changes",
         {
@@ -145,6 +163,7 @@ export default function AppNavbar() {
           await loadUnreadMessages();
         },
       )
+
       .on(
         "postgres_changes",
         {
@@ -156,25 +175,47 @@ export default function AppNavbar() {
           await loadUnreadMessages();
         },
       )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "work_progress_updates",
+        },
+        async () => {
+          await loadUnreadProgress();
+        },
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "work_progress_reads",
+        },
+        async () => {
+          await loadUnreadProgress();
+        },
+      )
+
       .subscribe();
 
-    const handleFocus = () => {
+    const refreshBadges = () => {
       loadUnreadMessages();
+      loadUnreadProgress();
     };
 
-    const handleMessagesReadUpdated = () => {
-      loadUnreadMessages();
-    };
-
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("messages-read-updated", handleMessagesReadUpdated);
+    window.addEventListener("focus", refreshBadges);
+    window.addEventListener("messages-read-updated", refreshBadges);
+    window.addEventListener("progress-read-updated", refreshBadges);
 
     return () => {
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener(
-        "messages-read-updated",
-        handleMessagesReadUpdated,
-      );
+      window.removeEventListener("focus", refreshBadges);
+      window.removeEventListener("messages-read-updated", refreshBadges);
+      window.removeEventListener("progress-read-updated", refreshBadges);
+
       supabase.removeChannel(channel);
     };
   }, [userId]);
@@ -320,6 +361,26 @@ export default function AppNavbar() {
                 {unreadCount > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
                     {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isWorkshopMode) {
+                    router.push("/workshops/won-jobs");
+                    return;
+                  }
+
+                  router.push("/customer/my-requests");
+                }}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              >
+                🔧
+                {progressUnreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
+                    {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
                   </span>
                 )}
               </button>
