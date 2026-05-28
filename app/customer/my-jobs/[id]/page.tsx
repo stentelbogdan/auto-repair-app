@@ -37,52 +37,79 @@ export default function CustomerJobDetailPage() {
 
   useEffect(() => {
     const loadJob = async () => {
-      if (!requestId) {
-        router.push("/customer/my-jobs");
-        return;
+      try {
+        setLoading(true);
+
+        if (!requestId) {
+          router.push("/customer/my-jobs");
+          return;
+        }
+
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!authData.user) {
+          router.push("/login");
+          return;
+        }
+
+        const { data: requestData, error: requestError } = await supabase
+          .from("repair_requests")
+          .select("*")
+          .eq("id", requestId)
+          .single<RepairRequestRow>();
+
+        if (requestError) {
+          console.error(requestError);
+          router.push("/customer/my-jobs");
+          return;
+        }
+
+        setRequest(requestData);
+
+        if (requestData.accepted_offer_id) {
+          const { data: offerData } = await supabase
+            .from("repair_offers")
+            .select("id, workshop_name, price, days, message")
+            .eq("id", requestData.accepted_offer_id)
+            .single<AcceptedOffer>();
+
+          setOffer(offerData || null);
+        }
+
+        const { data: progressData, error: progressError } = await supabase
+          .from("work_progress_updates")
+          .select("*")
+          .eq("request_id", requestId)
+          .order("created_at", { ascending: false });
+
+        if (progressError) {
+          console.error(progressError);
+        } else {
+          setProgressUpdates(progressData || []);
+
+          const unreadUpdates =
+            progressData?.map((update) => ({
+              update_id: update.id,
+              user_id: authData.user.id,
+            })) || [];
+
+          if (unreadUpdates.length > 0) {
+            await supabase.rpc("mark_progress_updates_read", {
+              p_request_id: requestId,
+            });
+
+            window.dispatchEvent(new Event("progress-read-updated"));
+          }
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setLoading(false);
       }
-
-      const { data: requestData, error: requestError } = await supabase
-        .from("repair_requests")
-        .select("*")
-        .eq("id", requestId)
-        .single<RepairRequestRow>();
-
-      if (requestError) {
-        console.error(requestError);
-        alert("Nu am putut încărca lucrarea.");
-        router.push("/customer/my-jobs");
-        return;
-      }
-
-      setRequest(requestData);
-
-      if (requestData.accepted_offer_id) {
-        const { data: offerData } = await supabase
-          .from("repair_offers")
-          .select("id, workshop_name, price, days, message")
-          .eq("id", requestData.accepted_offer_id)
-          .single<AcceptedOffer>();
-
-        setOffer(offerData || null);
-      }
-
-      const { data: progressData, error: progressError } = await supabase
-        .from("work_progress_updates")
-        .select("*")
-        .eq("request_id", requestId)
-        .order("created_at", { ascending: false });
-
-      if (progressError) {
-        console.error(progressError);
-      } else {
-        setProgressUpdates(progressData || []);
-      }
-
-      setLoading(false);
     };
 
     loadJob();
+
     const channel = supabase
       .channel(`customer-job-progress-${requestId}`)
       .on(
@@ -94,13 +121,7 @@ export default function CustomerJobDetailPage() {
           filter: `request_id=eq.${requestId}`,
         },
         async () => {
-          const { data } = await supabase
-            .from("work_progress_updates")
-            .select("*")
-            .eq("request_id", requestId)
-            .order("created_at", { ascending: false });
-
-          setProgressUpdates(data || []);
+          await loadJob();
         },
       )
       .subscribe();

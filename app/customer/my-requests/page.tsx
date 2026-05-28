@@ -31,7 +31,13 @@ export default function MyRequestsPage() {
         }
 
         const data = await getOwnRepairRequests(authData.user.id);
-        setRequests(data);
+
+        const visibleRequests = data.filter(
+          (request) =>
+            request.status !== "matched" && !request.accepted_offer_id,
+        );
+
+        setRequests(visibleRequests); 
       } catch (error) {
         console.error("Failed to load requests:", error);
         alert("Nu am putut încărca daunele tale.");

@@ -282,6 +282,16 @@ export default function AppNavbar() {
   };
 
   const goMessages = () => {
+    const goProgress = () => {
+      if (isWorkshopMode) {
+        localStorage.setItem("activeRole", "workshop");
+        window.location.href = "/workshops/won-jobs";
+        return;
+      }
+
+      localStorage.setItem("activeRole", "customer");
+      window.location.href = "/customer/my-jobs";
+    };
     if (isWorkshopMode) {
       localStorage.setItem("activeRole", "workshop");
       window.location.href = "/workshops/messages";
@@ -373,7 +383,7 @@ export default function AppNavbar() {
                     return;
                   }
 
-                  router.push("/customer/my-requests");
+                  router.push("/customer/my-jobs");
                 }}
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
               >

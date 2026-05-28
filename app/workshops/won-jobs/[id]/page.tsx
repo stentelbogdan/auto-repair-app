@@ -39,10 +39,6 @@ export default function WonJobDetailPage() {
 
   const uploadProgressImages = async () => {
     try {
-      if (progressImages.length === 0) {
-        alert("Alege cel puțin o poză.");
-        return;
-      }
       setUploading(true);
 
       const uploadedUrls: string[] = [];
@@ -96,6 +92,13 @@ export default function WonJobDetailPage() {
 
         return;
       }
+
+      await supabase
+        .from("repair_requests")
+        .update({
+          status: selectedStatus,
+        })
+        .eq("id", requestId);
 
       console.log("Uploaded:", uploadedUrls);
 

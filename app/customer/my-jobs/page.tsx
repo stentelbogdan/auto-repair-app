@@ -11,12 +11,19 @@ import {
   getOffersForCustomerRequests,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
+type LatestProgress = {
+  status: string | null;
+  created_at: string;
+};
 
 export default function MyJobsPage() {
   const router = useRouter();
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
   const [offers, setOffers] = useState<RepairOfferRow[]>([]);
+  const [progressByRequestId, setProgressByRequestId] = useState<
+    Record<string, { latestStatus: string | null; count: number }>
+  >({});
   const [loading, setLoading] = useState(true);
 
   const loadJobs = async () => {
@@ -35,6 +42,28 @@ export default function MyJobsPage() {
 
       setRequests(requestRows);
       setOffers(offerRows);
+
+      const progressMap: Record<
+        string,
+        { latestStatus: string | null; count: number }
+      > = {};
+
+      await Promise.all(
+        requestRows.map(async (request) => {
+          const { data } = await supabase
+            .from("work_progress_updates")
+            .select("status, created_at")
+            .eq("request_id", request.id)
+            .order("created_at", { ascending: false });
+
+          progressMap[request.id] = {
+            latestStatus: data?.[0]?.status || null,
+            count: data?.length || 0,
+          };
+        }),
+      );
+
+      setProgressByRequestId(progressMap);
     } catch (error) {
       console.error("Failed to load jobs:", error);
       alert("Nu am putut încărca programările.");
@@ -185,6 +214,19 @@ export default function MyJobsPage() {
                               €{acceptedOffer.price}
                             </span>
                           </div>
+                        </div>
+                      )}
+
+                      {progressByRequestId[request.id] && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="rounded-full bg-orange-100 px-3 py-1 text-[11px] font-bold text-orange-700">
+                            {progressByRequestId[request.id].latestStatus ||
+                              "Waiting"}
+                          </span>
+
+                          <span className="rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
+                            {progressByRequestId[request.id].count} update-uri
+                          </span>
                         </div>
                       )}
 
