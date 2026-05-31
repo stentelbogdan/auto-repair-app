@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -18,6 +18,8 @@ export default function AppNavbar() {
   const [activeRole, setActiveRole] = useState<Role>("customer");
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [roleParam, setRoleParam] = useState<Role | null>(null);
+  const lastProgressCountRef = useRef(0);
+  const [showProgressToast, setShowProgressToast] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -143,7 +145,22 @@ export default function AppNavbar() {
         return;
       }
 
-      setProgressUnreadCount(Number(data || 0));
+      const nextCount = Number(data || 0);
+
+      if (
+        isClientMode &&
+        nextCount > lastProgressCountRef.current &&
+        lastProgressCountRef.current !== 0
+      ) {
+        setShowProgressToast(true);
+
+        setTimeout(() => {
+          setShowProgressToast(false);
+        }, 4000);
+      }
+
+      lastProgressCountRef.current = nextCount;
+      setProgressUnreadCount(nextCount);
     };
 
     loadUnreadMessages();
@@ -388,7 +405,7 @@ export default function AppNavbar() {
                 className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
               >
                 🔧
-                {progressUnreadCount > 0 && (
+                {isClientMode && progressUnreadCount > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
                     {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
                   </span>
@@ -416,6 +433,17 @@ export default function AppNavbar() {
           </div>
         </div>
       </div>
+
+      {isClientMode && showProgressToast && (
+        <div className="fixed left-1/2 top-24 z-[999] w-[92%] max-w-sm -translate-x-1/2 rounded-3xl border border-orange-500/25 bg-black/90 px-4 py-3 text-white shadow-2xl backdrop-blur-xl">
+          <p className="text-sm font-bold text-orange-300">
+            🔧 Update nou de la service
+          </p>
+          <p className="mt-1 text-xs text-white/55">
+            Ai primit un nou status sau poze pentru lucrarea ta.
+          </p>
+        </div>
+      )}
     </nav>
   );
 }

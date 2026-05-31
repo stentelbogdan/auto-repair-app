@@ -5,6 +5,9 @@ import { Home } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
+import Lightbox from "yet-another-react-lightbox";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import "yet-another-react-lightbox/styles.css";
 
 type WorkProgressUpdate = {
   id: string;
@@ -34,6 +37,34 @@ export default function CustomerJobDetailPage() {
     [],
   );
   const [loading, setLoading] = useState(true);
+
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
+    null,
+  );
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+
+  const latestStatus =
+    progressUpdates.length > 0 ? progressUpdates[0].status : null;
+
+  const getStatusColor = (status?: string | null) => {
+    switch (status?.toLowerCase()) {
+      case "received":
+        return "bg-blue-500";
+      case "disassembly":
+        return "bg-orange-500";
+      case "body repair":
+        return "bg-purple-500";
+      case "painting":
+        return "bg-red-500";
+      case "polishing":
+        return "bg-lime-500";
+      case "ready":
+        return "bg-emerald-500";
+      default:
+        return "bg-orange-500";
+    }
+  };
 
   useEffect(() => {
     const loadJob = async () => {
@@ -219,53 +250,167 @@ export default function CustomerJobDetailPage() {
               </div>
             </div>
 
+            {request.status === "Ready" && (
+              <div className="mt-6 rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-5">
+                <p className="text-3xl">🎉</p>
+
+                <h2 className="mt-3 text-2xl font-black text-emerald-700">
+                  Mașina este gata
+                </h2>
+
+                <p className="mt-2 text-sm font-medium text-emerald-700/80">
+                  Finalizată pe{" "}
+                  {new Date(progressUpdates[0]?.created_at).toLocaleDateString(
+                    "ro-RO",
+                    {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                    },
+                  )}
+                  {" • "}
+                  {new Date(progressUpdates[0]?.created_at).toLocaleTimeString(
+                    "ro-RO",
+                    {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    },
+                  )}
+                </p>
+
+                <p className="mt-2 text-sm leading-relaxed text-black/60">
+                  Service-ul a finalizat lucrarea. Poți contacta atelierul
+                  pentru ridicarea mașinii sau pentru ultimele detalii.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => router.push(`/chat/${request.id}`)}
+                  className="mt-4 w-full rounded-2xl bg-black px-5 py-3 text-sm font-bold text-white"
+                >
+                  Contactează service-ul
+                </button>
+              </div>
+            )}
+
+            <div className="h-8" />
+
             {progressUpdates.length === 0 ? (
               <div className="rounded-3xl bg-black/[0.04] p-6 text-center text-sm text-black/50">
                 Service-ul nu a trimis încă update-uri.
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="relative ml-6 border-l-2 border-black/10 pl-8">
                 {progressUpdates.map((update, index) => (
-                  <div
-                    key={update.id}
-                    className="overflow-hidden rounded-3xl border border-black/10 bg-white shadow-sm"
-                  >
-                    <div className="border-b border-black/5 bg-orange-50 px-5 py-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
-                            {update.status || "Update"}
-                          </p>
+                  <div key={update.id} className="relative mb-7">
+                    <div
+                      className={`absolute -left-[43px] top-6 h-5 w-5 rounded-full border-4 border-white shadow-md ${getStatusColor(
+                        update.status,
+                      )}`}
+                    />
 
-                          <p className="mt-1 text-xs text-black/45">
-                            #{progressUpdates.length - index}
-                          </p>
-                        </div>
+                    <div
+                      className={`overflow-hidden rounded-3xl border bg-white shadow-sm ${
+                        index === 0
+                          ? "border-emerald-300 ring-2 ring-emerald-100"
+                          : "border-black/10"
+                      }`}
+                    >
+                      <div className="border-b border-black/5 bg-orange-50 px-5 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
+                              {update.status || "Update"}
+                            </p>
 
-                        <div className="rounded-full bg-black px-4 py-2 text-xs font-bold text-white">
-                          Service
+                            <div className="mt-1 flex items-center gap-2 text-xs text-black/45">
+                              <span>#{progressUpdates.length - index}</span>
+                              <span>•</span>
+
+                              <span>
+                                {new Date(update.created_at).toLocaleDateString(
+                                  "ro-RO",
+                                  {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  },
+                                )}
+                              </span>
+
+                              <span>•</span>
+
+                              <span>
+                                {new Date(update.created_at).toLocaleTimeString(
+                                  "ro-RO",
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  },
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {Array.isArray(update.images) &&
+                              update.images.length > 0 && (
+                                <div className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black/70">
+                                  📸 {update.images.length}{" "}
+                                  {update.images.length === 1 ? "poză" : "poze"}
+                                </div>
+                              )}
+
+                            <div className="rounded-full bg-black px-4 py-2 text-xs font-bold text-white">
+                              Service
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="p-5">
-                      <p className="text-sm leading-relaxed text-black/75">
-                        {update.message || "Fără mesaj."}
-                      </p>
+                      <div className="p-5">
+                        <p className="text-sm leading-relaxed text-black/75">
+                          {update.message || "Fără mesaj."}
+                        </p>
 
-                      {Array.isArray(update.images) &&
-                        update.images.length > 0 && (
-                          <div className="mt-4 grid grid-cols-2 gap-3">
-                            {update.images.slice(0, 2).map((imageUrl) => (
-                              <img
-                                key={imageUrl}
-                                src={imageUrl}
-                                alt=""
-                                className="h-32 w-full rounded-2xl object-cover"
-                              />
-                            ))}
-                          </div>
-                        )}
+                        {Array.isArray(update.images) &&
+                          update.images.length > 0 && (
+                            <div className="mt-4 grid grid-cols-2 gap-3">
+                              {update.images
+                                .slice(0, 2)
+                                .map((imageUrl, imageIndex) => (
+                                  <button
+                                    key={imageUrl}
+                                    type="button"
+                                    onClick={() => {
+                                      setLightboxImages(
+                                        update.images as string[],
+                                      );
+                                      setSelectedImageIndex(imageIndex);
+                                      setLightboxOpen(true);
+                                    }}
+                                    className="relative overflow-hidden rounded-2xl"
+                                  >
+                                    <img
+                                      src={imageUrl}
+                                      alt=""
+                                      className="h-40 w-full rounded-2xl object-cover"
+                                    />
+
+                                    {imageIndex === 1 &&
+                                      (update.images as string[]).length >
+                                        2 && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-black text-white">
+                                          +
+                                          {(update.images as string[]).length -
+                                            2}
+                                        </div>
+                                      )}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -282,6 +427,41 @@ export default function CustomerJobDetailPage() {
           </button>
         </div>
       </div>
+
+      <Lightbox
+        open={lightboxOpen}
+        close={() => {
+          setLightboxOpen(false);
+          setSelectedImageIndex(null);
+          setLightboxImages([]);
+        }}
+        slides={lightboxImages.map((src) => ({ src }))}
+        index={selectedImageIndex || 0}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
+      />
     </main>
   );
 }

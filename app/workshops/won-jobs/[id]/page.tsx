@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 const progressSteps = [
@@ -19,11 +19,30 @@ export default function WonJobDetailPage() {
 
   const requestId = params.id as string;
 
-  const [selectedStatus, setSelectedStatus] = useState("Painting");
+  const [selectedStatus, setSelectedStatus] = useState("");
   const [message, setMessage] = useState("");
   const [progressImages, setProgressImages] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadedPreviewUrls, setUploadedPreviewUrls] = useState<string[]>([]);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  useEffect(() => {
+    const loadRequestStatus = async () => {
+      const { data } = await supabase
+        .from("repair_requests")
+        .select("status")
+        .eq("id", requestId)
+        .maybeSingle();
+
+      if (data?.status) {
+        setSelectedStatus(data.status);
+      }
+    };
+
+    if (requestId) {
+      loadRequestStatus();
+    }
+  }, [requestId]);
 
   const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -40,6 +59,7 @@ export default function WonJobDetailPage() {
   const uploadProgressImages = async () => {
     try {
       setUploading(true);
+      setSuccessMessage("");
 
       const uploadedUrls: string[] = [];
 
@@ -102,7 +122,16 @@ export default function WonJobDetailPage() {
 
       console.log("Uploaded:", uploadedUrls);
 
-      alert("Update trimis către client!");
+      setSuccessMessage("success");
+
+      setTimeout(() => {
+        setSuccessMessage("");
+      }, 5000);
+
+      setSuccessMessage("Update trimis către client.");
+      setMessage("");
+      setProgressImages([]);
+      setUploadedPreviewUrls([]);
 
       setMessage("");
       setProgressImages([]);
@@ -242,9 +271,24 @@ export default function WonJobDetailPage() {
               </div>
             )}
 
+            {successMessage && (
+              <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-300">✓</span>
+                  <p className="text-sm font-semibold text-emerald-300">
+                    Update trimis cu succes
+                  </p>
+                </div>
+
+                <p className="mt-1 text-xs text-white/50">
+                  Clientul vede acum statusul, mesajul și pozele trimise.
+                </p>
+              </div>
+            )}
+
             <button
               onClick={uploadProgressImages}
-              disabled={uploading}
+              disabled={uploading || !selectedStatus}
               className="mt-5 w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-black hover:bg-orange-400 disabled:opacity-50"
             >
               {uploading ? "Se încarcă..." : "Trimite update către client"}

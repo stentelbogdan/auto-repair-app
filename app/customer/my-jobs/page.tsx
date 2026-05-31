@@ -25,6 +25,9 @@ export default function MyJobsPage() {
     Record<string, { latestStatus: string | null; count: number }>
   >({});
   const [loading, setLoading] = useState(true);
+  const [unreadByRequestId, setUnreadByRequestId] = useState<
+    Record<string, number>
+  >({});
 
   const loadJobs = async () => {
     try {
@@ -47,6 +50,18 @@ export default function MyJobsPage() {
         string,
         { latestStatus: string | null; count: number }
       > = {};
+
+      const { data: unreadData } = await supabase.rpc(
+        "get_unread_progress_updates_by_request",
+      );
+
+      const unreadMap: Record<string, number> = {};
+
+      (unreadData || []).forEach((row: any) => {
+        unreadMap[row.request_id] = row.unread_count;
+      });
+
+      setUnreadByRequestId(unreadMap);
 
       await Promise.all(
         requestRows.map(async (request) => {
@@ -179,9 +194,17 @@ export default function MyJobsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h2 className="text-xl font-black leading-tight">
-                            {request.car_brand} {request.car_model}
-                          </h2>
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-black leading-tight">
+                              {request.car_brand} {request.car_model}
+                            </h2>
+
+                            {(unreadByRequestId[request.id] || 0) > 0 && (
+                              <span className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
+                                NOU
+                              </span>
+                            )}
+                          </div>
                           <p className="mt-1 text-sm text-black/55">
                             {request.car_year} • {request.city}
                           </p>
