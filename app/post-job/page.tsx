@@ -13,7 +13,18 @@ type DamageType =
   | "bumper"
   | "paint"
   | "cracked_part"
-  | "other";
+  | "other"
+  | "detailing_interior"
+  | "detailing_exterior"
+  | "polish"
+  | "ceramic_coating"
+  | "ppf"
+  | "wrap"
+  | "window_tint"
+  | "dechroming"
+  | "wheel_refurbishment"
+  | "smart_repair"
+  | "pdr";
 
 type StoredImage = {
   name: string;
@@ -140,7 +151,8 @@ export default function PostJobPage() {
           </p>
           <h1 className="mt-2 text-2xl font-bold">Postează dauna</h1>
           <p className="mt-2 text-sm text-white/55">
-            Încarcă poze, descrie dauna și primești oferte de la service-uri.
+            Încarcă poze, descrie lucrarea și primești oferte de la service-uri
+            specializate.
           </p>
         </div>
 
@@ -241,22 +253,104 @@ export default function PostJobPage() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                Tip daună
+              <label className="mb-3 block text-sm font-medium text-black/70">
+                Ce serviciu dorești?
               </label>
 
-              <select
-                value={damageType}
-                onChange={(e) => setDamageType(e.target.value as DamageType)}
-                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
-              >
-                <option value="scratch">Zgârietură</option>
-                <option value="dent">Îndoitură</option>
-                <option value="bumper">Bară avariată</option>
-                <option value="paint">Problemă vopsea</option>
-                <option value="cracked_part">Element crăpat</option>
-                <option value="other">Altă daună</option>
-              </select>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    value: "scratch",
+                    title: "Reparație daună",
+                    icon: "🚗",
+                    desc: "Zgârieturi, lovituri, vopsitorie",
+                  },
+                  {
+                    value: "detailing_interior",
+                    title: "Detailing interior",
+                    icon: "✨",
+                    desc: "Curățare premium interior",
+                  },
+                  {
+                    value: "detailing_exterior",
+                    title: "Detailing exterior",
+                    icon: "🧽",
+                    desc: "Curățare și protecție exterior",
+                  },
+                  {
+                    value: "polish",
+                    title: "Polish profesional",
+                    icon: "💎",
+                    desc: "Corecție lac și luciu",
+                  },
+                  {
+                    value: "ceramic_coating",
+                    title: "Ceramic coating",
+                    icon: "🛡️",
+                    desc: "Protecție ceramică vopsea",
+                  },
+                  {
+                    value: "ppf",
+                    title: "PPF",
+                    icon: "🧊",
+                    desc: "Folie protecție vopsea",
+                  },
+                  {
+                    value: "wrap",
+                    title: "Colantări auto",
+                    icon: "🎨",
+                    desc: "Schimbare culoare / design",
+                  },
+                  {
+                    value: "window_tint",
+                    title: "Folii geamuri",
+                    icon: "🕶️",
+                    desc: "Folie solară geamuri",
+                  },
+                  {
+                    value: "dechroming",
+                    title: "Dechroming",
+                    icon: "⚫",
+                    desc: "Elemente cromate transformate negru",
+                  },
+                  {
+                    value: "wheel_refurbishment",
+                    title: "Recondiționare jante",
+                    icon: "🛞",
+                    desc: "Reparație, vopsire, diamond cut",
+                  },
+                  {
+                    value: "smart_repair",
+                    title: "Smart Repair",
+                    icon: "🔧",
+                    desc: "Reparații mici și rapide",
+                  },
+                  {
+                    value: "pdr",
+                    title: "PDR",
+                    icon: "🔨",
+                    desc: "Îndreptare fără vopsire",
+                  },
+                ].map((service) => (
+                  <button
+                    key={service.value}
+                    type="button"
+                    onClick={() => setDamageType(service.value as DamageType)}
+                    className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
+                      damageType === service.value
+                        ? "border-orange-400 bg-orange-50 shadow-sm"
+                        : "border-black/10 bg-black/[0.03] hover:border-orange-300"
+                    }`}
+                  >
+                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                      {service.icon}
+                    </div>
+
+                    <p className="font-bold text-black">{service.title}</p>
+                    <p className="mt-1 text-sm text-black/55">{service.desc}</p>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="md:col-span-2">
@@ -266,7 +360,7 @@ export default function PostJobPage() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Ex: bara față zgâriată, ușa stângă îndoită, aripa trebuie vopsită..."
+                placeholder="Ex: ceramic coating complet, detailing interior premium, recondiționare jante, PPF capotă și bară față..."
                 rows={4}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
               />
