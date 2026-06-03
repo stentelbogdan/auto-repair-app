@@ -8,13 +8,18 @@ export type RepairRequestRow = {
   car_year: string;
   city: string;
   damage_type: string;
+
+  service_type?: "bodywork" | "mechanical";
+
   description: string | null;
+
   images: {
-  name: string;
-  url?: string;
-  thumbUrl?: string;
-  dataUrl?: string;
-}[];
+    name: string;
+    url?: string;
+    thumbUrl?: string;
+    dataUrl?: string;
+  }[];
+
   status: string;
   accepted_offer_id: string | null;
   created_at: string;
@@ -28,12 +33,13 @@ export async function createRepairRequest(input: {
   city: string;
   damageType: string;
   description: string;
+  serviceType?: "bodywork" | "mechanical";
   images: {
-  name: string;
-  url?: string;
-  thumbUrl?: string;
-  dataUrl?: string;
-}[];
+    name: string;
+    url?: string;
+    thumbUrl?: string;
+    dataUrl?: string;
+  }[];
 }) {
   const { data, error } = await supabase
     .from("repair_requests")
@@ -45,6 +51,7 @@ export async function createRepairRequest(input: {
       city: input.city,
       damage_type: input.damageType,
       description: input.description,
+      service_type: input.serviceType ?? "bodywork",
       images: input.images,
       status: "open",
     })
@@ -75,7 +82,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, damage_type, description, status, accepted_offer_id, created_at, images"
+      "id, user_id, car_brand, car_model, car_year, city, damage_type, description, service_type, status, accepted_offer_id, created_at, images",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });

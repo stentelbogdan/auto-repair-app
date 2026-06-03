@@ -57,9 +57,9 @@ function getServiceMeta(value: string) {
 
 const filters = [
   { id: "all", label: "Toate", icon: "📋" },
-  { id: "scratch", label: "Daune", icon: "🚗" },
-  { id: "detailing_interior", label: "Detailing", icon: "✨" },
-  { id: "ceramic_coating", label: "Ceramic", icon: "🛡️" },
+  { id: "damage", label: "Daune", icon: "🚗" },
+  { id: "detailing", label: "Detailing", icon: "✨" },
+  { id: "ceramic", label: "Ceramic", icon: "🛡️" },
   { id: "ppf", label: "PPF", icon: "🧊" },
   { id: "wrap", label: "Colantări", icon: "🎨" },
   { id: "window_tint", label: "Folii", icon: "🕶️" },
@@ -159,10 +159,24 @@ export default function WorkshopsPage() {
     return null;
   }
 
+  const filterGroups: Record<string, string[]> = {
+    all: [],
+    damage: ["scratch", "dent", "bumper", "paint", "cracked_part", "other"],
+    detailing: ["detailing_interior", "detailing_exterior", "polish"],
+    ceramic: ["ceramic_coating"],
+    ppf: ["ppf"],
+    wrap: ["wrap"],
+    window_tint: ["window_tint"],
+    wheel_refurbishment: ["wheel_refurbishment"],
+    pdr: ["pdr"],
+  };
+
   const filteredRequests =
     activeFilter === "all"
       ? requests
-      : requests.filter((request) => request.damageType === activeFilter);
+      : requests.filter((request) =>
+          filterGroups[activeFilter]?.includes(request.damageType),
+        );
 
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">

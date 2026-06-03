@@ -74,10 +74,17 @@ export default function CustomerDashboardPage() {
           {!isWorkshop && (
             <>
               <Card
-                title="Postează"
-                desc="Încarcă poze și descriere"
-                icon="+"
+                title="Daună estetică"
+                desc="Poze + descriere"
+                icon="🚗"
                 onClick={() => router.push("/post-job")}
+              />
+
+              <Card
+                title="Problema mecanică"
+                desc="Descrie problema"
+                icon="⚙️"
+                onClick={() => router.push("/post-mechanical")}
               />
 
               <Card
