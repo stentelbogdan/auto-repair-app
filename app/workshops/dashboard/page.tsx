@@ -10,7 +10,8 @@ type ProfileRow = {
 };
 
 type DashboardStats = {
-  openRequests: number;
+  bodyworkRequests: number;
+  mechanicalRequests: number;
   myOffers: number;
   wonJobs: number;
 };
@@ -21,7 +22,8 @@ export default function WorkshopDashboardPage() {
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
-    openRequests: 0,
+    bodyworkRequests: 0,
+    mechanicalRequests: 0,
     myOffers: 0,
     wonJobs: 0,
   });
@@ -64,33 +66,44 @@ export default function WorkshopDashboardPage() {
 
   const loadStats = async (userId: string) => {
     try {
-      const [openRequestsResult, myOffersResult, wonJobsResult] =
-        await Promise.all([
-          supabase
-            .from("repair_requests")
-            .select("id", { count: "exact", head: true })
-            .neq("status", "matched"),
+      const [
+        bodyworkRequestsResult,
+        mechanicalRequestsResult,
+        myOffersResult,
+        wonJobsResult,
+      ] = await Promise.all([
+        supabase
+          .from("repair_requests")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "matched")
+          .eq("service_type", "bodywork"),
 
-          supabase
-            .from("repair_offers")
-            .select("id", { count: "exact", head: true })
-            .eq("workshop_user_id", userId),
+        supabase
+          .from("repair_requests")
+          .select("id", { count: "exact", head: true })
+          .neq("status", "matched")
+          .eq("service_type", "mechanical"),
 
-          supabase
-            .from("repair_offers")
-            .select(
-              `
-              id,
-              repair_requests!inner (
-                id,
-                status,
-                accepted_offer_id
-              )
-            `,
-            )
-            .eq("workshop_user_id", userId)
-            .eq("repair_requests.status", "matched"),
-        ]);
+        supabase
+          .from("repair_offers")
+          .select("id", { count: "exact", head: true })
+          .eq("workshop_user_id", userId),
+
+        supabase
+          .from("repair_offers")
+          .select(
+            `
+          id,
+          repair_requests!inner (
+            id,
+            status,
+            accepted_offer_id
+          )
+        `,
+          )
+          .eq("workshop_user_id", userId)
+          .eq("repair_requests.status", "matched"),
+      ]);
 
       const wonCount =
         wonJobsResult.data?.filter((row: any) => {
@@ -102,13 +115,15 @@ export default function WorkshopDashboardPage() {
         }).length || 0;
 
       setStats({
-        openRequests: openRequestsResult.count || 0,
+        bodyworkRequests: bodyworkRequestsResult.count || 0,
+        mechanicalRequests: mechanicalRequestsResult.count || 0,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
       });
     } catch {
       setStats({
-        openRequests: 0,
+        bodyworkRequests: 0,
+        mechanicalRequests: 0,
         myOffers: 0,
         wonJobs: 0,
       });
@@ -137,10 +152,18 @@ export default function WorkshopDashboardPage() {
         <section className="mt-10 grid grid-cols-2 gap-3 md:mx-auto md:max-w-3xl md:gap-6">
           <DashboardCard
             href="/workshops"
-            icon="🔎"
-            title="Daune disponibile"
+            icon="🚗"
+            title="Daune estetice"
             description="Cererile clienților"
-            value={stats.openRequests}
+            value={stats.bodyworkRequests}
+          />
+
+          <DashboardCard
+            href="/workshops/mechanical"
+            icon="⚙️"
+            title="Daune mecanice"
+            description="Cererile clienților"
+            value={stats.mechanicalRequests}
           />
 
           <DashboardCard
@@ -157,7 +180,6 @@ export default function WorkshopDashboardPage() {
             title="Lucrări câștigate"
             description="Joburi acceptate"
             value={stats.wonJobs}
-            centered
           />
         </section>
       </div>
@@ -171,20 +193,15 @@ function DashboardCard({
   title,
   description,
   value,
-  centered,
 }: {
   href: string;
   icon: string;
   title: string;
   description: string;
   value: string | number;
-  centered?: boolean;
 }) {
   return (
-    <Link
-      href={href}
-      className={`${centered ? "col-span-2 mx-auto w-[calc(50%-6px)]" : ""}`}
-    >
+    <Link href={href} className="w-full">
       <div className="relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6">
         <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
           {value}

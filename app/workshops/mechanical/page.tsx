@@ -31,24 +31,16 @@ type ProfileRow = {
 };
 
 const serviceMeta: Record<string, { label: string; icon: string }> = {
-  scratch: { label: "Reparație daună", icon: "🚗" },
-  dent: { label: "Îndoitură", icon: "🔨" },
-  bumper: { label: "Bară avariată", icon: "🚘" },
-  paint: { label: "Problemă vopsea", icon: "🎨" },
-  cracked_part: { label: "Element crăpat", icon: "🧩" },
-  other: { label: "Altă daună", icon: "🔧" },
-
-  detailing_interior: { label: "Detailing interior", icon: "✨" },
-  detailing_exterior: { label: "Detailing exterior", icon: "🧽" },
-  polish: { label: "Polish profesional", icon: "💎" },
-  ceramic_coating: { label: "Ceramic coating", icon: "🛡️" },
-  ppf: { label: "PPF", icon: "🧊" },
-  wrap: { label: "Colantări auto", icon: "🎨" },
-  window_tint: { label: "Folii geamuri", icon: "🕶️" },
-  dechroming: { label: "Dechroming", icon: "⚫" },
-  wheel_refurbishment: { label: "Recondiționare jante", icon: "🛞" },
-  smart_repair: { label: "Smart Repair", icon: "🔧" },
-  pdr: { label: "PDR", icon: "🔨" },
+  engine: { label: "Motor", icon: "🚗" },
+  gearbox: { label: "Cutie viteze", icon: "⚙️" },
+  brakes: { label: "Frâne", icon: "🛑" },
+  suspension: { label: "Suspensie", icon: "🚙" },
+  steering: { label: "Direcție", icon: "🛞" },
+  electrical: { label: "Electrică", icon: "🔋" },
+  ac: { label: "Aer condiționat", icon: "❄️" },
+  diagnostic: { label: "Diagnoză", icon: "💻" },
+  service: { label: "Revizie", icon: "🛠️" },
+  other: { label: "Altă problemă", icon: "❓" },
 };
 
 function getServiceMeta(value: string) {
@@ -57,14 +49,15 @@ function getServiceMeta(value: string) {
 
 const filters = [
   { id: "all", label: "Toate", icon: "📋" },
-  { id: "damage", label: "Daune", icon: "🚗" },
-  { id: "detailing", label: "Detailing", icon: "✨" },
-  { id: "ceramic", label: "Ceramic", icon: "🛡️" },
-  { id: "ppf", label: "PPF", icon: "🧊" },
-  { id: "wrap", label: "Colantări", icon: "🎨" },
-  { id: "window_tint", label: "Folii", icon: "🕶️" },
-  { id: "wheel_refurbishment", label: "Jante", icon: "🛞" },
-  { id: "pdr", label: "PDR", icon: "🔨" },
+  { id: "engine", label: "Motor", icon: "🚗" },
+  { id: "gearbox", label: "Cutie", icon: "⚙️" },
+  { id: "brakes", label: "Frâne", icon: "🛑" },
+  { id: "suspension", label: "Suspensie", icon: "🚙" },
+  { id: "steering", label: "Direcție", icon: "🛞" },
+  { id: "electrical", label: "Electrică", icon: "🔋" },
+  { id: "ac", label: "AC", icon: "❄️" },
+  { id: "diagnostic", label: "Diagnoză", icon: "💻" },
+  { id: "service", label: "Revizie", icon: "🛠️" },
 ];
 
 export default function WorkshopsPage() {
@@ -123,22 +116,24 @@ export default function WorkshopsPage() {
     try {
       const rows = await getWorkshopRepairRequests();
 
-      const bodyworkRows = rows.filter(
-        (req) => (req.service_type ?? "bodywork") === "bodywork",
+      const mechanicalRows = rows.filter(
+        (req) => req.service_type === "mechanical",
       );
 
-      const mapped: WorkshopRequest[] = bodyworkRows.map((req: RepairRequestRow) => ({
-        id: req.id,
-        carBrand: req.car_brand || "Unknown brand",
-        carModel: req.car_model || "Unknown model",
-        carYear: req.car_year || "-",
-        city: req.city || "-",
-        damageType: req.damage_type || "other",
-        description: req.description || "No description provided.",
-        images: Array.isArray(req.images) ? req.images : [],
-        status: req.status || "open",
-        postedAt: formatPostedAt(req.created_at),
-      }));
+      const mapped: WorkshopRequest[] = mechanicalRows.map(
+        (req: RepairRequestRow) => ({
+          id: req.id,
+          carBrand: req.car_brand || "Unknown brand",
+          carModel: req.car_model || "Unknown model",
+          carYear: req.car_year || "-",
+          city: req.city || "-",
+          damageType: req.damage_type || "other",
+          description: req.description || "No description provided.",
+          images: Array.isArray(req.images) ? req.images : [],
+          status: req.status || "open",
+          postedAt: formatPostedAt(req.created_at),
+        }),
+      );
 
       setRequests(mapped);
     } catch (error) {
@@ -165,15 +160,16 @@ export default function WorkshopsPage() {
 
   const filterGroups: Record<string, string[]> = {
     all: [],
-    damage: ["scratch", "dent", "bumper", "paint", "cracked_part", "other"],
-    detailing: ["detailing_interior", "detailing_exterior", "polish"],
-    ceramic: ["ceramic_coating"],
-    ppf: ["ppf"],
-    wrap: ["wrap"],
-    window_tint: ["window_tint"],
-    wheel_refurbishment: ["wheel_refurbishment"],
-    pdr: ["pdr"],
-  };
+    engine: ["engine"],
+    gearbox: ["gearbox"],
+    brakes: ["brakes"],
+    suspension: ["suspension"],
+    steering: ["steering"],
+    electrical: ["electrical"],
+    ac: ["ac"],
+    diagnostic: ["diagnostic"],
+    service: ["service"],
+  };    
 
   const filteredRequests =
     activeFilter === "all"
@@ -191,10 +187,10 @@ export default function WorkshopsPage() {
               Service auto
             </p>
             <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Daune estetice
+              Daune mecanice disponibile
             </h1>
             <p className="mt-3 max-w-2xl text-white/70">
-              Alege o lucrare, verifică pozele și trimite oferta ta clientului.
+              Alege o problemă mecanică și trimite oferta ta clientului.
             </p>
           </div>
 
