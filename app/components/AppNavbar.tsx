@@ -217,7 +217,12 @@ export default function AppNavbar() {
         },
       )
 
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          loadUnreadMessages();
+          loadUnreadProgress();
+        }
+      });
 
     const refreshBadges = () => {
       loadUnreadMessages();
