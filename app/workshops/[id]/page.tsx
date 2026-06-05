@@ -39,7 +39,6 @@ export default function WorkshopRequestDetailsPage() {
   const [request, setRequest] = useState<RepairRequestRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -88,49 +87,6 @@ export default function WorkshopRequestDetailsPage() {
 
     loadRequest();
   }, [id, router]);
-
-  const updateJobStatus = async (status: string) => {
-    if (!request) return;
-
-    try {
-      setUpdatingStatus(true);
-
-      const { data, error } = await supabase
-        .from("repair_requests")
-        .update({ status })
-        .eq("id", request.id)
-        .select("id, status")
-        .single();
-
-      if (error) {
-        alert(error.message);
-        return;
-      }
-
-      setRequest((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: data.status,
-            }
-          : prev,
-      );
-
-      await supabase.channel(`repair-request-${request.id}`).send({
-        type: "broadcast",
-        event: "status-updated",
-        payload: {
-          status: data.status,
-        },
-      });
-      
-    } catch (error) {
-      console.error("Failed to update status:", error);
-      alert("Statusul nu a putut fi actualizat.");
-    } finally {
-      setUpdatingStatus(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -237,62 +193,6 @@ export default function WorkshopRequestDetailsPage() {
             <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/65">
               {request.car_year}
             </span>
-          </div>
-        </section>
-
-        <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-orange-400">
-            Status lucrare
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              disabled={updatingStatus}
-              onClick={() => updateJobStatus("in_progress")}
-              className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                request.status === "in_progress"
-                  ? "bg-blue-500 text-white"
-                  : "bg-white/10 text-white"
-              }`}
-            >
-              În lucru
-            </button>
-
-            <button
-              disabled={updatingStatus}
-              onClick={() => updateJobStatus("painting")}
-              className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                request.status === "painting"
-                  ? "bg-orange-500 text-black"
-                  : "bg-white/10 text-white"
-              }`}
-            >
-              La vopsit
-            </button>
-
-            <button
-              disabled={updatingStatus}
-              onClick={() => updateJobStatus("polishing")}
-              className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                request.status === "polishing"
-                  ? "bg-purple-500 text-white"
-                  : "bg-white/10 text-white"
-              }`}
-            >
-              La polish
-            </button>
-
-            <button
-              disabled={updatingStatus}
-              onClick={() => updateJobStatus("completed")}
-              className={`rounded-2xl px-4 py-3 text-sm font-bold transition ${
-                request.status === "completed"
-                  ? "bg-green-500 text-white"
-                  : "bg-white/10 text-white"
-              }`}
-            >
-              Finalizată
-            </button>
           </div>
         </section>
 
