@@ -47,6 +47,19 @@ export default function CustomerJobDetailPage() {
   const latestStatus =
     progressUpdates.length > 0 ? progressUpdates[0].status : null;
 
+  const statusLabels: Record<string, string> = {
+    Received: "Primită",
+    Disassembly: "Demontare",
+    "Body repair": "Tinichigerie",
+    Painting: "Vopsire",
+    Polishing: "Polish",
+    Diagnosis: "Diagnoză",
+    "Parts ordered": "Piese comandate",
+    "In repair": "În reparație",
+    Testing: "Testare",
+    Ready: "Gata",
+  };
+
   const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
       case "received":
@@ -320,7 +333,9 @@ export default function CustomerJobDetailPage() {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
-                              {update.status || "Update"}
+                              {statusLabels[update.status ?? ""] ??
+                                update.status ??
+                                "Update"}
                             </p>
 
                             <div className="mt-1 flex items-center gap-2 text-xs text-black/45">
