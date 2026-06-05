@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-const progressSteps = [
+const bodyworkProgressSteps = [
   "Received",
   "Disassembly",
   "Body repair",
@@ -12,6 +12,28 @@ const progressSteps = [
   "Polishing",
   "Ready",
 ];
+
+const mechanicalProgressSteps = [
+  "Received",
+  "Diagnosis",
+  "Parts ordered",
+  "In repair",
+  "Testing",
+  "Ready",
+];
+
+const statusLabels: Record<string, string> = {
+  Received: "Primită",
+  Disassembly: "Demontare",
+  "Body repair": "Tinichigerie",
+  Painting: "Vopsire",
+  Polishing: "Polish",
+  Diagnosis: "Diagnoză",
+  "Parts ordered": "Piese comandate",
+  "In repair": "În reparație",
+  Testing: "Testare",
+  Ready: "Gata",
+};
 
 export default function WonJobDetailPage() {
   const params = useParams();
@@ -25,17 +47,24 @@ export default function WonJobDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadedPreviewUrls, setUploadedPreviewUrls] = useState<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
+  const [serviceType, setServiceType] = useState<"bodywork" | "mechanical">(
+    "bodywork",
+  );
 
   useEffect(() => {
     const loadRequestStatus = async () => {
       const { data } = await supabase
         .from("repair_requests")
-        .select("status")
+        .select("status, service_type")
         .eq("id", requestId)
         .maybeSingle();
 
       if (data?.status) {
         setSelectedStatus(data.status);
+      }
+
+      if (data?.service_type === "mechanical") {
+        setServiceType("mechanical");
       }
     };
 
@@ -43,6 +72,11 @@ export default function WonJobDetailPage() {
       loadRequestStatus();
     }
   }, [requestId]);
+
+  const activeProgressSteps =
+    serviceType === "mechanical"
+      ? mechanicalProgressSteps
+      : bodyworkProgressSteps;
 
   const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -170,7 +204,9 @@ export default function WonJobDetailPage() {
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
                 Current status
               </p>
-              <h2 className="mt-2 text-2xl font-black">{selectedStatus}</h2>
+              <h2 className="mt-2 text-2xl font-black">
+                {statusLabels[selectedStatus] ?? selectedStatus}
+              </h2>
               <p className="mt-2 text-sm text-black/60">
                 Clientul va vedea progresul lucrării și pozele încărcate de
                 service.
@@ -178,8 +214,8 @@ export default function WonJobDetailPage() {
             </div>
 
             <div className="mt-6 space-y-4">
-              {progressSteps.map((step, index) => {
-                const activeIndex = progressSteps.indexOf(selectedStatus);
+              {activeProgressSteps.map((step, index) => {
+                const activeIndex = activeProgressSteps.indexOf(selectedStatus);
                 const done = index <= activeIndex;
 
                 return (
@@ -195,7 +231,7 @@ export default function WonJobDetailPage() {
                         {done ? "✓" : index + 1}
                       </div>
 
-                      {index < progressSteps.length - 1 && (
+                      {index < activeProgressSteps.length - 1 && (
                         <div
                           className={`h-8 w-px ${
                             done ? "bg-orange-500" : "bg-white/10"
@@ -205,7 +241,9 @@ export default function WonJobDetailPage() {
                     </div>
 
                     <div>
-                      <p className="font-semibold">{step}</p>
+                      <p className="font-semibold">
+                        {statusLabels[step] ?? step}
+                      </p>
                       <p className="text-sm text-white/45">
                         {done ? "Completed / active" : "Waiting"}
                       </p>
@@ -227,9 +265,9 @@ export default function WonJobDetailPage() {
               onChange={(e) => setSelectedStatus(e.target.value)}
               className="mt-5 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
             >
-              {progressSteps.map((step) => (
+              {activeProgressSteps.map((step) => (
                 <option key={step} value={step}>
-                  {step}
+                  {statusLabels[step] ?? step}
                 </option>
               ))}
             </select>
@@ -237,7 +275,11 @@ export default function WonJobDetailPage() {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Ex: Bara spate este pregătită pentru vopsit..."
+              placeholder={
+                serviceType === "mechanical"
+                  ? "Ex: Am făcut diagnoza, am comandat piesele..."
+                  : "Ex: Bara spate este pregătită pentru vopsit..."
+              }
               className="mt-4 min-h-[120px] w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
             />
 
