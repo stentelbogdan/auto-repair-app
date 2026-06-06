@@ -136,7 +136,7 @@ export default function MyRequestsPage() {
                   </button>
 
                   <div
-                    onClick={() => router.push(`/review?id=${request.id}`)}
+                    onClick={() => router.push(`/customer/my-requests/${request.id}`)}
                     className="min-w-0 flex-1 cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-2">

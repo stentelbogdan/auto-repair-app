@@ -230,8 +230,13 @@ export default function OffersPage() {
   const handleAcceptOffer = async (offerId: string, requestId: string) => {
     try {
       setAcceptingOfferId(offerId);
+
       await acceptRepairOffer({ offerId, requestId });
-      await loadData();
+
+      router.push("/customer/my-jobs");
+    } catch (error) {
+      console.error("Failed to accept offer:", error);
+      alert("Nu am putut accepta oferta.");
     } finally {
       setAcceptingOfferId(null);
     }
