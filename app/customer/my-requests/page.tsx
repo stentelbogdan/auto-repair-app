@@ -37,7 +37,7 @@ export default function MyRequestsPage() {
             request.status !== "matched" && !request.accepted_offer_id,
         );
 
-        setRequests(visibleRequests); 
+        setRequests(visibleRequests);
       } catch (error) {
         console.error("Failed to load requests:", error);
         alert("Nu am putut încărca daunele tale.");
@@ -150,7 +150,7 @@ export default function MyRequestsPage() {
                       </div>
 
                       <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                        {formatStatus(request.status)}
+                        {formatStatus(request.status, request.accepted_offer_id)}
                       </span>
                     </div>
 
@@ -199,12 +199,30 @@ export default function MyRequestsPage() {
   );
 }
 
-function formatStatus(status: string) {
+function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
+  if (acceptedOfferId) return "Service selectat";
+
   switch (status) {
     case "open":
       return "Deschisă";
     case "matched":
-      return "Programată";
+      return "Service selectat";
+    case "in_progress":
+      return "În lucru";
+    case "completed":
+      return "Finalizată";
+    case "Received":
+      return "Primită";
+    case "Diagnosis":
+      return "Diagnoză";
+    case "Parts ordered":
+      return "Piese comandate";
+    case "In repair":
+      return "În reparație";
+    case "Testing":
+      return "Testare";
+    case "Ready":
+      return "Gata";
     default:
       return status || "-";
   }
