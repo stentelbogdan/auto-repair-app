@@ -23,6 +23,7 @@ type WorkshopRequest = {
     dataUrl?: string;
   }[];
   status: string;
+  accepted_offer_id?: string | null;
   postedAt: string;
 };
 
@@ -117,7 +118,10 @@ export default function WorkshopsPage() {
       const rows = await getWorkshopRepairRequests();
 
       const mechanicalRows = rows.filter(
-        (req) => req.service_type === "mechanical" && req.status === "open",
+        (req) =>
+          req.service_type === "mechanical" &&
+          req.status === "open" &&
+          !req.accepted_offer_id,
       );
 
       const mapped: WorkshopRequest[] = mechanicalRows.map(
@@ -131,6 +135,7 @@ export default function WorkshopsPage() {
           description: req.description || "No description provided.",
           images: Array.isArray(req.images) ? req.images : [],
           status: req.status || "open",
+          accepted_offer_id: req.accepted_offer_id,
           postedAt: formatPostedAt(req.created_at),
         }),
       );
