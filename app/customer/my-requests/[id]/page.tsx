@@ -193,7 +193,7 @@ export default function EditMyRequestPage() {
   if (!request) return null;
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white">
+    <main className="min-h-screen bg-black px-4 pb-40 pt-6 text-white">
       <div className="mx-auto max-w-md">
         <button
           onClick={() => router.push("/customer/my-requests")}
@@ -323,7 +323,7 @@ export default function EditMyRequestPage() {
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="mt-5 w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-bold text-red-300 disabled:opacity-50"
+            className="relative z-10 mt-5 w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-bold text-red-300 disabled:opacity-50"
           >
             {deleting ? "Se șterge..." : "Șterge cererea"}
           </button>
