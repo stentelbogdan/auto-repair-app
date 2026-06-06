@@ -37,6 +37,7 @@ export default function EditMyRequestPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [offersCount, setOffersCount] = useState(0);
 
   const canEdit = useMemo(() => {
     return !request?.accepted_offer_id && request?.status === "open";
@@ -72,6 +73,15 @@ export default function EditMyRequestPage() {
         setRequest(data);
         setDescription(data.description || "");
         setImages(Array.isArray(data.images) ? data.images : []);
+
+        const { count, error: offersCountError } = await supabase
+          .from("repair_offers")
+          .select("id", { count: "exact", head: true })
+          .eq("request_id", requestId);
+
+        if (offersCountError) throw offersCountError;
+
+        setOffersCount(count ?? 0);
       } catch (error) {
         console.error(error);
         alert("Nu am putut încărca cererea.");
@@ -150,8 +160,12 @@ export default function EditMyRequestPage() {
   const handleDelete = async () => {
     if (!request || !canEdit) return;
 
+    const hasOffers = offersCount > 0;
+
     const confirmed = confirm(
-      "Sigur vrei să ștergi această cerere? Acțiunea nu poate fi anulată.",
+      hasOffers
+        ? "Această cerere are deja oferte. Vrei să o închizi? Service-urile nu o vor mai vedea."
+        : "Sigur vrei să ștergi această cerere? Acțiunea nu poate fi anulată.",
     );
 
     if (!confirmed) return;
@@ -159,19 +173,35 @@ export default function EditMyRequestPage() {
     try {
       setDeleting(true);
 
-      const { error } = await supabase
-        .from("repair_requests")
-        .delete()
-        .eq("id", request.id)
-        .eq("user_id", request.user_id)
-        .is("accepted_offer_id", null);
+      if (hasOffers) {
+        const { error } = await supabase
+          .from("repair_requests")
+          .update({ status: "closed" })
+          .eq("id", request.id)
+          .eq("user_id", request.user_id)
+          .eq("status", "open");
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("repair_requests")
+          .delete()
+          .eq("id", request.id)
+          .eq("user_id", request.user_id)
+          .eq("status", "open");
 
+        if (error) throw error;
+      }
+
+      router.refresh();
       router.push("/customer/my-requests");
     } catch (error) {
       console.error(error);
-      alert("Nu am putut șterge cererea.");
+      alert(
+        hasOffers
+          ? "Nu am putut închide cererea."
+          : "Nu am putut șterge cererea.",
+      );
     } finally {
       setDeleting(false);
     }
@@ -325,7 +355,13 @@ export default function EditMyRequestPage() {
             disabled={deleting}
             className="relative z-10 mt-5 w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-bold text-red-300 disabled:opacity-50"
           >
-            {deleting ? "Se șterge..." : "Șterge cererea"}
+            {deleting
+              ? offersCount > 0
+                ? "Se închide..."
+                : "Se șterge..."
+              : offersCount > 0
+                ? "Închide cererea"
+                : "Șterge cererea"}
           </button>
         )}
       </div>
