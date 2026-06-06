@@ -117,7 +117,7 @@ export default function WorkshopsPage() {
       const rows = await getWorkshopRepairRequests();
 
       const mechanicalRows = rows.filter(
-        (req) => req.service_type === "mechanical",
+        (req) => req.service_type === "mechanical" && req.status === "open",
       );
 
       const mapped: WorkshopRequest[] = mechanicalRows.map(
@@ -169,7 +169,7 @@ export default function WorkshopsPage() {
     ac: ["ac"],
     diagnostic: ["diagnostic"],
     service: ["service"],
-  };    
+  };
 
   const filteredRequests =
     activeFilter === "all"
