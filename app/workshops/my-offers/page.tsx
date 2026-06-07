@@ -280,94 +280,86 @@ export default function WorkshopMyOffersPage() {
                       router.push(`/workshops/${offer.request_id}`);
                     }
                   }}
-                  className={`overflow-hidden rounded-[28px] border bg-white/[0.04] transition ${
-                    isWon
-                      ? "cursor-pointer border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.12)] hover:bg-white/[0.06] active:scale-[0.99]"
-                      : "border-white/10"
-                  }`}
+                  className={`rounded-[28px] bg-white p-5 text-black shadow-lg transition active:scale-[0.99] ${
+                    isWon ? "cursor-pointer ring-2 ring-green-500/25" : ""
+                  } ${isLost ? "opacity-70" : ""}`}
                 >
-                  {image ? (
+                  <div className="flex gap-4">
                     <button
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        openGallery(request?.images, 0);
+                        if (request?.images?.length) {
+                          openGallery(request.images, 0);
+                        }
                       }}
-                      className="block w-full overflow-hidden"
+                      className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100"
                     >
-                      <img
-                        src={image}
-                        alt={`${request?.car_brand || ""} ${
-                          request?.car_model || ""
-                        }`}
-                        className={`w-full object-cover ${
-                          isLost ? "h-40 opacity-60" : "h-72"
-                        }`}
-                      />
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={`${request?.car_brand || ""} ${request?.car_model || ""}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-2xl">
+                          🚗
+                        </div>
+                      )}
                     </button>
-                  ) : (
-                    <div className="flex h-44 items-center justify-center bg-white/5 text-white/40">
-                      Fără poză
-                    </div>
-                  )}
 
-                  <div className="space-y-5 p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h2 className="text-3xl font-black leading-tight">
-                          {request?.car_brand || "Mașină"}{" "}
-                          {request?.car_model || ""}
-                        </h2>
-                        <p className="mt-2 text-lg text-white/50">
-                          {request?.car_year || "-"} • {request?.city || "-"}
-                        </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-xl font-black leading-tight">
+                            {request?.car_brand || "Mașină"}{" "}
+                            {request?.car_model || ""}
+                          </h2>
+
+                          <p className="mt-1 text-sm text-black/50">
+                            {request?.car_year || "-"} • {request?.city || "-"}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                            isWon
+                              ? "bg-green-100 text-green-700"
+                              : isLost
+                                ? "bg-red-100 text-red-700"
+                                : "bg-orange-100 text-orange-700"
+                          }`}
+                        >
+                          {formatStatus(offer.derivedStatus)}
+                        </span>
                       </div>
 
-                      <span
-                        className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(
-                          offer.derivedStatus,
-                        )}`}
-                      >
-                        {formatStatus(offer.derivedStatus)}
-                      </span>
-                    </div>
+                      <div className="mt-4 rounded-2xl bg-gray-100 p-4">
+                        <p className="text-xs text-black/40">Oferta ta</p>
 
-                    {isWon && (
-                      <div className="rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">
-                        🏆 Ai câștigat această lucrare
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-sm text-black/60">
+                            {offer.days} zile
+                          </span>
+
+                          <span className="text-xl font-black">
+                            €{offer.price}
+                          </span>
+                        </div>
                       </div>
-                    )}
-
-                    <div>
-                      <p className="text-sm text-white/45">Oferta ta</p>
-                      <p className="mt-1 text-5xl font-black tracking-tight">
-                        €{offer.price}
-                      </p>
-                    </div>
-
-                    <div className="grid gap-3">
-                      <InfoBox
-                        label="Durată estimată"
-                        value={`${offer.days} zile`}
-                      />
 
                       {offer.message && !isLost && (
-                        <InfoBox label="Mesaj trimis" value={offer.message} />
+                        <p className="mt-3 line-clamp-2 text-sm text-black/60">
+                          {offer.message}
+                        </p>
                       )}
 
-                      {request?.description && !isLost && (
-                        <InfoBox
-                          label="Cererea clientului"
-                          value={request.description}
-                        />
+                      {isWon && (
+                        <p className="mt-3 text-xs font-semibold text-green-700">
+                          Apasă pe card pentru a deschide lucrarea →
+                        </p>
                       )}
                     </div>
-
-                    {isWon && (
-                      <p className="text-center text-xs font-semibold text-green-300/80">
-                        Apasă pe card pentru a deschide lucrarea →
-                      </p>
-                    )}
                   </div>
                 </article>
               );

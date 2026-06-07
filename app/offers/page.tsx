@@ -5,10 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
-import {
-  getOwnRepairRequests,
-  type RepairRequestRow,
-} from "@/lib/supabase/repair-requests";
+import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
@@ -54,6 +51,7 @@ type ProfileRow = {
 
 export default function OffersPage() {
   const router = useRouter();
+
   const [items, setItems] = useState<OfferWithRequest[]>([]);
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -120,7 +118,6 @@ export default function OffersPage() {
 
       const activeRequests = requestRows.filter((request) => {
         const status = request.status || "open";
-
         return status !== "completed";
       });
 
@@ -196,19 +193,19 @@ export default function OffersPage() {
         const matchingRequest = requestMap.get(offer.request_id);
         if (!matchingRequest) return;
 
+        const workshopProfile = workshopProfileMap.get(offer.workshop_user_id);
+
         merged.push({
           offer: {
             id: offer.id,
             requestId: offer.request_id,
             workshopUserId: offer.workshop_user_id,
-            workshopSlug:
-              workshopProfileMap.get(offer.workshop_user_id)?.workshop_slug ||
-              null,
+            workshopSlug: workshopProfile?.workshop_slug || null,
             price: String(offer.price),
             days: String(offer.days),
             message: offer.message || "",
             workshopName:
-              workshopProfileMap.get(offer.workshop_user_id)?.workshop_name ||
+              workshopProfile?.workshop_name ||
               offer.workshop_name ||
               "Service",
             createdAt: offer.created_at,
@@ -230,9 +227,7 @@ export default function OffersPage() {
   const handleAcceptOffer = async (offerId: string, requestId: string) => {
     try {
       setAcceptingOfferId(offerId);
-
       await acceptRepairOffer({ offerId, requestId });
-
       router.push("/customer/my-jobs");
     } catch (error) {
       console.error("Failed to accept offer:", error);
@@ -253,8 +248,8 @@ export default function OffersPage() {
   if (!authorized) return null;
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 md:py-10">
+      <div className="mx-auto max-w-5xl space-y-4">
         {loadingOffers ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
             Se încarcă ofertele...
@@ -267,130 +262,140 @@ export default function OffersPage() {
             </p>
           </div>
         ) : (
-          items.map(({ offer, request }) => {
-            const status = offer.status || "pending";
-            const isAccepted = status === "accepted";
-            const isRejected = status === "rejected";
-            const isMatched = request.status === "matched";
+          <div className="space-y-4">
+            {items.map(({ offer, request }) => {
+              const status = offer.status || "pending";
+              const isAccepted = status === "accepted";
+              const isRejected = status === "rejected";
+              const isMatched = request.status === "matched";
+              const image =
+                request.images[0]?.url || request.images[0]?.dataUrl || "";
 
-            return (
-              <div
-                key={offer.id}
-                className={`overflow-hidden rounded-[28px] border bg-white/[0.04] ${
-                  isAccepted
-                    ? "border-green-500/30 shadow-[0_0_40px_rgba(34,197,94,0.12)]"
-                    : "border-white/10"
-                }`}
-              >
-                {request.images[0]?.url || request.images[0]?.dataUrl ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setSelectedGallery({
-                        images: request.images,
-                        index: 0,
-                      })
-                    }
-                    className="block w-full"
-                  >
-                    <img
-                      src={request.images[0].url || request.images[0].dataUrl}
-                      alt={`${request.carBrand} ${request.carModel}`}
-                      className="h-72 w-full object-cover"
-                    />
-                  </button>
-                ) : (
-                  <div className="flex h-56 items-center justify-center bg-white/5 text-white/40">
-                    Fără poză
-                  </div>
-                )}
-
-                <div className="space-y-5 p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-3xl font-black leading-tight">
-                        {request.carBrand} {request.carModel}
-                      </h2>
-                      <p className="mt-2 text-lg text-white/50">
-                        {request.carYear} • {request.city}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold ${getOfferStatusClass(
-                        status,
-                      )}`}
+              return (
+                <div
+                  key={offer.id}
+                  className={`rounded-[28px] bg-white p-5 text-black shadow-lg ${
+                    isAccepted ? "ring-2 ring-green-500/25" : ""
+                  } ${isRejected ? "opacity-70" : ""}`}
+                >
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (request.images.length > 0) {
+                          setSelectedGallery({
+                            images: request.images,
+                            index: 0,
+                          });
+                        }
+                      }}
+                      className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100"
                     >
-                      {formatOfferStatus(status)}
-                    </span>
-                  </div>
-
-                  {isAccepted && (
-                    <div className="rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm font-semibold text-green-300">
-                      Oferta aleasă
-                    </div>
-                  )}
-
-                  <div>
-                    <p className="text-sm text-white/45">Preț ofertă</p>
-                    <p className="mt-1 text-5xl font-black tracking-tight">
-                      €{offer.price}
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <p className="text-sm text-white/45">Service</p>
-
-                      {offer.workshopSlug ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            router.push(
-                              `/workshops/profile/${offer.workshopSlug}`,
-                            )
-                          }
-                          className="mt-1 text-left text-xl font-bold text-white underline decoration-orange-400/50 underline-offset-4 transition hover:text-orange-300"
-                        >
-                          {offer.workshopName}
-                        </button>
+                      {image ? (
+                        <img
+                          src={image}
+                          alt={`${request.carBrand} ${request.carModel}`}
+                          className="h-full w-full object-cover"
+                        />
                       ) : (
-                        <p className="mt-1 text-xl font-bold">
-                          {offer.workshopName}
+                        <div className="flex h-full w-full items-center justify-center text-2xl">
+                          🚗
+                        </div>
+                      )}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-xl font-black leading-tight">
+                            {request.carBrand} {request.carModel}
+                          </h2>
+
+                          <p className="mt-1 text-sm text-black/50">
+                            {request.carYear} • {request.city}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+                            isAccepted
+                              ? "bg-green-100 text-green-700"
+                              : isRejected
+                                ? "bg-red-100 text-red-700"
+                                : "bg-orange-100 text-orange-700"
+                          }`}
+                        >
+                          {formatOfferStatus(status)}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl bg-gray-100 p-4">
+                        <p className="text-xs text-black/40">Oferta primită</p>
+
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-sm text-black/60">
+                            {offer.days} zile
+                          </span>
+
+                          <span className="text-xl font-black">
+                            €{offer.price}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-2xl bg-gray-100 p-4">
+                        <p className="text-xs text-black/40">Service</p>
+
+                        {offer.workshopSlug ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              router.push(
+                                `/workshops/profile/${offer.workshopSlug}`,
+                              )
+                            }
+                            className="mt-1 text-left text-base font-bold text-black underline decoration-orange-400/50 underline-offset-4"
+                          >
+                            {offer.workshopName}
+                          </button>
+                        ) : (
+                          <p className="mt-1 text-base font-bold">
+                            {offer.workshopName}
+                          </p>
+                        )}
+                      </div>
+
+                      {offer.message && (
+                        <p className="mt-3 line-clamp-2 text-sm text-black/60">
+                          {offer.message}
                         </p>
                       )}
-                    </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <p className="text-sm text-white/45">Durată estimată</p>
-                      <p className="mt-1 text-xl font-bold">
-                        {offer.days} zile
-                      </p>
-                    </div>
+                      {!isRejected && !isAccepted && !isMatched && (
+                        <button
+                          onClick={() =>
+                            handleAcceptOffer(offer.id, request.id)
+                          }
+                          disabled={acceptingOfferId === offer.id}
+                          className="mt-4 w-full rounded-2xl bg-black px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                          {acceptingOfferId === offer.id
+                            ? "Se confirmă..."
+                            : "Acceptă oferta"}
+                        </button>
+                      )}
 
-                    {offer.message && (
-                      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                        <p className="text-sm text-white/45">Mesaj service</p>
-                        <p className="mt-2 text-white/80">{offer.message}</p>
-                      </div>
-                    )}
+                      {isAccepted && (
+                        <div className="mt-4 rounded-2xl bg-green-100 px-4 py-3 text-sm font-semibold text-green-700">
+                          Oferta aleasă
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                  {!isRejected && !isAccepted && !isMatched && (
-                    <button
-                      onClick={() => handleAcceptOffer(offer.id, request.id)}
-                      disabled={acceptingOfferId === offer.id}
-                      className="w-full rounded-2xl bg-white px-6 py-4 text-base font-bold text-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {acceptingOfferId === offer.id
-                        ? "Se confirmă..."
-                        : "Acceptă oferta"}
-                    </button>
-                  )}
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -430,15 +435,4 @@ export default function OffersPage() {
       />
     </main>
   );
-}
-
-function getOfferStatusClass(value: string) {
-  switch (value) {
-    case "accepted":
-      return "border-green-500/20 bg-green-500/15 text-green-300";
-    case "rejected":
-      return "border-red-500/20 bg-red-500/15 text-red-300";
-    default:
-      return "border-yellow-500/20 bg-yellow-500/15 text-yellow-300";
-  }
 }
