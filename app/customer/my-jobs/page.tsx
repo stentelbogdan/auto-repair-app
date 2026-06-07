@@ -108,12 +108,16 @@ export default function MyJobsPage() {
       .filter((request) => {
         const status = request.status || "";
 
-        return (
-          status === "matched" ||
-          status === "in_progress" ||
-          status === "completed" ||
-          Boolean(request.accepted_offer_id)
-        );
+        return [
+          "matched",
+          "in_progress",
+          "Received",
+          "Disassembly",
+          "Body repair",
+          "Painting",
+          "Polishing",
+          "Ready",
+        ].includes(status);
       })
       .map((request) => {
         const acceptedOffer = offers.find(

@@ -96,11 +96,11 @@ export default function AdminPage() {
   const loadAdminData = () => {
     try {
       const savedRequests = JSON.parse(
-        localStorage.getItem("repairRequests") || "[]"
+        localStorage.getItem("repairRequests") || "[]",
       ) as RepairRequest[];
 
       const savedOffers = JSON.parse(
-        localStorage.getItem("repairOffers") || "[]"
+        localStorage.getItem("repairOffers") || "[]",
       ) as RepairOffer[];
 
       setRequests(savedRequests);
@@ -115,7 +115,9 @@ export default function AdminPage() {
   };
 
   const acceptedJobs = useMemo<AcceptedJob[]>(() => {
-    const acceptedOffers = offers.filter((offer) => offer.status === "accepted");
+    const acceptedOffers = offers.filter(
+      (offer) => offer.status === "accepted",
+    );
 
     return acceptedOffers
       .map((offer) => {
@@ -135,7 +137,7 @@ export default function AdminPage() {
       .sort(
         (a, b) =>
           new Date(b.offer.createdAt).getTime() -
-          new Date(a.offer.createdAt).getTime()
+          new Date(a.offer.createdAt).getTime(),
       );
   }, [requests, offers]);
 
@@ -143,31 +145,40 @@ export default function AdminPage() {
 
   const totalRequests = requests.length;
   const openRequests = requests.filter(
-    (request) => (request.status || "open") === "open"
+    (request) => (request.status || "open") === "open",
   ).length;
-  const matchedRequests = requests.filter(
-    (request) => request.status === "matched"
+  const matchedRequests = requests.filter((request) =>
+    [
+      "matched",
+      "in_progress",
+      "Received",
+      "Disassembly",
+      "Body repair",
+      "Painting",
+      "Polishing",
+      "Ready",
+    ].includes(request.status || ""),
   ).length;
 
   const totalOffers = offers.length;
   const pendingOffers = offers.filter(
-    (offer) => (offer.status || "pending") === "pending"
+    (offer) => (offer.status || "pending") === "pending",
   ).length;
   const acceptedOffersCount = offers.filter(
-    (offer) => offer.status === "accepted"
+    (offer) => offer.status === "accepted",
   ).length;
   const rejectedOffersCount = offers.filter(
-    (offer) => offer.status === "rejected"
+    (offer) => offer.status === "rejected",
   ).length;
 
   const totalAcceptedValue = acceptedJobs.reduce(
     (sum, job) => sum + (Number(job.offer.price) || 0),
-    0
+    0,
   );
 
   const totalEstimatedCommission = acceptedJobs.reduce(
     (sum, job) => sum + job.commissionAmount,
-    0
+    0,
   );
 
   if (checkingAccess) {
@@ -232,8 +243,14 @@ export default function AdminPage() {
 
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <KpiCard label="Pending offers" value={String(pendingOffers)} />
-          <KpiCard label="Accepted offers" value={String(acceptedOffersCount)} />
-          <KpiCard label="Rejected offers" value={String(rejectedOffersCount)} />
+          <KpiCard
+            label="Accepted offers"
+            value={String(acceptedOffersCount)}
+          />
+          <KpiCard
+            label="Rejected offers"
+            value={String(rejectedOffersCount)}
+          />
           <KpiCard
             label="Commission rate"
             value={`${Math.round(COMMISSION_RATE * 100)}%`}
@@ -260,7 +277,8 @@ export default function AdminPage() {
               <div>
                 <h2 className="text-2xl font-bold">Accepted jobs</h2>
                 <p className="mt-1 text-sm text-white/60">
-                  Jobs that already generated revenue opportunity for the platform
+                  Jobs that already generated revenue opportunity for the
+                  platform
                 </p>
               </div>
 
@@ -328,7 +346,9 @@ export default function AdminPage() {
                         </div>
 
                         <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
-                          <p className="text-sm text-white/50">Workshop message</p>
+                          <p className="text-sm text-white/50">
+                            Workshop message
+                          </p>
                           <p className="mt-1 text-white/85">
                             {job.offer.message || "No message provided."}
                           </p>
@@ -463,13 +483,7 @@ export default function AdminPage() {
   );
 }
 
-function KpiCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function KpiCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <p className="text-sm text-white/50">{label}</p>
@@ -496,13 +510,7 @@ function HighlightCard({
   );
 }
 
-function InfoCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-white/10 bg-black/20 p-4">
       <p className="text-sm text-white/50">{label}</p>
@@ -523,7 +531,9 @@ function SummaryRow({
   return (
     <div className="flex items-center justify-between rounded-lg border border-white/10 bg-black/20 px-4 py-3">
       <span className="text-sm text-white/65">{label}</span>
-      <span className={highlight ? "font-bold text-green-300" : "font-semibold"}>
+      <span
+        className={highlight ? "font-bold text-green-300" : "font-semibold"}
+      >
         {value}
       </span>
     </div>

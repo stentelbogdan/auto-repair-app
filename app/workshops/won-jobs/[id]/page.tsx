@@ -147,12 +147,25 @@ export default function WonJobDetailPage() {
         return;
       }
 
+      const requestStatus =
+        selectedStatus === "Ready" || selectedStatus === "Gata"
+          ? "completed"
+          : selectedStatus;
+
       await supabase
         .from("repair_requests")
         .update({
-          status: selectedStatus,
+          status: requestStatus,
         })
         .eq("id", requestId);
+
+      const { data: verifyData } = await supabase
+        .from("repair_requests")
+        .select("status")
+        .eq("id", requestId)
+        .single();
+
+      console.log("REQUEST STATUS =", verifyData);
 
       console.log("Uploaded:", uploadedUrls);
 

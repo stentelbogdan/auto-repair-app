@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { getWorkshopRepairRequests } from "@/lib/supabase/repair-requests";
 
 type ProfileRow = {
   role: string[] | null;
@@ -66,24 +67,21 @@ export default function WorkshopDashboardPage() {
 
   const loadStats = async (userId: string) => {
     try {
-      const [
-        bodyworkRequestsResult,
-        mechanicalRequestsResult,
-        myOffersResult,
-        wonJobsResult,
-      ] = await Promise.all([
-        supabase
-          .from("repair_requests")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "matched")
-          .eq("service_type", "bodywork"),
+      const rows = await getWorkshopRepairRequests();
 
-        supabase
-          .from("repair_requests")
-          .select("id", { count: "exact", head: true })
-          .neq("status", "matched")
-          .eq("service_type", "mechanical"),
+      const bodyworkRequestsCount = rows.filter(
+        (req) => (req.service_type ?? "bodywork") === "bodywork",
+      ).length;
 
+      const mechanicalRequestsResult = await supabase
+        .from("repair_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open")
+        .eq("service_type", "mechanical");
+
+      const mechanicalRequestsCount = mechanicalRequestsResult.count || 0;
+
+      const [myOffersResult, wonJobsResult] = await Promise.all([
         supabase
           .from("repair_offers")
           .select("id", { count: "exact", head: true })
@@ -93,16 +91,16 @@ export default function WorkshopDashboardPage() {
           .from("repair_offers")
           .select(
             `
-          id,
-          repair_requests!inner (
-            id,
-            status,
-            accepted_offer_id
-          )
-        `,
+    id,
+    status,
+    repair_requests!inner (
+      id,
+      status
+    )
+  `,
           )
           .eq("workshop_user_id", userId)
-          .eq("repair_requests.status", "matched"),
+          .eq("status", "accepted"),
       ]);
 
       const wonCount =
@@ -111,12 +109,12 @@ export default function WorkshopDashboardPage() {
             ? row.repair_requests[0]
             : row.repair_requests;
 
-          return request?.accepted_offer_id === row.id;
+          return (request?.status || "matched") !== "completed";
         }).length || 0;
 
       setStats({
-        bodyworkRequests: bodyworkRequestsResult.count || 0,
-        mechanicalRequests: mechanicalRequestsResult.count || 0,
+        bodyworkRequests: bodyworkRequestsCount,
+        mechanicalRequests: mechanicalRequestsCount,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
       });

@@ -23,6 +23,7 @@ export type RepairRequestRow = {
   status: string;
   accepted_offer_id: string | null;
   created_at: string;
+  offers_count?: number;
 };
 
 export async function createRepairRequest(input: {
@@ -82,7 +83,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, damage_type, description, service_type, status, accepted_offer_id, created_at, images",
+      "id, user_id, car_brand, car_model, car_year, city, damage_type, service_type, description, images, status, accepted_offer_id, created_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -91,5 +92,33 @@ export async function getOwnRepairRequests(userId: string) {
     throw error;
   }
 
-  return (data ?? []) as RepairRequestRow[];
+  const requests = (data ?? []) as RepairRequestRow[];
+  const requestIds = requests.map((request) => request.id);
+
+  if (!requestIds.length) {
+    return [];
+  }
+
+  const { data: offers, error: offersError } = await supabase
+    .from("repair_offers")
+    .select("request_id")
+    .in("request_id", requestIds);
+
+  if (offersError) {
+    throw offersError;
+  }
+
+  const offersCountByRequest = new Map<string, number>();
+
+  (offers ?? []).forEach((offer) => {
+    offersCountByRequest.set(
+      offer.request_id,
+      (offersCountByRequest.get(offer.request_id) ?? 0) + 1,
+    );
+  });
+
+  return requests.map((request) => ({
+    ...request,
+    offers_count: offersCountByRequest.get(request.id) ?? 0,
+  }));
 }
