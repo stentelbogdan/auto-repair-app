@@ -200,6 +200,10 @@ export default function MyJobsPage() {
               const image =
                 request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
 
+              const latestProgress = progressByRequestId[request.id];
+              const displayStatus =
+                latestProgress?.latestStatus || request.status;
+
               return (
                 <div
                   key={request.id}
@@ -242,10 +246,14 @@ export default function MyJobsPage() {
 
                         <span
                           className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
-                            request.status,
+                            progressByRequestId[request.id]?.latestStatus ||
+                              request.status,
                           )}`}
                         >
-                          {formatJobStatus(request.status)}
+                          {formatJobStatus(
+                            progressByRequestId[request.id]?.latestStatus ||
+                              request.status,
+                          )}
                         </span>
                       </div>
 
@@ -334,16 +342,47 @@ export default function MyJobsPage() {
 
 function formatJobStatus(status?: string | null) {
   switch (status) {
+    case "Received":
+    case "received":
+      return "Primită";
+
+    case "Diagnosis":
+    case "diagnosis":
+      return "Diagnoză";
+
+    case "Parts ordered":
+    case "parts_ordered":
+      return "Piese comandate";
+
+    case "In repair":
+    case "in repair":
+    case "in_repair":
+      return "În reparație";
+
+    case "Testing":
+    case "testing":
+      return "Testare";
+
+    case "Ready":
+    case "ready":
+    case "Gata":
+      return "Gata";
+
     case "in_progress":
       return "În lucru";
+
     case "painting":
       return "La vopsit";
+
     case "polishing":
       return "La polish";
+
     case "completed":
       return "Finalizată";
+
     case "matched":
       return "Programată";
+
     default:
       return "Programată";
   }
@@ -351,6 +390,32 @@ function formatJobStatus(status?: string | null) {
 
 function getStatusClass(status?: string | null) {
   switch (status) {
+    case "Received":
+    case "received":
+      return "bg-gray-100 text-gray-700";
+
+    case "Diagnosis":
+    case "diagnosis":
+      return "bg-yellow-100 text-yellow-700";
+
+    case "Parts ordered":
+    case "parts_ordered":
+      return "bg-indigo-100 text-indigo-700";
+
+    case "In repair":
+    case "in repair":
+    case "in_repair":
+      return "bg-orange-100 text-orange-700";
+
+    case "Testing":
+    case "testing":
+      return "bg-blue-100 text-blue-700";
+
+    case "Ready":
+    case "ready":
+    case "Gata":
+      return "bg-green-100 text-green-700";
+
     case "in_progress":
       return "bg-blue-100 text-blue-700";
 

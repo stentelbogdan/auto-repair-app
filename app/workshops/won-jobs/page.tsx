@@ -28,6 +28,7 @@ type WonJob = {
   message: string;
   offerStatus: string;
   createdAt: string;
+  latestProgressStatus?: string | null;
   request: {
     id: string;
     carBrand: string;
@@ -133,6 +134,24 @@ export default function WorkshopWonJobsPage() {
 
       let requestsMap = new Map<string, any>();
 
+      let latestProgressMap = new Map<string, string>();
+
+      if (requestIds.length > 0) {
+        const { data: progressData } = await supabase
+          .from("work_progress_updates")
+          .select("request_id, status, created_at")
+          .in("request_id", requestIds)
+          .order("created_at", { ascending: false });
+
+        latestProgressMap = new Map();
+
+        (progressData || []).forEach((item: any) => {
+          if (!latestProgressMap.has(item.request_id)) {
+            latestProgressMap.set(item.request_id, item.status);
+          }
+        });
+      }
+
       if (requestIds.length > 0) {
         const { data: requestsData, error: requestsError } = await supabase
           .from("repair_requests")
@@ -171,6 +190,7 @@ export default function WorkshopWonJobsPage() {
           days: String(row.days ?? "-"),
           message: row.message || "",
           offerStatus: row.status || "accepted",
+          latestProgressStatus: latestProgressMap.get(row.request_id) || null,
           createdAt: row.created_at,
           request: {
             id: row.request_id,
@@ -560,14 +580,19 @@ export default function WorkshopWonJobsPage() {
                     <div className="absolute left-4 top-4">
                       <span
                         className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] backdrop-blur ${
-                          job.request.status === "completed"
+                          (job.latestProgressStatus || job.request.status) ===
+                            "completed" ||
+                          (job.latestProgressStatus || job.request.status) ===
+                            "Ready" ||
+                          (job.latestProgressStatus || job.request.status) ===
+                            "Gata"
                             ? "bg-green-500 text-black"
-                            : job.request.status === "in_progress"
-                              ? "bg-blue-500 text-black"
-                              : "bg-yellow-400 text-black"
+                            : "bg-blue-500 text-black"
                         }`}
                       >
-                        {formatJobStatus(job.request.status)}
+                        {formatJobStatus(
+                          job.latestProgressStatus || job.request.status,
+                        )}
                       </span>
                     </div>
 
@@ -575,7 +600,9 @@ export default function WorkshopWonJobsPage() {
                       <div>
                         <p className="text-xs uppercase tracking-[0.22em] text-white/50">
                           Lucrare{" "}
-                          {formatJobStatus(job.request.status).toLowerCase()}
+                          {formatJobStatus(
+                            job.latestProgressStatus || job.request.status,
+                          ).toLowerCase()}
                         </p>
 
                         <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
@@ -785,14 +812,40 @@ function formatDamageType(value: string) {
   }
 }
 
-function formatJobStatus(value: string) {
+function formatJobStatus(value?: string | null) {
   switch (value) {
     case "completed":
+    case "Ready":
+    case "Gata":
       return "Finalizată";
+
     case "in_progress":
       return "În lucru";
+
+    case "Received":
+    case "received":
+      return "Primită";
+
+    case "Diagnosis":
+    case "Diagnoză":
+      return "Diagnoză";
+
+    case "Parts ordered":
+    case "Piese comandate":
+      return "Piese comandate";
+
+    case "In repair":
+    case "in repair":
+    case "În reparație":
+      return "În reparație";
+
+    case "Testing":
+    case "Testare":
+      return "Testare";
+
     case "matched":
       return "Acceptată";
+
     default:
       return "Deschisă";
   }
