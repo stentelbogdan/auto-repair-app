@@ -1,14 +1,23 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { Home } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+type RequestRow = {
+  id: string;
+  user_id: string;
+  car_brand: string | null;
+  car_model: string | null;
+  status: string | null;
+  accepted_offer_id: string | null;
+};
+
+type OfferRow = {
+  id: string;
+  workshop_user_id: string;
+  workshop_name: string | null;
+};
 
 export default function ReviewPage() {
   return (
@@ -23,227 +32,183 @@ function ReviewContent() {
   const searchParams = useSearchParams();
   const requestId = searchParams.get("id");
 
-  const [request, setRequest] = useState<RepairRequestRow | null>(null);
+  const [request, setRequest] = useState<RequestRow | null>(null);
+  const [offer, setOffer] = useState<OfferRow | null>(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(true);
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
-    null,
-  );
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const loadRequest = async () => {
+    const loadData = async () => {
       if (!requestId) {
-        router.push("/customer/dashboard");
+        router.push("/customer/my-jobs");
         return;
       }
 
-      const { data, error } = await supabase
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        router.push("/login");
+        return;
+      }
+
+      const { data: requestData, error: requestError } = await supabase
         .from("repair_requests")
-        .select("*")
+        .select("id, user_id, car_brand, car_model, status, accepted_offer_id")
         .eq("id", requestId)
-        .single<RepairRequestRow>();
+        .single<RequestRow>();
 
-      if (error) {
-        console.error("Failed to load request:", error);
-        alert("Nu am putut încărca cererea.");
-        router.push("/customer/dashboard");
+      if (requestError || !requestData) {
+        alert("Nu am putut încărca lucrarea.");
+        router.push("/customer/my-jobs");
         return;
       }
 
-      setRequest(data);
+      if (requestData.user_id !== authData.user.id) {
+        alert("Nu ai acces la această lucrare.");
+        router.push("/customer/my-jobs");
+        return;
+      }
+
+      if (requestData.status !== "completed") {
+        alert("Poți lăsa review doar după finalizarea lucrării.");
+        router.push("/customer/my-jobs");
+        return;
+      }
+
+      if (!requestData.accepted_offer_id) {
+        alert("Această lucrare nu are ofertă acceptată.");
+        router.push("/customer/my-jobs");
+        return;
+      }
+
+      const { data: offerData, error: offerError } = await supabase
+        .from("repair_offers")
+        .select("id, workshop_user_id, workshop_name")
+        .eq("id", requestData.accepted_offer_id)
+        .single<OfferRow>();
+
+      if (offerError || !offerData) {
+        alert("Nu am putut încărca service-ul.");
+        router.push("/customer/my-jobs");
+        return;
+      }
+
+      setRequest(requestData);
+      setOffer(offerData);
       setLoading(false);
     };
 
-    loadRequest();
+    loadData();
   }, [requestId, router]);
 
+  const submitReview = async () => {
+    if (!request || !offer) return;
+
+    try {
+      setSaving(true);
+
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        router.push("/login");
+        return;
+      }
+
+      const { error } = await supabase.from("reviews").insert({
+        request_id: request.id,
+        offer_id: offer.id,
+        customer_user_id: authData.user.id,
+        workshop_user_id: offer.workshop_user_id,
+        rating,
+        comment: comment.trim() || null,
+      });
+
+      if (error) {
+        console.error("Failed to save review:", error);
+        alert("Nu am putut salva review-ul.");
+        return;
+      }
+
+      router.push("/customer/my-jobs");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <ReviewLoading />;
-  if (!request) return null;
-
-  const images = Array.isArray(request.images) ? request.images : [];
-
-  const lightboxImages = images
-    .map((image) => image.url || image.dataUrl || "")
-    .filter(Boolean);
+  if (!request || !offer) return null;
 
   return (
-    <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-              Verificare daună
+    <main className="min-h-screen bg-[#111111] px-4 py-6 text-white">
+      <div className="mx-auto max-w-xl">
+        <p className="text-xs uppercase tracking-[0.28em] text-orange-400">
+          Review service
+        </p>
+
+        <h1 className="mt-3 text-3xl font-black">Cum a fost lucrarea?</h1>
+
+        <div className="mt-6 rounded-[28px] bg-white p-6 text-black shadow-xl">
+          <h2 className="text-2xl font-black">
+            {request.car_brand} {request.car_model}
+          </h2>
+
+          <p className="mt-1 text-black/50">
+            Service: <strong>{offer.workshop_name || "Service"}</strong>
+          </p>
+
+          <div className="mt-6">
+            <p className="mb-3 text-sm font-semibold text-black/50">
+              Alege ratingul
             </p>
-            <h1 className="mt-2 text-2xl font-bold">Cererea ta</h1>
-            <p className="mt-2 text-sm text-white/55">
-              Verifică detaliile înainte să urmărești ofertele primite.
+
+            <div className="flex gap-2 text-4xl">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  className={star <= rating ? "text-orange-400" : "text-black/20"}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <p className="mb-2 text-sm font-semibold text-black/50">
+              Comentariu
             </p>
+
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              rows={5}
+              placeholder="Scrie câteva cuvinte despre experiența ta..."
+              className="w-full rounded-2xl bg-gray-100 p-4 text-black outline-none"
+            />
           </div>
 
           <button
             type="button"
-            onClick={() => router.push("/customer/dashboard")}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white"
-            aria-label="Înapoi la dashboard"
+            onClick={submitReview}
+            disabled={saving}
+            className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-bold text-white disabled:opacity-60"
           >
-            <Home size={24} />
+            {saving ? "Se salvează..." : "Trimite review"}
           </button>
         </div>
-
-        <div className="rounded-[24px] bg-white p-5 text-black shadow-xl">
-          <div className="grid gap-3 md:grid-cols-2">
-            <InfoCard label="Marcă" value={request.car_brand} />
-            <InfoCard label="Model" value={request.car_model} />
-            <InfoCard label="An fabricație" value={request.car_year} />
-            <InfoCard label="Localitate" value={request.city} />
-            <InfoCard
-              label="Tip daună"
-              value={formatDamageType(request.damage_type)}
-            />
-            <InfoCard label="Status" value={formatStatus(request.status)} />
-          </div>
-
-          <div className="mt-8 rounded-2xl bg-black/[0.04] p-4">
-            <p className="text-sm font-medium text-black/50">Descriere</p>
-            <p className="mt-1 text-sm text-black/75">
-              {request.description || "Nu ai adăugat descriere."}
-            </p>
-          </div>
-
-          <div className="mt-5">
-            <p className="mb-3 text-sm font-semibold text-black/60">
-              Poze încărcate
-            </p>
-
-            {images.length > 0 ? (
-              <div className="flex snap-x gap-3 overflow-x-auto pb-2">
-                {images.map((image, index) => {
-                  const imageSrc =
-                    image.thumbUrl || image.url || image.dataUrl || "";
-
-                  return (
-                    <button
-                      key={`${image.name || "image"}-${index}`}
-                      type="button"
-                      onClick={() => setSelectedImageIndex(index)}
-                      className="relative h-56 min-w-full snap-center overflow-hidden rounded-3xl bg-black/10 sm:min-w-[70%]"
-                    >
-                      <img
-                        src={imageSrc}
-                        alt={`Poză daună ${index + 1}`}
-                        className="h-full w-full object-cover"
-                      />
-
-                      {images.length > 1 && (
-                        <span className="absolute right-3 top-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white">
-                          {index + 1}/{images.length}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="rounded-2xl bg-black/[0.04] p-5 text-center text-sm text-black/50">
-                Nu ai încărcat poze.
-              </div>
-            )}
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3">
-            <button
-              type="button"
-              onClick={() => router.push("/offers")}
-              className="rounded-2xl bg-black px-6 py-4 font-semibold text-white"
-            >
-              Vezi ofertele
-            </button>
-
-            <button
-              type="button"
-              onClick={() => router.push("/customer/my-requests")}
-              className="rounded-2xl border border-black/10 px-6 py-4 font-semibold text-black"
-            >
-              Înapoi la daunele mele
-            </button>
-          </div>
-        </div>
       </div>
-
-      <Lightbox
-        open={selectedImageIndex !== null}
-        close={() => setSelectedImageIndex(null)}
-        slides={lightboxImages.map((src) => ({ src }))}
-        index={selectedImageIndex || 0}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }
 
 function ReviewLoading() {
   return (
-    <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
-      <p className="text-white/60">Se încarcă cererea...</p>
+    <main className="flex min-h-screen items-center justify-center bg-[#111111] text-white">
+      Se încarcă...
     </main>
   );
-}
-
-function InfoCard({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="rounded-2xl bg-black/[0.04] p-4">
-      <p className="text-sm font-medium text-black/50">{label}</p>
-      <p className="mt-1 font-bold text-black">{value || "-"}</p>
-    </div>
-  );
-}
-
-function formatDamageType(value: string) {
-  switch (value) {
-    case "scratch":
-      return "Zgârietură";
-    case "dent":
-      return "Îndoitură";
-    case "bumper":
-      return "Bară avariată";
-    case "paint":
-      return "Problemă vopsea";
-    case "cracked_part":
-      return "Element crăpat";
-    default:
-      return "Altă daună";
-  }
-}
-
-function formatStatus(value: string) {
-  switch (value) {
-    case "matched":
-      return "Programată";
-    case "open":
-      return "Deschisă";
-    default:
-      return value || "-";
-  }
 }

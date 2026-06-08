@@ -28,6 +28,7 @@ export default function MyJobsPage() {
   const [unreadByRequestId, setUnreadByRequestId] = useState<
     Record<string, number>
   >({});
+  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
 
   const loadJobs = async () => {
     try {
@@ -108,16 +109,7 @@ export default function MyJobsPage() {
       .filter((request) => {
         const status = request.status || "";
 
-        return [
-          "matched",
-          "in_progress",
-          "Received",
-          "Disassembly",
-          "Body repair",
-          "Painting",
-          "Polishing",
-          "Ready",
-        ].includes(status);
+        return ["matched", "in_progress", "completed"].includes(status);
       })
       .map((request) => {
         const acceptedOffer = offers.find(
@@ -132,6 +124,16 @@ export default function MyJobsPage() {
         };
       });
   }, [requests, offers]);
+
+  const completedJobs = jobs.filter(
+    ({ request }) => request.status === "completed",
+  );
+
+  const activeJobs = jobs.filter(
+    ({ request }) => request.status !== "completed",
+  );
+
+  const visibleJobs = activeTab === "active" ? activeJobs : completedJobs;
 
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
@@ -149,6 +151,30 @@ export default function MyJobsPage() {
             className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white"
           >
             Dashboard
+          </button>
+        </div>
+
+        <div className="mb-5 flex gap-3">
+          <button
+            onClick={() => setActiveTab("active")}
+            className={`rounded-full px-5 py-2 font-semibold transition ${
+              activeTab === "active"
+                ? "bg-orange-500 text-black"
+                : "bg-white/10 text-white"
+            }`}
+          >
+            Active ({activeJobs.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab("completed")}
+            className={`rounded-full px-5 py-2 font-semibold transition ${
+              activeTab === "completed"
+                ? "bg-orange-500 text-black"
+                : "bg-white/10 text-white"
+            }`}
+          >
+            Finalizate ({completedJobs.length})
           </button>
         </div>
 
@@ -170,7 +196,7 @@ export default function MyJobsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {jobs.map(({ request, acceptedOffer }) => {
+            {visibleJobs.map(({ request, acceptedOffer }) => {
               const image =
                 request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
 
@@ -281,6 +307,18 @@ export default function MyJobsPage() {
                         >
                           Chat cu service-ul
                         </button>
+
+                        {request.status === "completed" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              router.push(`/review?id=${request.id}`)
+                            }
+                            className="mt-3 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
+                          >
+                            ⭐ Lasă review
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

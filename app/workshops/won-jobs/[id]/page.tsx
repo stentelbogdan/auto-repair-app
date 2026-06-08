@@ -53,17 +53,27 @@ export default function WonJobDetailPage() {
 
   useEffect(() => {
     const loadRequestStatus = async () => {
-      const { data } = await supabase
+      const { data: requestData } = await supabase
         .from("repair_requests")
         .select("status, service_type")
         .eq("id", requestId)
         .maybeSingle();
 
-      if (data?.status) {
-        setSelectedStatus(data.status);
+      const { data: latestProgress } = await supabase
+        .from("work_progress_updates")
+        .select("status")
+        .eq("request_id", requestId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestProgress?.status) {
+        setSelectedStatus(latestProgress.status);
+      } else if (requestData?.status) {
+        setSelectedStatus(requestData.status);
       }
 
-      if (data?.service_type === "mechanical") {
+      if (requestData?.service_type === "mechanical") {
         setServiceType("mechanical");
       }
     };
@@ -150,7 +160,7 @@ export default function WonJobDetailPage() {
       const requestStatus =
         selectedStatus === "Ready" || selectedStatus === "Gata"
           ? "completed"
-          : selectedStatus;
+          : "in_progress";
 
       await supabase
         .from("repair_requests")
