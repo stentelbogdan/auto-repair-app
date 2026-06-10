@@ -404,8 +404,8 @@ export default function OffersPage() {
                       >
                         <p className="text-xs text-black/40">Service</p>
 
-                        <div className="mt-2 flex items-center gap-3">
-                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm">
+                        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
+                          <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white shadow-sm">
                             {offer.workshopLogoUrl ? (
                               <img
                                 src={offer.workshopLogoUrl}
@@ -419,44 +419,38 @@ export default function OffersPage() {
                             )}
                           </div>
 
-                          <div className="min-w-0">
-                            {offer.workshopSlug ? (
-                              <div className="mt-1 flex items-center gap-2">
-                                <span className="truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
-                                  {offer.workshopName}
-                                </span>
-
-                                {workshopRating &&
-                                  workshopRating.average >= 4.8 &&
-                                  workshopRating.count >= 2 && (
-                                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black text-orange-700">
-                                      🏆 Top Rated
-                                    </span>
-                                  )}
-                              </div>
-                            ) : (
-                              <p className="truncate text-base font-black">
+                          <div className="min-w-0 w-full">
+                            <div className="flex flex-col items-start gap-1">
+                              <span className="max-w-full truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
                                 {offer.workshopName}
-                              </p>
-                            )}
+                              </span>
 
-                            {workshopRating && workshopRating.count > 0 && (
-                              <div className="mt-1 flex items-center gap-1 text-xs font-bold text-orange-500">
-                                <span>★★★★★</span>
-                                <span className="text-black/60">
-                                  {workshopRating.average.toFixed(1)} (
-                                  {workshopRating.count} review-uri)
-                                </span>
-                              </div>
-                            )}
-
-                            {offer.workshopSlug &&
-                              workshopRating &&
-                              workshopRating.count > 0 && (
-                                <span className="mt-1 block text-xs font-bold text-black/50 underline underline-offset-4">
-                                  Vezi profilul și review-urile →
-                                </span>
+                              {workshopRating && workshopRating.count > 0 && (
+                                <div className="flex items-center gap-1 text-xs font-bold text-orange-500">
+                                  <span>★★★★★</span>
+                                  <span className="text-black/60">
+                                    {workshopRating.average.toFixed(1)} (
+                                    {workshopRating.count} review-uri)
+                                  </span>
+                                </div>
                               )}
+
+                              {workshopRating &&
+                                workshopRating.average >= 4.8 &&
+                                workshopRating.count >= 2 && (
+                                  <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
+                                    🏆 Top Rated
+                                  </span>
+                                )}
+
+                              {offer.workshopSlug &&
+                                workshopRating &&
+                                workshopRating.count > 0 && (
+                                  <span className="text-xs font-bold text-black/50 underline underline-offset-4">
+                                    Vezi profilul și review-urile →
+                                  </span>
+                                )}
+                            </div>
                           </div>
                         </div>
                       </div>
