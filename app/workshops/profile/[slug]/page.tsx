@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Clock, MapPin, Phone, Store, Star } from "lucide-react";
 import LightboxGallery from "./LightboxGallery";
+import ReviewImagesGallery from "./ReviewImagesGallery";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -85,12 +86,29 @@ export default async function WorkshopProfilePage({ params }: Props) {
                 </h1>
 
                 {reviewList.length > 0 && (
-                  <div className="mt-3 flex items-center gap-2 text-sm font-bold text-orange-300">
-                    <Star size={18} fill="currentColor" />
-                    {averageRating.toFixed(1)} / 5
-                    <span className="text-white/45">
-                      ({reviewList.length} review-uri)
-                    </span>
+                  <div className="mt-4 rounded-2xl border border-orange-500/20 bg-black/35 p-4">
+                    <div className="flex items-center gap-2 text-orange-300">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          size={18}
+                          fill="currentColor"
+                          className={
+                            star <= Math.round(averageRating)
+                              ? "text-orange-300"
+                              : "text-white/20"
+                          }
+                        />
+                      ))}
+
+                      <span className="ml-2 text-sm font-black text-white">
+                        {averageRating.toFixed(1)} / 5
+                      </span>
+                    </div>
+
+                    <p className="mt-2 text-xs font-medium text-white/50">
+                      Bazat pe {reviewList.length} review-uri verificate
+                    </p>
                   </div>
                 )}
 
@@ -150,10 +168,22 @@ export default async function WorkshopProfilePage({ params }: Props) {
                               {reviewRequest?.car_year || "-"} •{" "}
                               {reviewRequest?.city || "-"}
                             </p>
+
+                            <p className="mt-1 text-xs text-black/40">
+                              {new Date(review.created_at).toLocaleDateString(
+                                "ro-RO",
+                              )}
+                            </p>
                           </div>
 
-                          <div className="rounded-full bg-orange-100 px-3 py-1 text-sm font-bold text-orange-700">
-                            ⭐ {review.rating}
+                          <div className="flex flex-col items-end">
+                            <div className="rounded-full bg-orange-100 px-3 py-1 text-sm font-bold text-orange-700">
+                              ⭐ {review.rating}
+                            </div>
+
+                            <span className="mt-2 text-xs font-medium text-black/50">
+                              ✔ Lucrare verificată
+                            </span>
                           </div>
                         </div>
 
@@ -163,17 +193,8 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
                         {Array.isArray(review.images) &&
                           review.images.length > 0 && (
-                            <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
-                              {review.images.map(
-                                (imageUrl: string, index: number) => (
-                                  <img
-                                    key={`${imageUrl}-${index}`}
-                                    src={imageUrl}
-                                    alt={`Poză review ${index + 1}`}
-                                    className="h-24 w-24 shrink-0 rounded-2xl object-cover"
-                                  />
-                                ),
-                              )}
+                            <div className="mt-4">
+                              <ReviewImagesGallery images={review.images} />
                             </div>
                           )}
                       </div>

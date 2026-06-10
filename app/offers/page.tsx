@@ -38,6 +38,12 @@ type RepairOffer = {
   workshopName: string;
   createdAt: string;
   status?: string;
+  workshopLogoUrl: string | null;
+};
+
+type WorkshopRating = {
+  average: number;
+  count: number;
 };
 
 type OfferWithRequest = {
@@ -57,6 +63,9 @@ export default function OffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
+  const [workshopRatings, setWorkshopRatings] = useState<
+    Record<string, WorkshopRating>
+  >({});
 
   const [selectedGallery, setSelectedGallery] = useState<{
     images: RepairRequest["images"];
@@ -148,15 +157,52 @@ export default function OffersPage() {
         ),
       );
 
+      const ratingsMap: Record<string, WorkshopRating> = {};
+
+      if (workshopUserIds.length > 0) {
+        const { data: reviewsData } = await supabase
+          .from("reviews")
+          .select("workshop_user_id, rating")
+          .in("workshop_user_id", workshopUserIds);
+
+        (reviewsData || []).forEach((review: any) => {
+          const workshopId = review.workshop_user_id;
+          const ratingValue = Number(review.rating || 0);
+
+          if (!workshopId || ratingValue <= 0) return;
+
+          if (!ratingsMap[workshopId]) {
+            ratingsMap[workshopId] = {
+              average: 0,
+              count: 0,
+            };
+          }
+
+          ratingsMap[workshopId].average += ratingValue;
+          ratingsMap[workshopId].count += 1;
+        });
+
+        Object.keys(ratingsMap).forEach((workshopId) => {
+          ratingsMap[workshopId].average =
+            ratingsMap[workshopId].average / ratingsMap[workshopId].count;
+        });
+      }
+
+      setWorkshopRatings(ratingsMap);
+
       let workshopProfileMap = new Map<
         string,
-        { workshop_slug: string | null; workshop_name: string | null }
+        {
+          workshop_slug: string | null;
+          workshop_name: string | null;
+          workshop_logo_url: string | null;
+        }
       >();
 
       if (workshopUserIds.length > 0) {
         const { data: workshopProfiles } = await supabase
           .from("profiles")
-          .select("id, workshop_slug, workshop_name")
+          .select("id, workshop_slug, workshop_name, workshop_logo_url")
           .in("id", workshopUserIds);
 
         workshopProfileMap = new Map(
@@ -165,6 +211,7 @@ export default function OffersPage() {
             {
               workshop_slug: profile.workshop_slug || null,
               workshop_name: profile.workshop_name || null,
+              workshop_logo_url: profile.workshop_logo_url || null,
             },
           ]),
         );
@@ -210,6 +257,7 @@ export default function OffersPage() {
               "Service",
             createdAt: offer.created_at,
             status: offer.status,
+            workshopLogoUrl: workshopProfile?.workshop_logo_url || null,
           },
           request: matchingRequest,
         });
@@ -270,6 +318,8 @@ export default function OffersPage() {
               const isMatched = request.status === "matched";
               const image =
                 request.images[0]?.url || request.images[0]?.dataUrl || "";
+
+              const workshopRating = workshopRatings[offer.workshopUserId];
 
               return (
                 <div
@@ -343,26 +393,72 @@ export default function OffersPage() {
                         </div>
                       </div>
 
-                      <div className="mt-3 rounded-2xl bg-gray-100 p-4">
+                      <div
+                        onClick={() =>
+                          offer.workshopSlug &&
+                          router.push(
+                            `/workshops/profile/${offer.workshopSlug}`,
+                          )
+                        }
+                        className="mt-3 w-full cursor-pointer rounded-2xl bg-gray-100 p-4 text-left transition hover:bg-gray-200 active:scale-[0.99]"
+                      >
                         <p className="text-xs text-black/40">Service</p>
 
-                        {offer.workshopSlug ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              router.push(
-                                `/workshops/profile/${offer.workshopSlug}`,
-                              )
-                            }
-                            className="mt-1 text-left text-base font-bold text-black underline decoration-orange-400/50 underline-offset-4"
-                          >
-                            {offer.workshopName}
-                          </button>
-                        ) : (
-                          <p className="mt-1 text-base font-bold">
-                            {offer.workshopName}
-                          </p>
-                        )}
+                        <div className="mt-2 flex items-center gap-3">
+                          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm">
+                            {offer.workshopLogoUrl ? (
+                              <img
+                                src={offer.workshopLogoUrl}
+                                alt={offer.workshopName}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-sm font-black">
+                                AR
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            {offer.workshopSlug ? (
+                              <div className="mt-1 flex items-center gap-2">
+                                <span className="truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
+                                  {offer.workshopName}
+                                </span>
+
+                                {workshopRating &&
+                                  workshopRating.average >= 4.8 &&
+                                  workshopRating.count >= 2 && (
+                                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-black text-orange-700">
+                                      🏆 Top Rated
+                                    </span>
+                                  )}
+                              </div>
+                            ) : (
+                              <p className="truncate text-base font-black">
+                                {offer.workshopName}
+                              </p>
+                            )}
+
+                            {workshopRating && workshopRating.count > 0 && (
+                              <div className="mt-1 flex items-center gap-1 text-xs font-bold text-orange-500">
+                                <span>★★★★★</span>
+                                <span className="text-black/60">
+                                  {workshopRating.average.toFixed(1)} (
+                                  {workshopRating.count} review-uri)
+                                </span>
+                              </div>
+                            )}
+
+                            {offer.workshopSlug &&
+                              workshopRating &&
+                              workshopRating.count > 0 && (
+                                <span className="mt-1 block text-xs font-bold text-black/50 underline underline-offset-4">
+                                  Vezi profilul și review-urile →
+                                </span>
+                              )}
+                          </div>
+                        </div>
                       </div>
 
                       {offer.message && (
