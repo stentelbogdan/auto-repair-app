@@ -29,6 +29,7 @@ export default function MyJobsPage() {
     Record<string, number>
   >({});
   const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+  const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
 
   const loadJobs = async () => {
     try {
@@ -38,6 +39,15 @@ export default function MyJobsPage() {
         router.push("/login");
         return;
       }
+
+      const { data: reviewsData } = await supabase
+        .from("reviews")
+        .select("request_id")
+        .eq("customer_user_id", authData.user.id);
+
+      setReviewedRequestIds(
+        (reviewsData || []).map((review) => review.request_id).filter(Boolean),
+      );
 
       const [requestRows, offerRows] = await Promise.all([
         getOwnRepairRequests(authData.user.id),
@@ -316,17 +326,19 @@ export default function MyJobsPage() {
                           Chat cu service-ul
                         </button>
 
-                        {request.status === "completed" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              router.push(`/review?id=${request.id}`)
-                            }
-                            className="mt-3 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
-                          >
-                            ⭐ Lasă review
-                          </button>
-                        )}
+                        {request.status === "completed" &&
+                          !reviewedRequestIds.includes(request.id) && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                router.push(`/review?id=${request.id}`);
+                              }}
+                              className="mt-3 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
+                            >
+                              ⭐ Lasă review
+                            </button>
+                          )}
                       </div>
                     </div>
                   </div>

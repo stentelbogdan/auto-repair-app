@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { ImagePlus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -17,6 +18,11 @@ type OfferRow = {
   id: string;
   workshop_user_id: string;
   workshop_name: string | null;
+};
+
+type ReviewPreviewImage = {
+  file: File;
+  previewUrl: string;
 };
 
 export default function ReviewPage() {
@@ -36,6 +42,7 @@ function ReviewContent() {
   const [offer, setOffer] = useState<OfferRow | null>(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+  const [reviewImages, setReviewImages] = useState<ReviewPreviewImage[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -103,6 +110,60 @@ function ReviewContent() {
     loadData();
   }, [requestId, router]);
 
+  const handleReviewImages = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    const remainingSlots = 5 - reviewImages.length;
+
+    const selectedFiles = files.slice(0, remainingSlots);
+
+    const newImages = selectedFiles.map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setReviewImages((current) => [...current, ...newImages]);
+    event.target.value = "";
+  };
+
+  const removeReviewImage = (index: number) => {
+    setReviewImages((current) => {
+      const imageToRemove = current[index];
+      if (imageToRemove) {
+        URL.revokeObjectURL(imageToRemove.previewUrl);
+      }
+
+      return current.filter((_, imageIndex) => imageIndex !== index);
+    });
+  };
+
+  const uploadReviewImages = async (userId: string) => {
+    const uploadedUrls: string[] = [];
+
+    for (const image of reviewImages) {
+      const fileExtension = image.file.name.split(".").pop() || "jpg";
+      const filePath = `${userId}/${requestId}/${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("review-images")
+        .upload(filePath, image.file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("review-images")
+        .getPublicUrl(filePath);
+
+      uploadedUrls.push(publicUrlData.publicUrl);
+    }
+
+    return uploadedUrls;
+  };
+
   const submitReview = async () => {
     if (!request || !offer) return;
 
@@ -116,6 +177,8 @@ function ReviewContent() {
         return;
       }
 
+      const uploadedImageUrls = await uploadReviewImages(authData.user.id);
+
       const { error } = await supabase.from("reviews").insert({
         request_id: request.id,
         offer_id: offer.id,
@@ -123,15 +186,19 @@ function ReviewContent() {
         workshop_user_id: offer.workshop_user_id,
         rating,
         comment: comment.trim() || null,
+        images: uploadedImageUrls,
       });
 
       if (error) {
-        console.error("Failed to save review:", error);
-        alert("Nu am putut salva review-ul.");
+        console.error("Review insert error:", error);
+        alert(error.message);
         return;
       }
 
       router.push("/customer/my-jobs");
+    } catch (error: any) {
+      console.error("Review save error:", error);
+      alert(error.message || "Nu am putut salva review-ul.");
     } finally {
       setSaving(false);
     }
@@ -169,7 +236,9 @@ function ReviewContent() {
                   key={star}
                   type="button"
                   onClick={() => setRating(star)}
-                  className={star <= rating ? "text-orange-400" : "text-black/20"}
+                  className={
+                    star <= rating ? "text-orange-400" : "text-black/20"
+                  }
                 >
                   ★
                 </button>
@@ -189,6 +258,52 @@ function ReviewContent() {
               placeholder="Scrie câteva cuvinte despre experiența ta..."
               className="w-full rounded-2xl bg-gray-100 p-4 text-black outline-none"
             />
+          </div>
+
+          <div className="mt-6">
+            <p className="mb-2 text-sm font-semibold text-black/50">
+              Poze review
+            </p>
+
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-black/20 bg-gray-100 p-5 text-center transition active:scale-[0.98]">
+              <ImagePlus className="mb-2 h-7 w-7 text-orange-500" />
+              <span className="font-bold">Adaugă poze</span>
+              <span className="mt-1 text-xs text-black/45">Maxim 5 poze</span>
+
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleReviewImages}
+                className="hidden"
+                disabled={reviewImages.length >= 5 || saving}
+              />
+            </label>
+
+            {reviewImages.length > 0 && (
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                {reviewImages.map((image, index) => (
+                  <div
+                    key={image.previewUrl}
+                    className="relative aspect-square overflow-hidden rounded-2xl bg-gray-100"
+                  >
+                    <img
+                      src={image.previewUrl}
+                      alt={`Poză review ${index + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeReviewImage(index)}
+                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-white"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <button
