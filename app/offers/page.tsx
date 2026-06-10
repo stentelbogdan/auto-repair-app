@@ -318,7 +318,6 @@ export default function OffersPage() {
               const isMatched = request.status === "matched";
               const image =
                 request.images[0]?.url || request.images[0]?.dataUrl || "";
-
               const workshopRating = workshopRatings[offer.workshopUserId];
 
               return (
@@ -392,96 +391,106 @@ export default function OffersPage() {
                           </span>
                         </div>
                       </div>
-
-                      <div
-                        onClick={() =>
-                          offer.workshopSlug &&
-                          router.push(
-                            `/workshops/profile/${offer.workshopSlug}`,
-                          )
-                        }
-                        className="mt-3 w-full cursor-pointer rounded-2xl bg-gray-100 p-4 text-left transition hover:bg-gray-200 active:scale-[0.99]"
-                      >
-                        <p className="text-xs text-black/40">Service</p>
-
-                        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
-                          <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white shadow-sm">
-                            {offer.workshopLogoUrl ? (
-                              <img
-                                src={offer.workshopLogoUrl}
-                                alt={offer.workshopName}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-sm font-black">
-                                AR
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="min-w-0 w-full">
-                            <div className="flex flex-col items-start gap-1">
-                              <span className="max-w-full truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
-                                {offer.workshopName}
-                              </span>
-
-                              {workshopRating && workshopRating.count > 0 && (
-                                <div className="flex items-center gap-1 text-xs font-bold text-orange-500">
-                                  <span>★★★★★</span>
-                                  <span className="text-black/60">
-                                    {workshopRating.average.toFixed(1)} (
-                                    {workshopRating.count} review-uri)
-                                  </span>
-                                </div>
-                              )}
-
-                              {workshopRating &&
-                                workshopRating.average >= 4.8 &&
-                                workshopRating.count >= 2 && (
-                                  <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
-                                    🏆 Top Rated
-                                  </span>
-                                )}
-
-                              {offer.workshopSlug &&
-                                workshopRating &&
-                                workshopRating.count > 0 && (
-                                  <span className="text-xs font-bold text-black/50 underline underline-offset-4">
-                                    Vezi profilul și review-urile →
-                                  </span>
-                                )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {offer.message && (
-                        <p className="mt-3 line-clamp-2 text-sm text-black/60">
-                          {offer.message}
-                        </p>
-                      )}
-
-                      {!isRejected && !isAccepted && !isMatched && (
-                        <button
-                          onClick={() =>
-                            handleAcceptOffer(offer.id, request.id)
-                          }
-                          disabled={acceptingOfferId === offer.id}
-                          className="mt-4 w-full rounded-2xl bg-black px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                        >
-                          {acceptingOfferId === offer.id
-                            ? "Se confirmă..."
-                            : "Acceptă oferta"}
-                        </button>
-                      )}
-
-                      {isAccepted && (
-                        <div className="mt-4 rounded-2xl bg-green-100 px-4 py-3 text-sm font-semibold text-green-700">
-                          Oferta aleasă
-                        </div>
-                      )}
                     </div>
                   </div>
+
+                  <div
+                    onClick={() =>
+                      offer.workshopSlug &&
+                      router.push(`/workshops/profile/${offer.workshopSlug}`)
+                    }
+                    role={offer.workshopSlug ? "button" : undefined}
+                    tabIndex={offer.workshopSlug ? 0 : undefined}
+                    onKeyDown={(event) => {
+                      if (
+                        offer.workshopSlug &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        router.push(`/workshops/profile/${offer.workshopSlug}`);
+                      }
+                    }}
+                    className={`mt-4 w-full rounded-2xl bg-gray-100 p-4 text-left transition ${
+                      offer.workshopSlug
+                        ? "cursor-pointer hover:bg-gray-200 active:scale-[0.99]"
+                        : ""
+                    }`}
+                  >
+                    <p className="text-xs text-black/40">Service</p>
+
+                    <div className="mt-3 flex items-start gap-4">
+                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm sm:h-16 sm:w-16">
+                        {offer.workshopLogoUrl ? (
+                          <img
+                            src={offer.workshopLogoUrl}
+                            alt={offer.workshopName}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-sm font-black">
+                            AR
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="max-w-full truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
+                          {offer.workshopName}
+                        </p>
+
+                        {workshopRating && workshopRating.count > 0 && (
+                          <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs font-bold text-orange-500">
+                            <span>★★★★★</span>
+                            <span className="text-black/60">
+                              {workshopRating.average.toFixed(1)} (
+                              {workshopRating.count} review-uri)
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {workshopRating &&
+                            workshopRating.average >= 4.8 &&
+                            workshopRating.count >= 2 && (
+                              <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
+                                🏆 Top Rated
+                              </span>
+                            )}
+
+                          {offer.workshopSlug &&
+                            workshopRating &&
+                            workshopRating.count > 0 && (
+                              <span className="text-xs font-bold text-black/50 underline underline-offset-4">
+                                Vezi profilul și review-urile →
+                              </span>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {offer.message && (
+                    <p className="mt-3 line-clamp-2 text-sm text-black/60">
+                      {offer.message}
+                    </p>
+                  )}
+
+                  {!isRejected && !isAccepted && !isMatched && (
+                    <button
+                      onClick={() => handleAcceptOffer(offer.id, request.id)}
+                      disabled={acceptingOfferId === offer.id}
+                      className="mt-4 w-full rounded-2xl bg-black px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {acceptingOfferId === offer.id
+                        ? "Se confirmă..."
+                        : "Acceptă oferta"}
+                    </button>
+                  )}
+
+                  {isAccepted && (
+                    <div className="mt-4 rounded-2xl bg-green-100 px-4 py-3 text-center text-sm font-semibold text-green-700">
+                      Oferta aleasă
+                    </div>
+                  )}
                 </div>
               );
             })}
