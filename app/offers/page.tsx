@@ -433,15 +433,15 @@ export default function OffersPage() {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="max-w-full truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
+                       <div className="flex items-center">
+                          <p className="max-w-full truncate text-left text-lg font-black text-black underline decoration-orange-300 underline-offset-4">
                             {offer.workshopName}
                           </p>
 
                           {workshopRating &&
                             workshopRating.average >= 4.8 &&
                             workshopRating.count >= 2 && (
-                              <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
+                              <span className="ml-auto bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
                                 🏆 Top Rated
                               </span>
                             )}
@@ -460,7 +460,7 @@ export default function OffersPage() {
                         {offer.workshopSlug &&
                           workshopRating &&
                           workshopRating.count > 0 && (
-                            <span className="mt-2 block text-xs font-bold text-black/50 underline underline-offset-4">
+                            <span className="mt-2 block text-sm font-bold text-black underline underline-offset-4">
                               Vezi profilul și review-urile →
                             </span>
                           )}
