@@ -433,13 +433,23 @@ export default function OffersPage() {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="max-w-full truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
-                          {offer.workshopName}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="max-w-full truncate text-left text-base font-black text-black underline decoration-orange-300 underline-offset-4">
+                            {offer.workshopName}
+                          </p>
+
+                          {workshopRating &&
+                            workshopRating.average >= 4.8 &&
+                            workshopRating.count >= 2 && (
+                              <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
+                                🏆 Top Rated
+                              </span>
+                            )}
+                        </div>
 
                         {workshopRating && workshopRating.count > 0 && (
-                          <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs font-bold text-orange-500">
-                            <span>★★★★★</span>
+                          <div className="mt-1 flex items-center gap-1 text-xs font-bold">
+                            <span className="text-orange-500">★★★★★</span>
                             <span className="text-black/60">
                               {workshopRating.average.toFixed(1)} (
                               {workshopRating.count} review-uri)
@@ -447,23 +457,13 @@ export default function OffersPage() {
                           </div>
                         )}
 
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {workshopRating &&
-                            workshopRating.average >= 4.8 &&
-                            workshopRating.count >= 2 && (
-                              <span className="rounded-full bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">
-                                🏆 Top Rated
-                              </span>
-                            )}
-
-                          {offer.workshopSlug &&
-                            workshopRating &&
-                            workshopRating.count > 0 && (
-                              <span className="text-xs font-bold text-black/50 underline underline-offset-4">
-                                Vezi profilul și review-urile →
-                              </span>
-                            )}
-                        </div>
+                        {offer.workshopSlug &&
+                          workshopRating &&
+                          workshopRating.count > 0 && (
+                            <span className="mt-2 block text-xs font-bold text-black/50 underline underline-offset-4">
+                              Vezi profilul și review-urile →
+                            </span>
+                          )}
                       </div>
                     </div>
                   </div>
