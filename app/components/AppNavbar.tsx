@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { MessageCircle, Mail, Wrench, Settings, LogOut } from "lucide-react";
 
 type Role = "customer" | "workshop";
 
@@ -369,26 +370,26 @@ export default function AppNavbar() {
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-xl">
-      <div className="mx-auto max-w-7xl px-4 py-4">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+      <div className="mx-auto max-w-7xl px-4 py-3">
+        <div className="grid grid-cols-[auto_1fr] items-center gap-3 md:grid-cols-[auto_1fr_auto]">
           <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-sm font-black text-black shadow-sm">
             AR
           </div>
 
           <div className="min-w-0 text-center">
             <p
-              className={`text-[10px] uppercase tracking-[0.26em] ${
+              className={`text-[10px] uppercase tracking-[0.26em] hidden sm:block ${
                 isWorkshopMode ? "text-orange-400" : "text-white/80"
               }`}
             >
               {isWorkshopMode ? "PROFIL SERVICE" : "PROFIL CLIENT"}
             </p>
 
-            <h1 className="mt-1 truncate text-base font-bold leading-tight text-white">
+            <h1 className="truncate text-base font-bold leading-tight text-white">
               AutoRepair Marketplace
             </h1>
 
-            <div className="mx-auto mt-3 flex w-fit rounded-full border border-white/10 bg-white/5 p-1 shadow-inner">
+            <div className="mx-auto mt-4 flex w-fit rounded-full border border-white/10 bg-white/5 p-1 shadow-inner">
               <button
                 type="button"
                 onClick={goClient}
@@ -415,86 +416,86 @@ export default function AppNavbar() {
             </div>
           </div>
 
-          <div className="flex flex-col items-center gap-2">
+          <div className="col-span-2 mt-2 flex w-full items-center justify-between px-2 md:col-span-1 md:mt-0 md:w-auto md:justify-end md:gap-2.5 md:px-0">
+            <button
+              type="button"
+              onClick={goMessages}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              aria-label="Mesaje"
+            >
+              <MessageCircle size={17} strokeWidth={2.25} />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem("activeRole", "customer");
+                router.push("/offers");
+              }}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              aria-label="Oferte primite"
+            >
+              <Mail size={17} strokeWidth={2.25} />
+              {isClientMode && offerUnreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                  {offerUnreadCount > 9 ? "9+" : offerUnreadCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (isWorkshopMode) {
+                  router.push("/workshops/won-jobs");
+                  return;
+                }
+
+                router.push("/customer/my-jobs");
+              }}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+            >
+              <Wrench size={17} strokeWidth={2.25} />
+              {isClientMode && progressUnreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                  {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (isWorkshopMode) {
+                  localStorage.setItem("activeRole", "workshop");
+                  router.push("/account?role=workshop");
+                  return;
+                }
+
+                localStorage.setItem("activeRole", "customer");
+                router.push("/account?role=customer");
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              aria-label="Setări"
+            >
+              <Settings size={17} strokeWidth={2.25} />
+            </button>
+
             <button
               type="button"
               onClick={handleLogout}
               disabled={loggingOut}
-              className="rounded-full border border-white/20 px-4 py-2 text-xs font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white transition hover:bg-white/10 disabled:opacity-40"
+              aria-label="Ieșire"
+              title="Ieșire"
             >
-              {loggingOut ? "..." : "Ieșire"}
+              <LogOut size={20} strokeWidth={2.25} />
             </button>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={goMessages}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
-                aria-label="Mesaje"
-              >
-                💬
-                {unreadCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.setItem("activeRole", "customer");
-                  router.push("/offers");
-                }}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
-                aria-label="Oferte primite"
-              >
-                📩
-                {isClientMode && offerUnreadCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
-                    {offerUnreadCount > 9 ? "9+" : offerUnreadCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (isWorkshopMode) {
-                    router.push("/workshops/won-jobs");
-                    return;
-                  }
-
-                  router.push("/customer/my-jobs");
-                }}
-                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
-              >
-                🔧
-                {isClientMode && progressUnreadCount > 0 && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
-                    {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
-                  </span>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (isWorkshopMode) {
-                    localStorage.setItem("activeRole", "workshop");
-                    router.push("/account?role=workshop");
-                    return;
-                  }
-
-                  localStorage.setItem("activeRole", "customer");
-                  router.push("/account?role=customer");
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
-                aria-label="Setări"
-              >
-                ⚙
-              </button>
-            </div>
           </div>
         </div>
       </div>
