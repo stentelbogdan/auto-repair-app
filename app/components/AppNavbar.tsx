@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { MessageCircle, Mail, Wrench, Settings, LogOut } from "lucide-react";
+import { BadgeEuro } from "lucide-react";
+import { FileText } from "lucide-react";
+import { ClipboardList } from "lucide-react";
 
 type Role = "customer" | "workshop";
 
@@ -440,7 +443,7 @@ export default function AppNavbar() {
               className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
               aria-label="Oferte primite"
             >
-              <Mail size={17} strokeWidth={2.25} />
+              <BadgeEuro size={18} strokeWidth={2.25} />
               {isClientMode && offerUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
                   {offerUnreadCount > 9 ? "9+" : offerUnreadCount}

@@ -19,6 +19,7 @@ type WorkProgressUpdate = {
 
 type AcceptedOffer = {
   id: string;
+  workshop_user_id: string;
   workshop_name: string | null;
   price: number | string | null;
   days: number | string | null;
@@ -43,9 +44,17 @@ export default function CustomerJobDetailPage() {
   );
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [existingReview, setExistingReview] = useState(false);
 
   const latestStatus =
     progressUpdates.length > 0 ? progressUpdates[0].status : null;
+
+  const isCompleted =
+    request?.status === "completed" ||
+    latestStatus === "Ready" ||
+    latestStatus === "Gata";
 
   const statusLabels: Record<string, string> = {
     Received: "Primită",
@@ -184,6 +193,30 @@ export default function CustomerJobDetailPage() {
   }
 
   if (!request) return null;
+
+  const submitReview = async () => {
+    if (!request || !offer || rating === 0 || existingReview) return;
+
+    const { data: authData } = await supabase.auth.getUser();
+    const customerUserId = authData.user?.id;
+
+    if (!customerUserId) return;
+
+    const { error } = await supabase.from("workshop_reviews").insert({
+      request_id: request.id,
+      workshop_user_id: offer.workshop_user_id,
+      customer_user_id: customerUserId,
+      rating,
+      review_text: reviewText.trim() || null,
+    });
+
+    if (error) {
+      console.error("Failed to submit review:", error);
+      return;
+    }
+
+    setExistingReview(true);
+  };
 
   return (
     <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
@@ -477,6 +510,45 @@ export default function CustomerJobDetailPage() {
           button: { display: "none" },
         }}
       />
+      {isCompleted && !existingReview && (
+        <div className="mt-6 rounded-3xl border border-orange-500/20 bg-black/40 p-5">
+          <h3 className="text-lg font-bold text-white">
+            Lasă un review pentru service
+          </h3>
+
+          <div className="mt-4 flex gap-2">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => setRating(star)}
+                className={`text-3xl transition ${
+                  rating >= star ? "text-yellow-400" : "text-white/20"
+                }`}
+              >
+                ★
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            value={reviewText}
+            onChange={(e) => setReviewText(e.target.value)}
+            placeholder="Cum a fost experiența cu acest service?"
+            className="mt-4 w-full rounded-2xl border border-white/10 bg-black/40 p-3 text-white"
+            rows={4}
+          />
+
+          <button
+            type="button"
+            onClick={submitReview}
+            disabled={rating === 0}
+            className="mt-4 rounded-2xl bg-orange-500 px-5 py-3 font-bold text-black disabled:opacity-50"
+          >
+            Trimite review
+          </button>
+        </div>
+      )}
     </main>
   );
 }

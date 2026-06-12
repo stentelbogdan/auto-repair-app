@@ -366,7 +366,7 @@ export default function WorkshopWonJobsPage() {
 
       setActiveTab("completed");
     } catch (err) {
-      console.error("Failed to mark as completed:", err);
+      console.error("Failed to mark as completed:", JSON.stringify(err, null, 2));
       alert("Nu am putut finaliza lucrarea.");
     }
   };
