@@ -96,8 +96,18 @@ export default function MakeOfferPage() {
         return;
       }
 
+      const { data: workshopProfile } = await supabase
+        .from("profiles")
+        .select("workshop_name")
+        .eq("id", authData.user.id)
+        .single();
+
       const workshopEmail = authData.user.email ?? "Workshop";
-      const workshopName = workshopEmail.split("@")[0] || "Workshop";
+
+      const workshopName =
+        workshopProfile?.workshop_name?.trim() ||
+        workshopEmail.split("@")[0] ||
+        "Workshop";
 
       await createRepairOffer({
         requestId: id,

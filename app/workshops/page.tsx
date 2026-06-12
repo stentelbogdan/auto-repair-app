@@ -124,21 +124,25 @@ export default function WorkshopsPage() {
       const rows = await getWorkshopRepairRequests();
 
       const bodyworkRows = rows.filter(
-        (req) => (req.service_type ?? "bodywork") === "bodywork",
+        (req) =>
+          (req.service_type ?? "bodywork") === "bodywork" &&
+          req.status === "open",
       );
 
-      const mapped: WorkshopRequest[] = bodyworkRows.map((req: RepairRequestRow) => ({
-        id: req.id,
-        carBrand: req.car_brand || "Unknown brand",
-        carModel: req.car_model || "Unknown model",
-        carYear: req.car_year || "-",
-        city: req.city || "-",
-        damageType: req.damage_type || "other",
-        description: req.description || "No description provided.",
-        images: Array.isArray(req.images) ? req.images : [],
-        status: req.status || "open",
-        postedAt: formatPostedAt(req.created_at),
-      }));
+      const mapped: WorkshopRequest[] = bodyworkRows.map(
+        (req: RepairRequestRow) => ({
+          id: req.id,
+          carBrand: req.car_brand || "Unknown brand",
+          carModel: req.car_model || "Unknown model",
+          carYear: req.car_year || "-",
+          city: req.city || "-",
+          damageType: req.damage_type || "other",
+          description: req.description || "No description provided.",
+          images: Array.isArray(req.images) ? req.images : [],
+          status: req.status || "open",
+          postedAt: formatPostedAt(req.created_at),
+        }),
+      );
 
       setRequests(mapped);
     } catch (error) {
@@ -175,10 +179,12 @@ export default function WorkshopsPage() {
     pdr: ["pdr"],
   };
 
+  const openRequests = requests.filter((request) => request.status === "open");
+
   const filteredRequests =
     activeFilter === "all"
-      ? requests
-      : requests.filter((request) =>
+      ? openRequests
+      : openRequests.filter((request) =>
           filterGroups[activeFilter]?.includes(request.damageType),
         );
 

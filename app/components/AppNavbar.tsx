@@ -15,6 +15,7 @@ export default function AppNavbar() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [progressUnreadCount, setProgressUnreadCount] = useState(0);
+  const [offerUnreadCount, setOfferUnreadCount] = useState(0);
   const [activeRole, setActiveRole] = useState<Role>("customer");
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [roleParam, setRoleParam] = useState<Role | null>(null);
@@ -119,6 +120,7 @@ export default function AppNavbar() {
     if (!userId) {
       setUnreadCount(0);
       setProgressUnreadCount(0);
+      setOfferUnreadCount(0);
       return;
     }
 
@@ -163,8 +165,45 @@ export default function AppNavbar() {
       setProgressUnreadCount(nextCount);
     };
 
+    const loadUnreadOffers = async () => {
+      const { data: customerRequests, error: requestsError } = await supabase
+        .from("repair_requests")
+        .select("id, status")
+        .eq("user_id", userId);
+
+      if (requestsError) {
+        console.error("Failed to load customer requests:", requestsError);
+        setOfferUnreadCount(0);
+        return;
+      }
+
+      const requestIds = (customerRequests || [])
+        .filter((request) => (request.status || "open") !== "completed")
+        .map((request) => request.id);
+
+      if (requestIds.length === 0) {
+        setOfferUnreadCount(0);
+        return;
+      }
+
+      const { count, error } = await supabase
+        .from("repair_offers")
+        .select("id", { count: "exact", head: true })
+        .in("request_id", requestIds)
+        .is("customer_read_at", null);
+
+      if (error) {
+        console.error("Failed to load unread offers:", error);
+        setOfferUnreadCount(0);
+        return;
+      }
+
+      setOfferUnreadCount(count || 0);
+    };
+
     loadUnreadMessages();
     loadUnreadProgress();
+    loadUnreadOffers();
 
     const channel = supabase
       .channel(`navbar-live-badges-${userId}`)
@@ -221,22 +260,26 @@ export default function AppNavbar() {
         if (status === "SUBSCRIBED") {
           loadUnreadMessages();
           loadUnreadProgress();
+          loadUnreadOffers();
         }
       });
 
     const refreshBadges = () => {
       loadUnreadMessages();
       loadUnreadProgress();
+      loadUnreadOffers();
     };
 
     window.addEventListener("focus", refreshBadges);
     window.addEventListener("messages-read-updated", refreshBadges);
     window.addEventListener("progress-read-updated", refreshBadges);
+    window.addEventListener("offers-read-updated", refreshBadges);
 
     return () => {
       window.removeEventListener("focus", refreshBadges);
       window.removeEventListener("messages-read-updated", refreshBadges);
       window.removeEventListener("progress-read-updated", refreshBadges);
+      window.removeEventListener("offers-read-updated", refreshBadges);
 
       supabase.removeChannel(channel);
     };
@@ -393,6 +436,23 @@ export default function AppNavbar() {
                 {unreadCount > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
                     {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem("activeRole", "customer");
+                  router.push("/offers");
+                }}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+                aria-label="Oferte primite"
+              >
+                📩
+                {isClientMode && offerUnreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1.5 text-[10px] font-black leading-none text-white shadow-lg ring-2 ring-black">
+                    {offerUnreadCount > 9 ? "9+" : offerUnreadCount}
                   </span>
                 )}
               </button>

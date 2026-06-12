@@ -149,6 +149,19 @@ export default function OffersPage() {
         return;
       }
 
+      const unreadOfferIds = (offerRows || [])
+        .filter((offer) => !offer.customer_read_at)
+        .map((offer) => offer.id);
+
+      if (unreadOfferIds.length > 0) {
+        await supabase
+          .from("repair_offers")
+          .update({ customer_read_at: new Date().toISOString() })
+          .in("id", unreadOfferIds);
+
+        window.dispatchEvent(new Event("offers-read-updated"));
+      }
+
       const workshopUserIds = Array.from(
         new Set(
           (offerRows || [])
@@ -433,7 +446,7 @@ export default function OffersPage() {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                       <div className="flex items-center">
+                        <div className="flex items-center">
                           <p className="max-w-full truncate text-left text-lg font-black text-black underline decoration-orange-300 underline-offset-4">
                             {offer.workshopName}
                           </p>
