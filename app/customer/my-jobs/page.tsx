@@ -327,7 +327,15 @@ export default function MyJobsPage() {
                         </button>
 
                         {request.status === "completed" &&
-                          !reviewedRequestIds.includes(request.id) && (
+                          (reviewedRequestIds.includes(request.id) ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="mt-3 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-bold text-emerald-700"
+                            >
+                              ✓ Review trimis
+                            </button>
+                          ) : (
                             <button
                               type="button"
                               onClick={(event) => {
@@ -338,7 +346,7 @@ export default function MyJobsPage() {
                             >
                               ⭐ Lasă review
                             </button>
-                          )}
+                          ))}
                       </div>
                     </div>
                   </div>

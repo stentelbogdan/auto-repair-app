@@ -26,7 +26,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
   const { data: reviews } = await supabase
     .from("reviews")
-    .select("id, rating, comment, created_at, request_id, images")
+    .select(
+      "id, rating, comment, created_at, request_id, images, customer_user_id",
+    )
     .eq("workshop_user_id", workshop.id)
     .order("created_at", { ascending: false });
 
@@ -41,6 +43,19 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
   const requestsById = new Map(
     (reviewRequests || []).map((request) => [request.id, request]),
+  );
+
+  const customerIds = (reviews || [])
+    .map((review) => review.customer_user_id)
+    .filter(Boolean);
+
+  const { data: customerProfiles } = await supabase
+    .from("profiles")
+    .select("id, email")
+    .in("id", customerIds);
+
+  const customersById = new Map(
+    (customerProfiles || []).map((customer) => [customer.id, customer]),
   );
 
   const reviewList = reviews || [];
@@ -104,6 +119,12 @@ export default async function WorkshopProfilePage({ params }: Props) {
                       <span className="ml-2 text-sm font-black text-white">
                         {averageRating.toFixed(1)} / 5
                       </span>
+
+                      {averageRating >= 4.8 && reviewList.length >= 3 && (
+                        <span className="ml-3 rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-black">
+                          🏆 Top Rated
+                        </span>
+                      )}
                     </div>
 
                     <p className="mt-2 text-xs font-medium text-white/50">
@@ -152,6 +173,13 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   {reviewList.map((review: any) => {
                     const reviewRequest = requestsById.get(review.request_id);
 
+                    const customerProfile = customersById.get(
+                      review.customer_user_id,
+                    );
+                    const customerName =
+                      customerProfile?.email?.split("@")[0] ||
+                      "Client verificat";
+
                     return (
                       <div
                         key={review.id}
@@ -159,10 +187,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-lg font-black">
-                              {reviewRequest?.car_brand || "Mașină"}{" "}
-                              {reviewRequest?.car_model || ""}
-                            </p>
+                            <p className="text-lg font-black">{customerName}</p>
 
                             <p className="text-sm text-black/50">
                               {reviewRequest?.car_year || "-"} •{" "}
@@ -173,6 +198,10 @@ export default async function WorkshopProfilePage({ params }: Props) {
                               {new Date(review.created_at).toLocaleDateString(
                                 "ro-RO",
                               )}
+                            </p>
+
+                            <p className="mt-1 text-xs font-semibold text-black/50">
+                              Client verificat
                             </p>
                           </div>
 

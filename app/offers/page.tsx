@@ -44,6 +44,9 @@ type RepairOffer = {
 type WorkshopRating = {
   average: number;
   count: number;
+  lastReview?: string;
+  completedJobs?: number;
+  specialties?: string[];
 };
 
 type OfferWithRequest = {
@@ -175,7 +178,7 @@ export default function OffersPage() {
       if (workshopUserIds.length > 0) {
         const { data: reviewsData } = await supabase
           .from("reviews")
-          .select("workshop_user_id, rating")
+          .select("workshop_user_id, rating, comment, created_at")
           .in("workshop_user_id", workshopUserIds);
 
         (reviewsData || []).forEach((review: any) => {
@@ -188,16 +191,71 @@ export default function OffersPage() {
             ratingsMap[workshopId] = {
               average: 0,
               count: 0,
+              lastReview: "",
+              completedJobs: 0,
+              specialties: [],
             };
           }
 
           ratingsMap[workshopId].average += ratingValue;
           ratingsMap[workshopId].count += 1;
+
+          if (!ratingsMap[workshopId].lastReview && review.comment) {
+            ratingsMap[workshopId].lastReview = review.comment;
+          }
         });
 
         Object.keys(ratingsMap).forEach((workshopId) => {
           ratingsMap[workshopId].average =
             ratingsMap[workshopId].average / ratingsMap[workshopId].count;
+        });
+      }
+
+      const { data: completedRequests } = await supabase
+        .from("repair_requests")
+        .select("accepted_offer_id, damage_type, service_type")
+        .eq("status", "completed")
+        .not("accepted_offer_id", "is", null);
+
+      const completedOfferIds = (completedRequests || [])
+        .map((request) => request.accepted_offer_id)
+        .filter(Boolean);
+
+      if (completedOfferIds.length > 0) {
+        const { data: completedOffers } = await supabase
+          .from("repair_offers")
+          .select("id, workshop_user_id")
+          .in("id", completedOfferIds);
+
+        (completedOffers || []).forEach((offer) => {
+          const completedRequest = (completedRequests || []).find(
+            (request) => request.accepted_offer_id === offer.id,
+          );
+          const workshopId = offer.workshop_user_id;
+          if (!workshopId) return;
+
+          if (!ratingsMap[workshopId]) {
+            ratingsMap[workshopId] = {
+              average: 0,
+              count: 0,
+              lastReview: "",
+              completedJobs: 0,
+              specialties: [],
+            };
+          }
+
+          ratingsMap[workshopId].completedJobs =
+            (ratingsMap[workshopId].completedJobs || 0) + 1;
+
+          const specialty =
+            completedRequest?.damage_type || completedRequest?.service_type;
+
+          if (
+            specialty &&
+            !ratingsMap[workshopId].specialties?.includes(specialty)
+          ) {
+            ratingsMap[workshopId].specialties?.push(specialty);
+          }
         });
       }
 
@@ -296,6 +354,22 @@ export default function OffersPage() {
     } finally {
       setAcceptingOfferId(null);
     }
+  };
+
+  const formatSpecialty = (value: string) => {
+    const labels: Record<string, string> = {
+      service: "Service",
+      engine: "Motor",
+      dent: "Îndreptare",
+      scratch: "Zgârieturi",
+      steering: "Direcție",
+      electrical: "Electrică",
+      detailing_exterior: "Detailing exterior",
+      bodywork: "Caroserie",
+      mechanical: "Mecanică",
+    };
+
+    return labels[value] || value;
   };
 
   if (checkingAccess) {
@@ -455,7 +529,7 @@ export default function OffersPage() {
                             workshopRating.average >= 4.8 &&
                             workshopRating.count >= 2 && (
                               <span className="ml-auto bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
-                                🏆 Top Rated
+                                ⭐ {workshopRating.average.toFixed(1)} Rating
                               </span>
                             )}
                         </div>
@@ -467,6 +541,37 @@ export default function OffersPage() {
                               {workshopRating.average.toFixed(1)} (
                               {workshopRating.count} review-uri)
                             </span>
+                          </div>
+                        )}
+
+                        {(workshopRating?.completedJobs || 0) > 0 && (
+                          <div className="mt-1 text-xs font-medium text-green-700">
+                            ✓ {workshopRating.completedJobs} lucrări finalizate
+                          </div>
+                        )}
+
+                        {(workshopRating?.specialties?.length || 0) > 0 && (
+                          <div className="mt-1 text-xs font-medium text-black/80">
+                            <div>Experiență verificată:</div>
+
+                            <div className="mt-0.5">
+                              {workshopRating.specialties
+                                ?.slice(0, 3)
+                                .map(formatSpecialty)
+                                .join(" • ")}
+                            </div>
+                          </div>
+                        )}
+
+                        {workshopRating?.lastReview && (
+                          <div className="mt-2 rounded-lg bg-white/60 border border-black/5 p-2">
+                            <div className="text-[11px] font-semibold text-black/60">
+                              💬 Ultimul client
+                            </div>
+
+                            <p className="mt-1 text-sm italic text-black/80">
+                              “{workshopRating.lastReview}”
+                            </p>
                           </div>
                         )}
 
