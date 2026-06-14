@@ -74,6 +74,9 @@ export default function AccountPage() {
   const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(
     null,
   );
+  const [sundayOpen, setSundayOpen] = useState(false);
+  const [sunOpen, setSunOpen] = useState("09:00");
+  const [sunClose, setSunClose] = useState("13:00");
 
   useEffect(() => {
     const parseWorkshopHours = (value: string | null | undefined) => {
@@ -345,7 +348,11 @@ export default function AccountPage() {
       parts.push("Sâmbătă: Închis");
     }
 
-    parts.push("Duminică: Închis");
+    if (sundayOpen) {
+      parts.push(`Duminică: ${sunOpen}–${sunClose}`);
+    } else {
+      parts.push("Duminică: Închis");
+    }
 
     return parts.join(" · ");
   };
@@ -604,6 +611,12 @@ export default function AccountPage() {
                 setSatOpen={setSatOpen}
                 satClose={satClose}
                 setSatClose={setSatClose}
+                sundayOpen={sundayOpen}
+                setSundayOpen={setSundayOpen}
+                sunOpen={sunOpen}
+                setSunOpen={setSunOpen}
+                sunClose={sunClose}
+                setSunClose={setSunClose}
               />
 
               <div>
@@ -779,6 +792,12 @@ function OpeningHoursPicker({
   setSatOpen,
   satClose,
   setSatClose,
+  sundayOpen,
+  setSundayOpen,
+  sunOpen,
+  setSunOpen,
+  sunClose,
+  setSunClose,
 }: {
   weekOpen: string;
   setWeekOpen: (value: string) => void;
@@ -790,6 +809,12 @@ function OpeningHoursPicker({
   setSatOpen: (value: string) => void;
   satClose: string;
   setSatClose: (value: string) => void;
+  sundayOpen: boolean;
+  setSundayOpen: (value: boolean) => void;
+  sunOpen: string;
+  setSunOpen: (value: string) => void;
+  sunClose: string;
+  setSunClose: (value: string) => void;
 }) {
   return (
     <div className="md:col-span-2 rounded-2xl border border-white/10 bg-black/25 p-4">
@@ -844,6 +869,36 @@ function OpeningHoursPicker({
               value={satClose}
               onChange={(e) => setSatClose(e.target.value)}
               disabled={!saturdayOpen}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none disabled:opacity-35 focus:border-orange-400/60"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <label className="mb-3 flex items-center justify-between gap-3 text-sm font-semibold text-white">
+            <span>Duminică deschis</span>
+            <input
+              type="checkbox"
+              checked={sundayOpen}
+              onChange={(e) => setSundayOpen(e.target.checked)}
+              className="h-5 w-5"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="time"
+              value={sunOpen}
+              onChange={(e) => setSunOpen(e.target.value)}
+              disabled={!sundayOpen}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none disabled:opacity-35 focus:border-orange-400/60"
+            />
+
+            <input
+              type="time"
+              value={sunClose}
+              onChange={(e) => setSunClose(e.target.value)}
+              disabled={!sundayOpen}
               className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none disabled:opacity-35 focus:border-orange-400/60"
             />
           </div>
