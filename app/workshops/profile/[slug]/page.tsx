@@ -133,9 +133,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   </div>
                 )}
 
-                <div className="mt-3 grid gap-2 text-sm text-white/75">
+                <div className="mt-4 space-y-3">
                   {(workshop.workshop_address || workshop.workshop_city) && (
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-3 text-base text-white/80">
                       <MapPin
                         size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
@@ -149,7 +149,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   )}
 
                   {workshop.workshop_phone && (
-                    <div className="flex items-start gap-2">
+                    <div className="flex items-start gap-3 text-base text-white/80">
                       <Phone
                         size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
@@ -159,17 +159,34 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   )}
 
                   {workshop.workshop_hours && (
-                    <div className="flex items-start gap-2">
-                      <Clock
-                        size={18}
-                        className="mt-0.5 shrink-0 text-orange-300"
-                      />
-                      <div className="grid gap-1">
+                    <div className="mt-2 max-w-sm rounded-3xl border border-orange-500/20 bg-black/40 p-4 shadow-[0_0_30px_rgba(249,115,22,0.08)]">
+                      <div className="mb-3 flex items-center gap-2">
+                        <Clock size={18} className="text-orange-300" />
+                        <span className="font-semibold text-white">
+                          Program
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 text-sm text-white/75">
                         {String(workshop.workshop_hours)
                           .split("·")
-                          .map((line, index) => (
-                            <span key={index}>{line.trim()}</span>
-                          ))}
+                          .map((line, index) => {
+                            const [day, hours] = line.split(":");
+
+                            return (
+                              <div
+                                key={index}
+                                className="flex items-center justify-between gap-6 border-b border-white/5 pb-2 last:border-b-0 last:pb-0"
+                              >
+                                <span className="font-medium text-white/55">
+                                  {day.trim()}
+                                </span>
+                                <span className="font-semibold text-white">
+                                  {hours?.trim()}
+                                </span>
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   )}
