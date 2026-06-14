@@ -147,9 +147,19 @@ export default async function WorkshopProfilePage({ params }: Props) {
                     </div>
                   )}
                   {workshop.workshop_hours && (
-                    <div className="flex items-center gap-2">
-                      <Clock size={16} />
-                      {workshop.workshop_hours}
+                    <div className="flex items-start gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+                      <Clock
+                        size={16}
+                        className="mt-0.5 shrink-0 text-orange-300"
+                      />
+
+                      <div className="grid gap-1 text-sm text-white/65">
+                        {String(workshop.workshop_hours)
+                          .split("·")
+                          .map((line, index) => (
+                            <span key={index}>{line.trim()}</span>
+                          ))}
+                      </div>
                     </div>
                   )}
                 </div>
