@@ -171,7 +171,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
                         {String(workshop.workshop_hours)
                           .split("·")
                           .map((line, index) => {
-                            const [day, hours] = line.split(":");
+                            const separatorIndex = line.indexOf(":");
+                            const day = line.slice(0, separatorIndex);
+                            const hours = line.slice(separatorIndex + 1);
 
                             return (
                               <div
@@ -182,7 +184,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                                   {day.trim()}
                                 </span>
                                 <span className="font-semibold text-white">
-                                  {hours?.trim()}
+                                  {hours.trim()}
                                 </span>
                               </div>
                             );
