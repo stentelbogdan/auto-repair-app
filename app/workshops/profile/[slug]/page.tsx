@@ -133,27 +133,38 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   </div>
                 )}
 
-                <div className="mt-4 flex flex-wrap gap-3 text-sm text-white/60">
-                  {workshop.workshop_city && (
-                    <div className="flex items-center gap-2">
-                      <MapPin size={16} />
-                      {workshop.workshop_city}
+                <div className="mt-5 grid gap-3 text-sm text-white/65">
+                  {(workshop.workshop_address || workshop.workshop_city) && (
+                    <div className="flex items-start gap-2">
+                      <MapPin
+                        size={16}
+                        className="mt-0.5 shrink-0 text-orange-300"
+                      />
+                      <span>
+                        {[workshop.workshop_address, workshop.workshop_city]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </span>
                     </div>
                   )}
+
                   {workshop.workshop_phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone size={16} />
-                      {workshop.workshop_phone}
+                    <div className="flex items-start gap-2">
+                      <Phone
+                        size={16}
+                        className="mt-0.5 shrink-0 text-orange-300"
+                      />
+                      <span>{workshop.workshop_phone}</span>
                     </div>
                   )}
+
                   {workshop.workshop_hours && (
-                    <div className="flex items-start gap-2 rounded-2xl border border-white/10 bg-black/25 px-3 py-2">
+                    <div className="flex items-start gap-2">
                       <Clock
                         size={16}
                         className="mt-0.5 shrink-0 text-orange-300"
                       />
-
-                      <div className="grid gap-1 text-sm text-white/65">
+                      <div className="grid gap-1">
                         {String(workshop.workshop_hours)
                           .split("·")
                           .map((line, index) => (
