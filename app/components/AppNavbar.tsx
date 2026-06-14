@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { MessageCircle, Mail, Wrench, Settings, LogOut } from "lucide-react";
+import {
+  MessageCircle,
+  Wrench,
+  Settings,
+  LogOut,
+  ShieldCheck,
+} from "lucide-react";
 import { BadgeEuro } from "lucide-react";
 import { FileText } from "lucide-react";
 import { ClipboardList } from "lucide-react";
@@ -25,6 +31,7 @@ export default function AppNavbar() {
   const [roleParam, setRoleParam] = useState<Role | null>(null);
   const lastProgressCountRef = useRef(0);
   const [showProgressToast, setShowProgressToast] = useState(false);
+  const isAdmin = userRoles.includes("admin");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -470,6 +477,18 @@ export default function AppNavbar() {
                 </span>
               )}
             </button>
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => router.push("/admin")}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-orange-400/40 text-orange-300 transition hover:bg-orange-400/10"
+                aria-label="Admin Dashboard"
+                title="Admin Dashboard"
+              >
+                <ShieldCheck size={17} strokeWidth={2.25} />
+              </button>
+            )}
 
             <button
               type="button"
