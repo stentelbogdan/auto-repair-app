@@ -133,11 +133,11 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   </div>
                 )}
 
-                <div className="mt-5 grid gap-3 text-sm text-white/65">
+                <div className="mt-3 grid gap-2 text-sm text-white/75">
                   {(workshop.workshop_address || workshop.workshop_city) && (
                     <div className="flex items-start gap-2">
                       <MapPin
-                        size={16}
+                        size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
                       />
                       <span>
@@ -151,7 +151,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   {workshop.workshop_phone && (
                     <div className="flex items-start gap-2">
                       <Phone
-                        size={16}
+                        size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
                       />
                       <span>{workshop.workshop_phone}</span>
@@ -161,7 +161,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   {workshop.workshop_hours && (
                     <div className="flex items-start gap-2">
                       <Clock
-                        size={16}
+                        size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
                       />
                       <div className="grid gap-1">
