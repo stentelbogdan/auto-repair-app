@@ -76,7 +76,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
           <div className="h-44 bg-gradient-to-br from-orange-500/20 to-black" />
 
           <div className="relative px-6 pb-8">
-            <div className="-mt-16 flex flex-col gap-5 md:flex-row md:items-end">
+            <div className="-mt-16 flex flex-col gap-5 md:flex-row">
               <div className="h-32 w-32 overflow-hidden rounded-[2rem] border-4 border-black bg-white">
                 {workshop.workshop_logo_url ? (
                   <img
@@ -158,40 +158,64 @@ export default async function WorkshopProfilePage({ params }: Props) {
                     </div>
                   )}
 
-                  {workshop.workshop_hours && (
-                    <div className="mt-2 max-w-sm rounded-3xl border border-orange-500/20 bg-black/40 p-4 shadow-[0_0_30px_rgba(249,115,22,0.08)]">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Clock size={18} className="text-orange-300" />
-                        <span className="font-semibold text-white">
-                          Program
+                  <div className="mt-5 space-y-4 text-white/80">
+                    {(workshop.workshop_address || workshop.workshop_city) && (
+                      <div className="flex items-start gap-3">
+                        <MapPin
+                          size={18}
+                          className="mt-0.5 shrink-0 text-orange-300"
+                        />
+                        <span>
+                          {[workshop.workshop_address, workshop.workshop_city]
+                            .filter(Boolean)
+                            .join(", ")}
                         </span>
                       </div>
+                    )}
 
-                      <div className="space-y-2 text-sm text-white/75">
-                        {String(workshop.workshop_hours)
-                          .split("·")
-                          .map((line, index) => {
-                            const separatorIndex = line.indexOf(":");
-                            const day = line.slice(0, separatorIndex);
-                            const hours = line.slice(separatorIndex + 1);
-
-                            return (
-                              <div
-                                key={index}
-                                className="flex items-center justify-between gap-6 border-b border-white/5 pb-2 last:border-b-0 last:pb-0"
-                              >
-                                <span className="font-medium text-white/55">
-                                  {day.trim()}
-                                </span>
-                                <span className="font-semibold text-white">
-                                  {hours.trim()}
-                                </span>
-                              </div>
-                            );
-                          })}
+                    {workshop.workshop_phone && (
+                      <div className="flex items-start gap-3">
+                        <Phone
+                          size={18}
+                          className="mt-0.5 shrink-0 text-orange-300"
+                        />
+                        <span>{workshop.workshop_phone}</span>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {workshop.workshop_hours && (
+                      <div className="flex items-start gap-3">
+                        <Clock
+                          size={18}
+                          className="mt-0.5 shrink-0 text-orange-300"
+                        />
+
+                        <div>
+                          <div className="mb-2 font-semibold text-white">
+                            Program
+                          </div>
+
+                          {String(workshop.workshop_hours)
+                            .split("·")
+                            .map((line, index) => {
+                              const separatorIndex = line.indexOf(":");
+                              const day = line.slice(0, separatorIndex);
+                              const hours = line.slice(separatorIndex + 1);
+
+                              return (
+                                <div
+                                  key={index}
+                                  className="flex min-w-[220px] justify-between gap-8 text-sm"
+                                >
+                                  <span>{day.trim()}</span>
+                                  <span>{hours.trim()}</span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
