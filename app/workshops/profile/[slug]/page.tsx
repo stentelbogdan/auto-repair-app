@@ -76,8 +76,8 @@ export default async function WorkshopProfilePage({ params }: Props) {
           <div className="h-44 bg-gradient-to-br from-orange-500/20 to-black" />
 
           <div className="relative px-6 pb-8">
-            <div className="-mt-16 flex flex-col gap-5 md:flex-row">
-              <div className="h-32 w-32 overflow-hidden rounded-[2rem] border-4 border-black bg-white">
+            <div className="-mt-12 flex flex-col gap-6 md:flex-row md:items-end">
+              <div className="h-24 w-24 overflow-hidden rounded-[2rem] border-4 border-black bg-white">
                 {workshop.workshop_logo_url ? (
                   <img
                     src={workshop.workshop_logo_url}
@@ -135,7 +135,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
                 <div className="mt-6 space-y-5 text-white/80">
                   {(workshop.workshop_address || workshop.workshop_city) && (
-                    <div className="flex items-start gap-3 text-base">
+                    <div className="flex items-start gap-3 text-lg">
                       <MapPin
                         size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
@@ -149,7 +149,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   )}
 
                   {workshop.workshop_phone && (
-                    <div className="flex items-start gap-3 text-base">
+                    <div className="flex items-start gap-3 text-lg">
                       <Phone
                         size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
