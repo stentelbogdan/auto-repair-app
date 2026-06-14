@@ -61,6 +61,11 @@ export default function AccountPage() {
   const [workshopAddress, setWorkshopAddress] = useState("");
   const [workshopCity, setWorkshopCity] = useState("");
   const [workshopHours, setWorkshopHours] = useState("");
+  const [weekOpen, setWeekOpen] = useState("08:00");
+  const [weekClose, setWeekClose] = useState("17:00");
+  const [saturdayOpen, setSaturdayOpen] = useState(false);
+  const [satOpen, setSatOpen] = useState("09:00");
+  const [satClose, setSatClose] = useState("13:00");
   const [workshopDescription, setWorkshopDescription] = useState("");
   const [workshopLogoUrl, setWorkshopLogoUrl] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -71,6 +76,28 @@ export default function AccountPage() {
   );
 
   useEffect(() => {
+    const parseWorkshopHours = (value: string | null | undefined) => {
+      if (!value) return;
+
+      const weekMatch = value.match(
+        /Luni–Vineri:\s*(\d{2}:\d{2})–(\d{2}:\d{2})/,
+      );
+      const satMatch = value.match(/Sâmbătă:\s*(\d{2}:\d{2})–(\d{2}:\d{2})/);
+
+      if (weekMatch) {
+        setWeekOpen(weekMatch[1]);
+        setWeekClose(weekMatch[2]);
+      }
+
+      if (satMatch) {
+        setSaturdayOpen(true);
+        setSatOpen(satMatch[1]);
+        setSatClose(satMatch[2]);
+      } else if (value.includes("Sâmbătă: Închis")) {
+        setSaturdayOpen(false);
+      }
+    };
+
     const loadAccount = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
@@ -102,6 +129,7 @@ export default function AccountPage() {
         setWorkshopAddress(profile?.workshop_address || "");
         setWorkshopCity(profile?.workshop_city || "");
         setWorkshopHours(profile?.workshop_hours || "");
+        parseWorkshopHours(profile?.workshop_hours);
         setWorkshopDescription(profile?.workshop_description || "");
         setWorkshopLogoUrl(profile?.workshop_logo_url || "");
 
@@ -308,6 +336,20 @@ export default function AccountPage() {
       .replace(/^-+|-+$/g, "");
   };
 
+  const buildWorkshopHours = () => {
+    const parts = [`Luni–Vineri: ${weekOpen}–${weekClose}`];
+
+    if (saturdayOpen) {
+      parts.push(`Sâmbătă: ${satOpen}–${satClose}`);
+    } else {
+      parts.push("Sâmbătă: Închis");
+    }
+
+    parts.push("Duminică: Închis");
+
+    return parts.join(" · ");
+  };
+
   const handleSave = async () => {
     setSaving(true);
 
@@ -323,6 +365,8 @@ export default function AccountPage() {
 
       const workshopSlug = workshopName ? createSlug(workshopName) : null;
 
+      const formattedWorkshopHours = buildWorkshopHours();
+
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -331,7 +375,7 @@ export default function AccountPage() {
           workshop_phone: workshopPhone,
           workshop_address: workshopAddress,
           workshop_city: workshopCity,
-          workshop_hours: workshopHours,
+          workshop_hours: formattedWorkshopHours,
           workshop_description: workshopDescription,
           workshop_logo_url: workshopLogoUrl,
           workshop_gallery_urls: workshopGalleryUrls,
@@ -348,7 +392,7 @@ export default function AccountPage() {
 
       if (accountMode === "workshop" && safeRoles.includes("workshop")) {
         localStorage.setItem("activeRole", "workshop");
-        router.push("/workshops/dashboard");
+        router.refresh();
         return;
       }
 
@@ -549,12 +593,17 @@ export default function AccountPage() {
                 placeholder="Kleve"
               />
 
-              <Field
-                label="Opening hours"
-                value={workshopHours}
-                onChange={setWorkshopHours}
-                placeholder="Mon - Fri, 08:00 - 17:00"
-                icon={<Clock size={17} />}
+              <OpeningHoursPicker
+                weekOpen={weekOpen}
+                setWeekOpen={setWeekOpen}
+                weekClose={weekClose}
+                setWeekClose={setWeekClose}
+                saturdayOpen={saturdayOpen}
+                setSaturdayOpen={setSaturdayOpen}
+                satOpen={satOpen}
+                setSatOpen={setSatOpen}
+                satClose={satClose}
+                setSatClose={setSatClose}
               />
 
               <div>
@@ -716,6 +765,97 @@ export default function AccountPage() {
         }}
       />
     </main>
+  );
+}
+
+function OpeningHoursPicker({
+  weekOpen,
+  setWeekOpen,
+  weekClose,
+  setWeekClose,
+  saturdayOpen,
+  setSaturdayOpen,
+  satOpen,
+  setSatOpen,
+  satClose,
+  setSatClose,
+}: {
+  weekOpen: string;
+  setWeekOpen: (value: string) => void;
+  weekClose: string;
+  setWeekClose: (value: string) => void;
+  saturdayOpen: boolean;
+  setSaturdayOpen: (value: boolean) => void;
+  satOpen: string;
+  setSatOpen: (value: string) => void;
+  satClose: string;
+  setSatClose: (value: string) => void;
+}) {
+  return (
+    <div className="md:col-span-2 rounded-2xl border border-white/10 bg-black/25 p-4">
+      <label className="mb-3 flex items-center gap-2 text-sm font-medium text-white/70">
+        <Clock size={17} />
+        Program service
+      </label>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <p className="mb-3 text-sm font-semibold text-white">Luni–Vineri</p>
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="time"
+              value={weekOpen}
+              onChange={(e) => setWeekOpen(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none focus:border-orange-400/60"
+            />
+
+            <input
+              type="time"
+              value={weekClose}
+              onChange={(e) => setWeekClose(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none focus:border-orange-400/60"
+            />
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <label className="mb-3 flex items-center justify-between gap-3 text-sm font-semibold text-white">
+            <span>Sâmbătă deschis</span>
+            <input
+              type="checkbox"
+              checked={saturdayOpen}
+              onChange={(e) => setSaturdayOpen(e.target.checked)}
+              className="h-5 w-5"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="time"
+              value={satOpen}
+              onChange={(e) => setSatOpen(e.target.value)}
+              disabled={!saturdayOpen}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none disabled:opacity-35 focus:border-orange-400/60"
+            />
+
+            <input
+              type="time"
+              value={satClose}
+              onChange={(e) => setSatClose(e.target.value)}
+              disabled={!saturdayOpen}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-white outline-none disabled:opacity-35 focus:border-orange-400/60"
+            />
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-3 text-xs text-white/40">
+        Se va salva automat ca: Luni–Vineri: {weekOpen}–{weekClose} ·{" "}
+        {saturdayOpen ? `Sâmbătă: ${satOpen}–${satClose}` : "Sâmbătă: Închis"} ·
+        Duminică: Închis
+      </p>
+    </div>
   );
 }
 
