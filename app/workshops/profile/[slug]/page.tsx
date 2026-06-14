@@ -133,9 +133,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   </div>
                 )}
 
-                <div className="mt-4 space-y-3">
+                <div className="mt-5 space-y-4 text-white/80">
                   {(workshop.workshop_address || workshop.workshop_city) && (
-                    <div className="flex items-start gap-3 text-base text-white/80">
+                    <div className="flex items-start gap-3">
                       <MapPin
                         size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
@@ -149,7 +149,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   )}
 
                   {workshop.workshop_phone && (
-                    <div className="flex items-start gap-3 text-base text-white/80">
+                    <div className="flex items-start gap-3">
                       <Phone
                         size={18}
                         className="mt-0.5 shrink-0 text-orange-300"
@@ -158,64 +158,38 @@ export default async function WorkshopProfilePage({ params }: Props) {
                     </div>
                   )}
 
-                  <div className="mt-5 space-y-4 text-white/80">
-                    {(workshop.workshop_address || workshop.workshop_city) && (
-                      <div className="flex items-start gap-3">
-                        <MapPin
-                          size={18}
-                          className="mt-0.5 shrink-0 text-orange-300"
-                        />
-                        <span>
-                          {[workshop.workshop_address, workshop.workshop_city]
-                            .filter(Boolean)
-                            .join(", ")}
-                        </span>
-                      </div>
-                    )}
+                  {workshop.workshop_hours && (
+                    <div className="flex items-start gap-3">
+                      <Clock
+                        size={18}
+                        className="mt-0.5 shrink-0 text-orange-300"
+                      />
 
-                    {workshop.workshop_phone && (
-                      <div className="flex items-start gap-3">
-                        <Phone
-                          size={18}
-                          className="mt-0.5 shrink-0 text-orange-300"
-                        />
-                        <span>{workshop.workshop_phone}</span>
-                      </div>
-                    )}
-
-                    {workshop.workshop_hours && (
-                      <div className="flex items-start gap-3">
-                        <Clock
-                          size={18}
-                          className="mt-0.5 shrink-0 text-orange-300"
-                        />
-
-                        <div>
-                          <div className="mb-2 font-semibold text-white">
-                            Program
-                          </div>
-
-                          {String(workshop.workshop_hours)
-                            .split("·")
-                            .map((line, index) => {
-                              const separatorIndex = line.indexOf(":");
-                              const day = line.slice(0, separatorIndex);
-                              const hours = line.slice(separatorIndex + 1);
-
-                              return (
-                                <div
-                                  key={index}
-                                  className="flex min-w-[220px] justify-between gap-8 text-sm"
-                                >
-                                  <span>{day.trim()}</span>
-                                  <span>{hours.trim()}</span>
-                                </div>
-                              );
-                            })}
+                      <div>
+                        <div className="mb-2 font-semibold text-white">
+                          Program
                         </div>
+
+                        {String(workshop.workshop_hours)
+                          .split("·")
+                          .map((line, index) => {
+                            const separatorIndex = line.indexOf(":");
+                            const day = line.slice(0, separatorIndex);
+                            const hours = line.slice(separatorIndex + 1);
+
+                            return (
+                              <div
+                                key={index}
+                                className="flex min-w-[220px] justify-between gap-8 text-sm"
+                              >
+                                <span>{day.trim()}</span>
+                                <span>{hours.trim()}</span>
+                              </div>
+                            );
+                          })}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
