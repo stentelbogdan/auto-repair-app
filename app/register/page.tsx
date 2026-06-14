@@ -94,7 +94,9 @@ export default function RegisterPage() {
       localStorage.setItem("activeRole", role);
 
       if (!data.session) {
-        alert("Cont creat cu succes. Verifică emailul dacă este necesar, apoi autentifică-te.");
+        alert(
+          "Cont creat cu succes. Verifică emailul dacă este necesar, apoi autentifică-te.",
+        );
         router.push("/login");
         return;
       }
@@ -110,6 +112,22 @@ export default function RegisterPage() {
       alert("A apărut o problemă la crearea contului.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    localStorage.setItem("pendingRegisterRole", role);
+    localStorage.setItem("activeRole", role);
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      alert(error.message);
     }
   };
 
@@ -155,7 +173,9 @@ export default function RegisterPage() {
 
                 <div className="flex items-center gap-3 py-2">
                   <div className="h-px flex-1 bg-black/10" />
-                  <span className="text-sm font-semibold text-black/40">SAU</span>
+                  <span className="text-sm font-semibold text-black/40">
+                    SAU
+                  </span>
                   <div className="h-px flex-1 bg-black/10" />
                 </div>
 
@@ -204,7 +224,9 @@ export default function RegisterPage() {
               >
                 <input
                   type="text"
-                  placeholder={role === "workshop" ? "Nume service" : "Nume afișare"}
+                  placeholder={
+                    role === "workshop" ? "Nume service" : "Nume afișare"
+                  }
                   className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-4 outline-none focus:border-orange-400"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -241,10 +263,32 @@ export default function RegisterPage() {
                     onChange={(e) => setGdprAccepted(e.target.checked)}
                     className="mt-1 h-5 w-5"
                   />
-                  <span>
-                    Accept Termenii și Condițiile și Politica GDPR.
-                  </span>
+                  <span>Accept Termenii și Condițiile și Politica GDPR.</span>
                 </label>
+
+                <div className="flex items-center gap-3 py-2">
+                  <div className="h-px flex-1 bg-black/10" />
+                  <span className="text-xs text-black/40">sau</span>
+                  <div className="h-px flex-1 bg-black/10" />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleRegister}
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-black/10 py-3.5 font-semibold text-black transition active:scale-[0.99]"
+                >
+                  <span className="text-xl font-black">G</span>
+                  Continuă cu Google
+                </button>
+
+                <button
+                  type="button"
+                  disabled
+                  className="flex w-full items-center justify-center gap-3 rounded-2xl border border-black/10 py-3.5 font-semibold text-black/35"
+                >
+                  <span className="text-xl"></span>
+                  Continuă cu Apple
+                </button>
 
                 <button
                   type="submit"

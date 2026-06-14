@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 
+type UserRole = "customer" | "workshop";
+
 type ProfileRow = {
   role: string[] | null;
 };
@@ -26,6 +28,10 @@ export default function AuthCallbackPage() {
 
       const user = session.user;
 
+      const pendingRole = localStorage.getItem(
+        "pendingRegisterRole",
+      ) as UserRole | null;
+
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("role")
@@ -41,21 +47,39 @@ export default function AuthCallbackPage() {
       let roles = Array.isArray(profile?.role) ? profile.role : [];
 
       if (roles.length === 0) {
+        const selectedRole: UserRole = pendingRole || "customer";
+
         const fullName =
           user.user_metadata?.full_name ||
           user.user_metadata?.name ||
           user.email ||
           "Client";
 
-        const { error: insertError } = await supabase.from("profiles").upsert({
-          id: user.id,
-          email: user.email,
-          role: ["customer"],
-          full_name: fullName,
-          display_name: fullName,
-          gdpr_accepted: true,
-          gdpr_accepted_at: new Date().toISOString(),
-        });
+        const profilePayload =
+          selectedRole === "workshop"
+            ? {
+                id: user.id,
+                email: user.email,
+                role: ["workshop"],
+                full_name: fullName,
+                display_name: fullName,
+                workshop_name: fullName,
+                gdpr_accepted: true,
+                gdpr_accepted_at: new Date().toISOString(),
+              }
+            : {
+                id: user.id,
+                email: user.email,
+                role: ["customer"],
+                full_name: fullName,
+                display_name: fullName,
+                gdpr_accepted: true,
+                gdpr_accepted_at: new Date().toISOString(),
+              };
+
+        const { error: insertError } = await supabase
+          .from("profiles")
+          .upsert(profilePayload);
 
         if (insertError) {
           alert(insertError.message);
@@ -63,17 +87,26 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        roles = ["customer"];
+        roles = [selectedRole];
       }
+
+      localStorage.removeItem("pendingRegisterRole");
 
       if (roles.includes("admin")) {
         router.push("/admin");
         return;
       }
 
-      const savedRole = localStorage.getItem("activeRole");
+      const savedRole = localStorage.getItem("activeRole") as UserRole | null;
 
       if (savedRole === "workshop" && roles.includes("workshop")) {
+        setActiveRole("workshop");
+        localStorage.setItem("activeRole", "workshop");
+        router.push("/workshops/dashboard");
+        return;
+      }
+
+      if (roles.includes("workshop") && !roles.includes("customer")) {
         setActiveRole("workshop");
         localStorage.setItem("activeRole", "workshop");
         router.push("/workshops/dashboard");
