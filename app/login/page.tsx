@@ -13,11 +13,10 @@ type ProfileRow = {
 
 export default function LoginPage() {
   const router = useRouter();
-
   const { setActiveRole } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("customer");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -65,6 +64,11 @@ export default function LoginPage() {
       return;
     }
 
+    if (selectedRole === "customer" && !roles.includes("customer")) {
+      alert("Acest cont nu are acces de client.");
+      return;
+    }
+
     setActiveRole(selectedRole);
     localStorage.setItem("activeRole", selectedRole);
 
@@ -74,68 +78,6 @@ export default function LoginPage() {
     }
 
     router.push("/customer/dashboard");
-  };
-
-  const handleSignUp = async () => {
-    if (!email || !password) {
-      alert("Te rugăm să introduci emailul și parola.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({ email, password });
-
-      if (error) {
-        alert(error.message);
-        return;
-      }
-
-      const userId = data.user?.id;
-
-      if (userId) {
-        const { data: existingProfile, error: fetchProfileError } =
-          await supabase
-            .from("profiles")
-            .select("role")
-            .eq("id", userId)
-            .maybeSingle<ProfileRow>();
-
-        if (fetchProfileError) {
-          alert(fetchProfileError.message);
-          return;
-        }
-
-        const existingRoles = Array.isArray(existingProfile?.role)
-          ? existingProfile.role
-          : [];
-
-        const mergedRoles = Array.from(new Set([...existingRoles, role]));
-
-        const { error: profileError } = await supabase.from("profiles").upsert({
-          id: userId,
-          email,
-          role: mergedRoles,
-        });
-
-        if (profileError) {
-          alert(profileError.message);
-          return;
-        }
-
-        if (data.session) {
-          goToDashboard(role, mergedRoles);
-        } else {
-          alert("Cont creat cu succes. Te poți autentifica acum.");
-        }
-      }
-    } catch (err) {
-      console.error("Sign up failed:", err);
-      alert("A apărut o problemă la crearea contului.");
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleLogin = async () => {
@@ -169,7 +111,30 @@ export default function LoginPage() {
       }
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
-      goToDashboard(role, roles);
+
+      const savedRole = localStorage.getItem("activeRole") as UserRole | null;
+
+      if (savedRole === "workshop" && roles.includes("workshop")) {
+        goToDashboard("workshop", roles);
+        return;
+      }
+
+      if (savedRole === "customer" && roles.includes("customer")) {
+        goToDashboard("customer", roles);
+        return;
+      }
+
+      if (roles.includes("workshop") && !roles.includes("customer")) {
+        goToDashboard("workshop", roles);
+        return;
+      }
+
+      if (roles.includes("customer")) {
+        goToDashboard("customer", roles);
+        return;
+      }
+
+      alert("Contul nu are un rol valid.");
     } catch (err) {
       console.error("Login failed:", err);
       alert("A apărut o problemă la autentificare.");
@@ -195,23 +160,38 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      alert(error.message);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#101010] px-4 py-6 text-white">
       <div className="mx-auto flex min-h-[85vh] max-w-md items-center justify-center">
-        <div className="w-full rounded-[28px] bg-white p-6 text-black shadow-2xl">
-          <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white">
-              AR
+        <div className="w-full rounded-[32px] bg-white p-6 text-black shadow-2xl">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-black text-xl shadow-lg">
+              🚗
             </div>
 
-            <p className="text-xs uppercase tracking-[0.25em] text-orange-500">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-orange-500">
               AutoRepair Marketplace
             </p>
 
-            <h1 className="mt-3 text-2xl font-bold">Autentificare</h1>
+            <h1 className="mt-4 text-3xl font-black tracking-tight">
+              Autentificare
+            </h1>
 
-            <p className="mt-2 text-sm text-black/55">
-              Intră în cont sau creează un cont nou.
+            <p className="mt-2 text-sm leading-6 text-black/55">
+              Intră în contul tău pentru a continua.
             </p>
           </div>
 
@@ -223,7 +203,7 @@ export default function LoginPage() {
             className="space-y-4"
           >
             <div>
-              <label className="mb-2 block text-sm font-medium text-black/70">
+              <label className="mb-2 block text-sm font-semibold text-black/70">
                 Email
               </label>
               <input
@@ -232,14 +212,14 @@ export default function LoginPage() {
                 autoComplete="username"
                 placeholder="email@exemplu.ro"
                 required
-                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-4 text-base outline-none transition focus:border-orange-400 focus:bg-white"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-black/70">
+              <label className="mb-2 block text-sm font-semibold text-black/70">
                 Parolă
               </label>
               <input
@@ -248,50 +228,60 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 placeholder="Introdu parola"
                 required
-                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-4 text-base outline-none transition focus:border-orange-400 focus:bg-white"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-black/70">
-                Tip cont
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
-              >
-                <option value="customer">Client</option>
-                <option value="workshop">Service auto</option>
-              </select>
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-3 w-full rounded-2xl bg-black py-4 font-bold text-white shadow-lg transition active:scale-[0.99] disabled:opacity-60"
+            >
+              {loading ? "Te rugăm așteaptă..." : "Intră în cont"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleResetPassword}
+              className="w-full pt-1 text-center text-sm font-medium text-black/55 underline underline-offset-4"
+            >
+              Ai uitat parola?
+            </button>
+
+            <div className="flex items-center gap-3 py-3">
+              <div className="h-px flex-1 bg-black/10" />
+              <span className="text-xs text-black/40">sau</span>
+              <div className="h-px flex-1 bg-black/10" />
             </div>
 
-            <div className="mt-6 flex flex-col gap-3">
-              <button
-                type="submit"
-                disabled={loading}
-                className="rounded-2xl bg-black py-4 font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
-              >
-                {loading ? "Te rugăm așteaptă..." : "Intră în cont"}
-              </button>
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-black/10 py-3.5 font-semibold text-black transition active:scale-[0.99]"
+            >
+              <span className="text-xl font-black">G</span>
+              Continuă cu Google
+            </button>
 
+            <button
+              type="button"
+              disabled
+              className="flex w-full items-center justify-center gap-3 rounded-2xl border border-black/10 py-3.5 font-semibold text-black/35"
+            >
+              <span className="text-xl"></span>
+              Continuă cu Apple
+            </button>
+
+            <div className="pt-5 text-center text-sm text-black/55">
+              Nu ai un cont?{" "}
               <button
                 type="button"
-                onClick={handleSignUp}
-                disabled={loading}
-                className="rounded-2xl border border-black/10 py-4 font-semibold text-black transition active:scale-[0.99] disabled:opacity-60"
+                onClick={() => router.push("/register")}
+                className="font-bold text-orange-500"
               >
-                {loading ? "Te rugăm așteaptă..." : "Creează cont"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleResetPassword}
-                className="text-sm text-blue-500 underline"
-              >
-                Ai uitat parola?
+                Creează cont
               </button>
             </div>
           </form>
