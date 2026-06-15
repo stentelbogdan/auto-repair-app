@@ -77,7 +77,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
           <div className="relative px-6 pb-8">
             <div className="-mt-10 flex flex-col gap-6 md:-mt-28 md:grid md:grid-cols-[160px_1fr] md:items-start">
-              <div className="h-28 w-28 md:h-36 md:w-36 overflow-hidden rounded-[2rem] border-4 border-black bg-white">
+              <div className="h-40 w-40 md:h-36 md:w-36 overflow-hidden rounded-[2rem] border-4 border-black bg-white">
                 {workshop.workshop_logo_url ? (
                   <img
                     src={workshop.workshop_logo_url}
