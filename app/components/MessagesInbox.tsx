@@ -8,7 +8,7 @@ type Role = "customer" | "workshop";
 
 type Conversation = {
   requestId: string;
-  offerId: string;
+  offerId: string | null;
   title: string;
   city: string;
   status: string;
@@ -56,11 +56,6 @@ export default function MessagesInbox({ role }: { role: Role }) {
       if (offersError) throw offersError;
 
       const offers = offersData || [];
-
-      if (offers.length === 0) {
-        setConversations([]);
-        return;
-      }
 
       const requestIds = offers.map((offer: any) => offer.request_id);
 
@@ -134,6 +129,68 @@ export default function MessagesInbox({ role }: { role: Role }) {
         });
       }
 
+      let directRequestsQuery = supabase
+        .from("repair_requests")
+        .select("*")
+        .eq("request_type", "direct_message");
+
+      if (role === "workshop") {
+        directRequestsQuery = directRequestsQuery.eq(
+          "target_workshop_id",
+          userId,
+        );
+      } else {
+        directRequestsQuery = directRequestsQuery.eq("user_id", userId);
+      }
+
+      const { data: directRequestsData } = await directRequestsQuery;
+
+      for (const request of directRequestsData || []) {
+        const { data: messagesData } = await supabase
+          .from("messages")
+          .select("*")
+          .eq("request_id", request.id)
+          .is("offer_id", null)
+          .order("created_at", { ascending: false });
+
+        const messages = messagesData || [];
+        const lastMessage = messages[0];
+        const lastReadAt = readMap.get(request.id);
+
+        const unreadCount = messages.filter((message: any) => {
+          if (message.sender_id === userId) return false;
+          if (message.sender_role === "system") return false;
+          if (!lastReadAt) return true;
+
+          return new Date(message.created_at) > new Date(lastReadAt);
+        }).length;
+
+        let workshopName = "Service";
+
+        if (request.target_workshop_id) {
+          const { data: workshopProfile } = await supabase
+            .from("profiles")
+            .select("workshop_name")
+            .eq("id", request.target_workshop_id)
+            .single();
+
+          workshopName = workshopProfile?.workshop_name || "Service";
+        }
+
+        mapped.push({
+          requestId: request.id,
+          offerId: null,
+          title: "Mesaj direct Service",
+          city: "Conversație directă",
+          status: request.status || "open",
+          image: "",
+          workshopName,
+          lastMessage: lastMessage?.message || "Conversație începută",
+          lastMessageTime: lastMessage?.created_at || request.created_at,
+          unreadCount,
+        });
+      }
+
       mapped.sort(
         (a, b) =>
           new Date(b.lastMessageTime).getTime() -
@@ -201,7 +258,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 onClick={() => {
                   localStorage.setItem("activeRole", role);
                   router.push(
-                    `/chat/${conversation.requestId}?offerId=${conversation.offerId}&role=${role}`,
+                    conversation.offerId
+                      ? `/chat/${conversation.requestId}?offerId=${conversation.offerId}&role=${role}`
+                      : `/chat/${conversation.requestId}?role=${role}`,
                   );
                 }}
                 className="flex w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.04] p-4 text-left transition active:scale-[0.99] hover:bg-white/[0.07]"

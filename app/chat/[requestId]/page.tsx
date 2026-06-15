@@ -39,6 +39,8 @@ type RequestData = {
   city: string | null;
   status: string | null;
   images: RepairImage[] | null;
+  request_type: string | null;
+  target_workshop_id: string | null;
 };
 
 const quickMessages = [
@@ -210,12 +212,14 @@ export default function ChatPage() {
       .from("repair_requests")
       .select(
         `
-        car_brand,
-        car_model,
-        city,
-        status,
-        images
-      `,
+  car_brand,
+  car_model,
+  city,
+  status,
+  images,
+  request_type,
+  target_workshop_id
+`,
       )
       .eq("id", requestId)
       .single<RequestData>();
@@ -226,6 +230,27 @@ export default function ChatPage() {
   };
 
   const loadWorkshopProfile = async () => {
+    const { data: request } = await supabase
+      .from("repair_requests")
+      .select("target_workshop_id")
+      .eq("id", requestId)
+      .single();
+
+    if (request?.target_workshop_id) {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("workshop_name, workshop_slug")
+        .eq("id", request.target_workshop_id)
+        .single();
+
+      setWorkshopProfile({
+        workshop_name: profileData?.workshop_name || "Service",
+        workshop_slug: profileData?.workshop_slug || null,
+      });
+
+      return;
+    }
+
     let offerQuery = supabase
       .from("repair_offers")
       .select("workshop_user_id, workshop_name")
