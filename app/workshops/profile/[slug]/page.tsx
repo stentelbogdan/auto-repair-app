@@ -206,7 +206,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
             {workshop.workshop_description && (
               <div className="mt-8 rounded-[2rem] border border-white/10 bg-black/30 p-6">
-                <h2 className="text-xl font-bold">About the workshop</h2>
+                <h2 className="text-xl font-bold">Descriere service</h2>
                 <p className="mt-4 whitespace-pre-wrap leading-7 text-white/70">
                   {workshop.workshop_description}
                 </p>
@@ -284,9 +284,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
             {gallery.length > 0 && (
               <div className="mt-8">
                 <div className="mb-5">
-                  <h2 className="text-2xl font-black">Workshop gallery</h2>
+                  <h2 className="text-2xl font-black">Portofoliu lucrări</h2>
                   <p className="mt-1 text-white/50">
-                    Recent work and workshop photos
+                    Exemple de lucrări și fotografii din service
                   </p>
                 </div>
 
