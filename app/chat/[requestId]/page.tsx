@@ -57,6 +57,7 @@ export default function ChatPage() {
   const roleParam = searchParams.get("role");
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [newMessage, setNewMessage] = useState("");
   const [userId, setUserId] = useState("");
   const [requestData, setRequestData] = useState<RequestData | null>(null);
@@ -72,6 +73,7 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const systemMessageCreatedRef = useRef(false);
 
   const [selectedChatGallery, setSelectedChatGallery] = useState<{
     images: ChatImage[];
@@ -165,7 +167,7 @@ export default function ChatPage() {
 
       supabase.removeChannel(channel);
     };
-  }, [requestId, userId, roleParam]);
+  }, [requestId, roleParam]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -253,6 +255,8 @@ export default function ChatPage() {
   };
 
   const loadMessages = async () => {
+    if (!requestId) return;
+
     let query = supabase
       .from("messages")
       .select("*")
@@ -267,10 +271,14 @@ export default function ChatPage() {
 
     const { data, error } = await query;
 
-    if (error) return;
+    if (error) {
+      setMessagesLoading(false);
+      return;
+    }
 
     if (data && data.length > 0) {
       setMessages(data);
+      setMessagesLoading(false);
       return;
     }
 
@@ -278,15 +286,19 @@ export default function ChatPage() {
 
     if (!authData.user) return;
 
+    if (systemMessageCreatedRef.current) return;
+    systemMessageCreatedRef.current = true;
+
     await supabase.from("messages").insert({
       request_id: requestId,
       offer_id: offerId,
       sender_id: authData.user.id,
       sender_role: "system",
-      message:
-        "Conversația a fost începută. Puteți discuta aici despre această lucrare.",
+      message: "Conversația a fost începută din profilul service-ului.",
       images: [],
     });
+
+    setMessagesLoading(false);
   };
 
   const markConversationAsRead = async () => {
@@ -533,13 +545,11 @@ export default function ChatPage() {
               </button>
             ) : (
               <p className="text-sm text-white/50">
-                {requestData?.city || "-"} • {formatStatus(requestData?.status)}
+                {requestData?.car_brand === "Mesaj direct"
+                  ? "Conversație directă"
+                  : `${requestData?.city || "-"} • ${formatStatus(requestData?.status)}`}
               </p>
             )}
-
-            <p className="text-xs text-white/35">
-              {requestData?.city || "-"} • {formatStatus(requestData?.status)}
-            </p>
           </div>
         </div>
       </div>
@@ -549,108 +559,109 @@ export default function ChatPage() {
         className="min-h-0 flex-1 overflow-y-auto px-4 py-6 pb-12 md:pb-32"
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-3">
-          {messages.length === 0 && (
-            <div className="mx-auto mt-10 max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55">
-              Conversația a fost creată. Scrie primul mesaj despre această
-              lucrare.
+          {messagesLoading ? (
+            <div className="mx-auto mt-10 rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm text-white/45">
+              Se încarcă conversația...
             </div>
-          )}
+          ) : (
+            <>
+              {messages.map((message) => {
+                const isSystem = message.sender_role === "system";
+                const isMine = message.sender_id === userId && !isSystem;
+                const isLastOwnMessage = message.id === lastOwnMessageId;
+                const images = message.images || [];
 
-          {messages.map((message) => {
-            const isSystem = message.sender_role === "system";
-            const isMine = message.sender_id === userId && !isSystem;
-            const isLastOwnMessage = message.id === lastOwnMessageId;
-            const images = message.images || [];
-
-            if (isSystem) {
-              return (
-                <div
-                  key={message.id}
-                  className="mx-auto max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55"
-                >
-                  {message.message}
-                </div>
-              );
-            }
-
-            return (
-              <div
-                key={message.id}
-                className={`animate-[messageIn_0.25s_ease] max-w-[80%] ${
-                  isMine ? "ml-auto" : ""
-                }`}
-              >
-                <div
-                  className={`overflow-hidden rounded-3xl ${
-                    images.length > 0 && !message.message
-                      ? "bg-transparent"
-                      : isMine
-                        ? "bg-white text-black"
-                        : "bg-white/10 text-white"
-                  }`}
-                >
-                  {images.length > 0 && (
+                if (isSystem) {
+                  return (
                     <div
-                      className={`grid gap-1 p-1 ${
-                        images.length === 1 ? "grid-cols-1" : "grid-cols-2"
-                      } ${isMine ? "justify-items-end" : "justify-items-start"}`}
+                      key={message.id}
+                      className="mx-auto max-w-sm rounded-3xl border border-white/10 bg-white/[0.04] px-5 py-4 text-center text-sm leading-6 text-white/55"
                     >
-                      {images.map((image, index) => (
-                        <button
-                          key={`${image.url}-${index}`}
-                          type="button"
-                          onClick={() => {
-                            const allImages = getAllChatImages();
-
-                            const imageIndex = allImages.findIndex(
-                              (item) => item.url === image.url,
-                            );
-
-                            setSelectedChatGallery({
-                              images: allImages,
-                              index: imageIndex >= 0 ? imageIndex : 0,
-                            });
-                          }}
-                          className="block overflow-hidden rounded-2xl bg-black/20"
-                        >
-                          <img
-                            src={image.url}
-                            alt={image.name || "Poză chat"}
-                            className="h-40 w-64 max-w-full object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {message.message && (
-                    <div className="px-4 py-3 text-sm leading-6">
                       {message.message}
                     </div>
-                  )}
+                  );
+                }
+
+                return (
+                  <div
+                    key={message.id}
+                    className={`animate-[messageIn_0.25s_ease] max-w-[80%] ${
+                      isMine ? "ml-auto" : ""
+                    }`}
+                  >
+                    <div
+                      className={`overflow-hidden rounded-3xl ${
+                        images.length > 0 && !message.message
+                          ? "bg-transparent"
+                          : isMine
+                            ? "bg-white text-black"
+                            : "bg-white/10 text-white"
+                      }`}
+                    >
+                      {images.length > 0 && (
+                        <div
+                          className={`grid gap-1 p-1 ${
+                            images.length === 1 ? "grid-cols-1" : "grid-cols-2"
+                          } ${isMine ? "justify-items-end" : "justify-items-start"}`}
+                        >
+                          {images.map((image, index) => (
+                            <button
+                              key={`${image.url}-${index}`}
+                              type="button"
+                              onClick={() => {
+                                const allImages = getAllChatImages();
+                                const imageIndex = allImages.findIndex(
+                                  (item) => item.url === image.url,
+                                );
+
+                                setSelectedChatGallery({
+                                  images: allImages,
+                                  index: imageIndex >= 0 ? imageIndex : 0,
+                                });
+                              }}
+                              className="block overflow-hidden rounded-2xl bg-black/20"
+                            >
+                              <img
+                                src={image.url}
+                                alt={image.name || "Poză chat"}
+                                className="h-40 w-64 max-w-full object-cover"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {message.message && (
+                        <div className="px-4 py-3 text-sm leading-6">
+                          {message.message}
+                        </div>
+                      )}
+                    </div>
+
+                    <p
+                      className={`mt-1 px-2 text-[11px] text-white/35 ${
+                        isMine ? "text-right" : "text-left"
+                      }`}
+                    >
+                      {formatTime(message.created_at)}
+                      {isMine && isLastOwnMessage && (
+                        <span> · {message.read_at ? "Văzut" : "Livrat"}</span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+
+              {isOtherTyping && (
+                <div className="animate-[messageIn_0.25s_ease] max-w-[80%] rounded-3xl bg-white/10 px-4 py-3 text-sm text-white/60">
+                  {activeRole === "workshop" ? "Clientul" : "Service-ul"}{" "}
+                  scrie...
                 </div>
+              )}
 
-                <p
-                  className={`mt-1 px-2 text-[11px] text-white/35 ${
-                    isMine ? "text-right" : "text-left"
-                  }`}
-                >
-                  {formatTime(message.created_at)}
-                  {isMine && isLastOwnMessage && (
-                    <span> · {message.read_at ? "Văzut" : "Livrat"}</span>
-                  )}
-                </p>
-              </div>
-            );
-          })}
-
-          {isOtherTyping && (
-            <div className="animate-[messageIn_0.25s_ease] max-w-[80%] rounded-3xl bg-white/10 px-4 py-3 text-sm text-white/60">
-              {activeRole === "workshop" ? "Clientul" : "Service-ul"} scrie...
-            </div>
+              <div ref={bottomRef} />
+            </>
           )}
-
-          <div ref={bottomRef} />
         </div>
       </div>
 

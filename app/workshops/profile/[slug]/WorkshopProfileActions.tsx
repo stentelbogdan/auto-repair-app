@@ -31,6 +31,8 @@ export default function WorkshopProfileActions({
         target_workshop_id: workshopId,
         car_brand: "Mesaj direct",
         car_model: "Service",
+        car_year: new Date().getFullYear(),
+        damage_type: "direct_message",
         city: "-",
         description: "Conversație începută din profilul service-ului.",
         images: [],
