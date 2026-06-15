@@ -13,13 +13,13 @@ export default function ReviewImagesGallery({ images }: { images: string[] }) {
 
   return (
     <>
-      <div className="mt-4 flex gap-3 overflow-x-auto pb-1">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         {uniqueImages.slice(0, 5).map((image, imageIndex) => (
           <button
             key={`${image}-${imageIndex}`}
             type="button"
             onClick={() => setIndex(imageIndex)}
-            className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-black/10"
+            className="relative aspect-square w-full overflow-hidden rounded-2xl bg-black/10"
           >
             <img
               src={image}

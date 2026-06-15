@@ -102,7 +102,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
                 {reviewList.length > 0 && (
                   <div className="mt-4 rounded-2xl border border-orange-500/20 bg-black/35 p-4">
-                    <div className="flex items-center gap-2 text-orange-300">
+                    <div className="flex flex-wrap items-center gap-2 text-orange-300">
                       {[1, 2, 3, 4, 5].map((star) => (
                         <Star
                           key={star}
@@ -116,18 +116,18 @@ export default async function WorkshopProfilePage({ params }: Props) {
                         />
                       ))}
 
-                      <span className="ml-2 text-sm font-black text-white">
+                      <span className="ml-2 whitespace-nowrap text-sm font-black text-white">
                         {averageRating.toFixed(1)} / 5
                       </span>
 
                       {averageRating >= 4.8 && reviewList.length >= 3 && (
-                        <span className="ml-3 rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-black">
+                        <span className="ml-2 w-fit rounded-full bg-orange-500 px-3 py-1 text-[9px] font-black text-black">
                           🏆 Top Rated
                         </span>
                       )}
                     </div>
 
-                    <p className="mt-2 text-xs font-medium text-white/50">
+                    <p className="mt-3 text-xs font-medium text-white/50">
                       Bazat pe {reviewList.length} review-uri verificate
                     </p>
                   </div>
@@ -231,7 +231,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                     return (
                       <div
                         key={review.id}
-                        className="rounded-3xl bg-white p-5 text-black"
+                        className="w-full max-w-full overflow-hidden rounded-3xl bg-white p-5 text-black"
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
@@ -265,7 +265,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
                         </div>
 
                         {review.comment && (
-                          <p className="mt-4 text-black/70">{review.comment}</p>
+                          <p className="mt-4 max-w-full break-words whitespace-pre-wrap text-black/70">
+                            {review.comment}
+                          </p>
                         )}
 
                         {Array.isArray(review.images) &&
