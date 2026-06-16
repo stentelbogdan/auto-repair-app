@@ -28,6 +28,26 @@ export default function MessagesInbox({ role }: { role: Role }) {
   useEffect(() => {
     localStorage.setItem("activeRole", role);
     loadConversations();
+
+    const channel = supabase
+      .channel(`messages-inbox-${role}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+        },
+        () => {
+          loadConversations();
+          window.dispatchEvent(new Event("messages-read-updated"));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [role]);
 
   const loadConversations = async () => {
@@ -265,18 +285,20 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 }}
                 className="flex w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.04] p-4 text-left transition active:scale-[0.99] hover:bg-white/[0.07]"
               >
-                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white/10">
-                  {conversation.image ? (
-                    <img
-                      src={conversation.image}
-                      alt={conversation.title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-xs font-bold text-white/40">
-                      AR
-                    </div>
-                  )}
+                <div className="relative h-16 w-16 shrink-0 overflow-visible">
+                  <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white/10">
+                    {conversation.image ? (
+                      <img
+                        src={conversation.image}
+                        alt={conversation.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xs font-bold text-white/40">
+                        AR
+                      </div>
+                    )}
+                  </div>
 
                   {conversation.unreadCount > 0 && (
                     <span className="absolute -right-1 -top-1 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-black text-white ring-2 ring-black">

@@ -136,15 +136,65 @@ export default function AppNavbar() {
     }
 
     const loadUnreadMessages = async () => {
-      const { data, error } = await supabase.rpc("get_unread_messages_count");
+      const { data: authData } = await supabase.auth.getUser();
 
-      if (error) {
-        console.error("Failed to load unread count:", error);
+      if (!authData.user) {
         setUnreadCount(0);
         return;
       }
 
-      setUnreadCount(Number(data || 0));
+      const currentUserId = authData.user.id;
+
+      let requestsQuery = supabase.from("repair_requests").select("id");
+
+      if (isWorkshopMode) {
+        requestsQuery = requestsQuery.eq("target_workshop_id", currentUserId);
+      } else {
+        requestsQuery = requestsQuery.eq("user_id", currentUserId);
+      }
+
+      const { data: requestsData, error: requestsError } = await requestsQuery;
+
+      if (requestsError || !requestsData?.length) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const requestIds = requestsData.map((request) => request.id);
+
+      const { data: readsData } = await supabase
+        .from("conversation_reads")
+        .select("request_id, last_read_at")
+        .eq("user_id", currentUserId);
+
+      const readMap = new Map<string, string>();
+
+      (readsData || []).forEach((read: any) => {
+        readMap.set(read.request_id, read.last_read_at);
+      });
+
+      const { data: messagesData, error: messagesError } = await supabase
+        .from("messages")
+        .select("id, request_id, sender_id, sender_role, created_at")
+        .in("request_id", requestIds);
+
+      if (messagesError) {
+        setUnreadCount(0);
+        return;
+      }
+
+      const count = (messagesData || []).filter((message: any) => {
+        if (message.sender_id === currentUserId) return false;
+        if (message.sender_role === "system") return false;
+
+        const lastReadAt = readMap.get(message.request_id);
+
+        if (!lastReadAt) return true;
+
+        return new Date(message.created_at) > new Date(lastReadAt);
+      }).length;
+
+      setUnreadCount(count);
     };
 
     const loadUnreadProgress = async () => {
@@ -294,7 +344,7 @@ export default function AppNavbar() {
 
       supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, isWorkshopMode, isClientMode]);
 
   if (pathname === "/" || pathname === "/login") {
     return null;
