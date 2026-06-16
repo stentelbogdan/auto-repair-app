@@ -22,6 +22,21 @@ export default function WorkshopProfileActions({
       return;
     }
 
+    const { data: existingRequest } = await supabase
+      .from("repair_requests")
+      .select("id")
+      .eq("user_id", authData.user.id)
+      .eq("target_workshop_id", workshopId)
+      .eq("request_type", "direct_message")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingRequest?.id) {
+      router.push(`/chat/${existingRequest.id}?role=customer`);
+      return;
+    }
+
     const { data: request, error } = await supabase
       .from("repair_requests")
       .insert({
