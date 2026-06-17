@@ -10,6 +10,9 @@ export type RepairRequestRow = {
   damage_type: string;
 
   service_type?: "bodywork" | "mechanical";
+  
+  request_type?: "repair" | "direct_request" | "direct_message";
+  target_workshop_id?: string | null;
 
   description: string | null;
 
