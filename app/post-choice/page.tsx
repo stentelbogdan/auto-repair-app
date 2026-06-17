@@ -1,9 +1,22 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function PostChoicePage() {
+  return (
+    <Suspense fallback={null}>
+      <PostChoiceContent />
+    </Suspense>
+  );
+}
+
+function PostChoiceContent() {
   const router = useRouter();
+
+  const searchParams = useSearchParams();
+  const targetWorkshopId = searchParams.get("targetWorkshopId");
+  const query = targetWorkshopId ? `?targetWorkshopId=${targetWorkshopId}` : "";
 
   return (
     <main className="min-h-screen bg-black px-5 py-8 text-white">
@@ -30,7 +43,7 @@ export default function PostChoicePage() {
 
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           <button
-            onClick={() => router.push("/post-job")}
+            onClick={() => router.push(`/post-job${query}`)}
             className="rounded-[32px] bg-white p-6 text-left text-black shadow-xl transition active:scale-[0.98]"
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl">
@@ -50,7 +63,7 @@ export default function PostChoicePage() {
           </button>
 
           <button
-            onClick={() => router.push("/post-mechanical")}
+            onClick={() => router.push(`/post-mechanical${query}`)}
             className="rounded-[32px] bg-white p-6 text-left text-black shadow-xl transition active:scale-[0.98]"
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-orange-100 text-3xl">
