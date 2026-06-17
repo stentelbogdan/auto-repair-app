@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
@@ -61,6 +61,8 @@ async function uploadRepairImage(
 
 export default function PostJobPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetWorkshopId = searchParams.get("targetWorkshopId");
 
   const [files, setFiles] = useState<File[]>([]);
   const [carBrand, setCarBrand] = useState("");
@@ -127,6 +129,8 @@ export default function PostJobPage() {
         damageType,
         description,
         images: storedImages,
+        requestType: targetWorkshopId ? "direct_request" : "repair",
+        targetWorkshopId: targetWorkshopId || null,
       });
 
       router.push(`/review?id=${createdRequest.id}`);

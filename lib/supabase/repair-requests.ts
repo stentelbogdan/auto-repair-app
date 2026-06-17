@@ -35,6 +35,8 @@ export async function createRepairRequest(input: {
   damageType: string;
   description: string;
   serviceType?: "bodywork" | "mechanical";
+  requestType?: "repair" | "direct_request" | "direct_message";
+  targetWorkshopId?: string | null;
   images: {
     name: string;
     url?: string;
@@ -53,6 +55,8 @@ export async function createRepairRequest(input: {
       damage_type: input.damageType,
       description: input.description,
       service_type: input.serviceType ?? "bodywork",
+      request_type: input.requestType ?? "repair",
+      target_workshop_id: input.targetWorkshopId ?? null,
       images: input.images,
       status: "open",
     })

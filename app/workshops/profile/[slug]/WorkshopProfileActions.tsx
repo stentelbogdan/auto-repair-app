@@ -11,8 +11,8 @@ export default function WorkshopProfileActions({
   const router = useRouter();
 
   const handleRequestOffer = () => {
-    router.push(`/post-job?workshopId=${workshopId}`);
-  };
+  router.push(`/post-job?targetWorkshopId=${workshopId}`);
+};
 
   const handleSendMessage = async () => {
     const { data: authData } = await supabase.auth.getUser();
