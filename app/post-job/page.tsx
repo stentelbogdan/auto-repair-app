@@ -1,6 +1,13 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
@@ -60,6 +67,14 @@ async function uploadRepairImage(
 }
 
 export default function PostJobPage() {
+  return (
+    <Suspense fallback={null}>
+      <PostJobContent />
+    </Suspense>
+  );
+}
+
+function PostJobContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetWorkshopId = searchParams.get("targetWorkshopId");
