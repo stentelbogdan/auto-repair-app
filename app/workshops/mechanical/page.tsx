@@ -117,12 +117,24 @@ export default function WorkshopsPage() {
     try {
       const rows = await getWorkshopRepairRequests();
 
-      const mechanicalRows = rows.filter(
-        (req) =>
+      const { data: authData } = await supabase.auth.getUser();
+      const workshopUserId = authData.user?.id;
+
+      const mechanicalRows = rows.filter((req) => {
+        const requestType = req.request_type ?? "repair";
+
+        const isVisibleToWorkshop =
+          requestType === "repair" ||
+          (requestType === "direct_request" &&
+            req.target_workshop_id === workshopUserId);
+
+        return (
           req.service_type === "mechanical" &&
           req.status === "open" &&
-          !req.accepted_offer_id,
-      );
+          !req.accepted_offer_id &&
+          isVisibleToWorkshop
+        );
+      });
 
       const mapped: WorkshopRequest[] = mechanicalRows.map(
         (req: RepairRequestRow) => ({
