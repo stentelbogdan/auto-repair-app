@@ -10,7 +10,7 @@ export type RepairRequestRow = {
   damage_type: string;
 
   service_type?: "bodywork" | "mechanical";
-  
+
   request_type?: "repair" | "direct_request" | "direct_message";
   target_workshop_id?: string | null;
 
@@ -90,7 +90,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, damage_type, service_type, description, images, status, accepted_offer_id, created_at",
+      "id, user_id, car_brand, car_model, car_year, city, damage_type, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, created_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
@@ -99,7 +99,9 @@ export async function getOwnRepairRequests(userId: string) {
     throw error;
   }
 
-  const requests = (data ?? []) as RepairRequestRow[];
+  const requests = ((data ?? []) as RepairRequestRow[]).filter(
+    (request) => request.request_type !== "direct_message",
+  );
   const requestIds = requests.map((request) => request.id);
 
   if (!requestIds.length) {
