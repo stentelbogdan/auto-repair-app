@@ -1,7 +1,14 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import {
+  ChangeEvent,
+  FormEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
@@ -121,7 +128,18 @@ const mechanicalServices: {
 ];
 
 export default function PostJobPage() {
+  return (
+    <Suspense fallback={null}>
+      <PostJobContent />
+    </Suspense>
+  );
+}
+
+function PostJobContent() {
   const router = useRouter();
+
+  const searchParams = useSearchParams();
+  const targetWorkshopId = searchParams.get("targetWorkshopId");
 
   const [files, setFiles] = useState<File[]>([]);
   const [carBrand, setCarBrand] = useState("");
@@ -189,6 +207,8 @@ export default function PostJobPage() {
         description,
         serviceType: "mechanical",
         images: storedImages,
+        requestType: targetWorkshopId ? "direct_request" : "repair",
+        targetWorkshopId: targetWorkshopId || null,
       });
 
       router.push(`/review?id=${createdRequest.id}`);
