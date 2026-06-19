@@ -91,6 +91,16 @@ export default function WorkshopWonJobsPage() {
         }
 
         setAuthorized(true);
+
+        await supabase
+          .from("repair_offers")
+          .update({ workshop_read_at: new Date().toISOString() })
+          .eq("workshop_user_id", authData.user.id)
+          .eq("status", "accepted")
+          .is("workshop_read_at", null);
+
+        window.dispatchEvent(new Event("offers-read-updated"));
+        
         await loadWonJobs(authData.user.id);
       } catch (error) {
         console.error("Access check failed:", error);
@@ -366,7 +376,10 @@ export default function WorkshopWonJobsPage() {
 
       setActiveTab("completed");
     } catch (err) {
-      console.error("Failed to mark as completed:", JSON.stringify(err, null, 2));
+      console.error(
+        "Failed to mark as completed:",
+        JSON.stringify(err, null, 2),
+      );
       alert("Nu am putut finaliza lucrarea.");
     }
   };
