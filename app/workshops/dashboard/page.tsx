@@ -106,6 +106,7 @@ export default function WorkshopDashboardPage() {
         .select("id", { count: "exact", head: true })
         .eq("status", "open")
         .eq("service_type", "bodywork")
+        .eq("request_type", "direct_request")
         .eq("target_workshop_id", userId)
         .is("target_workshop_read_at", null);
 
@@ -115,7 +116,8 @@ export default function WorkshopDashboardPage() {
         .eq("status", "open")
         .eq("service_type", "mechanical")
         .eq("target_workshop_id", userId)
-        .is("target_workshop_read_at", null);
+        .is("target_workshop_read_at", null)
+        .eq("request_type", "direct_request");
 
       const [myOffersResult, wonJobsResult] = await Promise.all([
         supabase

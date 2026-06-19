@@ -98,8 +98,21 @@ export default function WorkshopsPage() {
           return;
         }
 
+        await supabase
+          .from("repair_requests")
+          .update({
+            target_workshop_read_at: new Date().toISOString(),
+          })
+          .eq("target_workshop_id", authData.user.id)
+          .eq("service_type", "mechanical")
+          .eq("request_type", "direct_request")
+          .is("target_workshop_read_at", null);
+
+        window.dispatchEvent(new Event("direct-requests-read-updated"));
+
         setAuthorized(true);
         await loadRequests();
+        
       } catch (error) {
         console.error("Access check failed:", error);
         router.push("/login");

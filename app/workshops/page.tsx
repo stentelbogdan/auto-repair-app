@@ -85,21 +85,6 @@ export default function WorkshopsPage() {
           return;
         }
 
-        const { error: markDirectReadError } = await supabase
-          .from("repair_requests")
-          .update({
-            target_workshop_read_at: new Date().toISOString(),
-          })
-          .eq("target_workshop_id", authData.user.id)
-          .is("target_workshop_read_at", null);
-
-        if (markDirectReadError) {
-          console.error(
-            "Failed to mark direct requests as read:",
-            markDirectReadError,
-          );
-        }
-
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
@@ -126,6 +111,7 @@ export default function WorkshopsPage() {
           .update({ target_workshop_read_at: new Date().toISOString() })
           .eq("target_workshop_id", authData.user.id)
           .eq("service_type", "bodywork")
+          .eq("request_type", "direct_request")
           .is("target_workshop_read_at", null);
 
         window.dispatchEvent(new Event("direct-requests-read-updated"));
