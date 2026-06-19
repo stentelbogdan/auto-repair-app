@@ -402,12 +402,14 @@ export default function AppNavbar() {
     window.addEventListener("messages-read-updated", refreshBadges);
     window.addEventListener("progress-read-updated", refreshBadges);
     window.addEventListener("offers-read-updated", refreshBadges);
+    window.addEventListener("direct-requests-read-updated", refreshBadges);
 
     return () => {
       window.removeEventListener("focus", refreshBadges);
       window.removeEventListener("messages-read-updated", refreshBadges);
       window.removeEventListener("progress-read-updated", refreshBadges);
       window.removeEventListener("offers-read-updated", refreshBadges);
+      window.removeEventListener("direct-requests-read-updated", refreshBadges);
 
       supabase.removeChannel(channel);
     };

@@ -15,7 +15,8 @@ type DashboardStats = {
   mechanicalRequests: number;
   myOffers: number;
   wonJobs: number;
-  directRequestsUnread: number;
+  directBodyworkUnread: number;
+  directMechanicalUnread: number;
 };
 
 export default function WorkshopDashboardPage() {
@@ -28,7 +29,8 @@ export default function WorkshopDashboardPage() {
     mechanicalRequests: 0,
     myOffers: 0,
     wonJobs: 0,
-    directRequestsUnread: 0,
+    directBodyworkUnread: 0,
+    directMechanicalUnread: 0,
   });
 
   useEffect(() => {
@@ -71,17 +73,49 @@ export default function WorkshopDashboardPage() {
     try {
       const rows = await getWorkshopRepairRequests();
 
-      const bodyworkRequestsCount = rows.filter(
-        (req) => (req.service_type ?? "bodywork") === "bodywork",
-      ).length;
+      const visibleBodyworkRows = rows.filter((req) => {
+        const requestType = req.request_type ?? "repair";
+
+        const isVisible =
+          requestType === "repair" ||
+          (requestType === "direct_request" &&
+            req.target_workshop_id === userId);
+
+        return (
+          (req.service_type ?? "bodywork") === "bodywork" &&
+          req.status === "open" &&
+          isVisible
+        );
+      });
+
+      const bodyworkRequestsCount = visibleBodyworkRows.length;
 
       const mechanicalRequestsResult = await supabase
         .from("repair_requests")
         .select("id", { count: "exact", head: true })
         .eq("status", "open")
-        .eq("service_type", "mechanical");
+        .eq("service_type", "mechanical")
+        .or(
+          `request_type.eq.repair,and(request_type.eq.direct_request,target_workshop_id.eq.${userId})`,
+        );
 
       const mechanicalRequestsCount = mechanicalRequestsResult.count || 0;
+
+      const directBodyworkUnreadResult = await supabase
+        .from("repair_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open")
+        .eq("service_type", "bodywork")
+        .eq("target_workshop_id", userId)
+        .is("target_workshop_read_at", null);
+
+      const directMechanicalUnreadResult = await supabase
+        .from("repair_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open")
+        .eq("service_type", "mechanical")
+        .eq("target_workshop_id", userId)
+        .is("target_workshop_read_at", null);
 
       const [myOffersResult, wonJobsResult] = await Promise.all([
         supabase
@@ -114,18 +148,13 @@ export default function WorkshopDashboardPage() {
           return (request?.status || "matched") !== "completed";
         }).length || 0;
 
-      const directRequestsResult = await supabase
-        .from("repair_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("target_workshop_id", userId)
-        .is("target_workshop_read_at", null);
-
       setStats({
         bodyworkRequests: bodyworkRequestsCount,
-        mechanicalRequests: mechanicalRequestsCount,
+        mechanicalRequests: mechanicalRequestsResult.count || 0,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
-        directRequestsUnread: directRequestsResult.count || 0,
+        directBodyworkUnread: directBodyworkUnreadResult.count || 0,
+        directMechanicalUnread: directMechanicalUnreadResult.count || 0,
       });
     } catch {
       setStats({
@@ -133,7 +162,8 @@ export default function WorkshopDashboardPage() {
         mechanicalRequests: 0,
         myOffers: 0,
         wonJobs: 0,
-        directRequestsUnread: 0,
+        directBodyworkUnread: 0,
+        directMechanicalUnread: 0,
       });
     }
   };
@@ -164,7 +194,7 @@ export default function WorkshopDashboardPage() {
             title="Daune estetice"
             description="Cererile clienților"
             value={stats.bodyworkRequests}
-            badge={stats.directRequestsUnread}
+            badge={stats.directBodyworkUnread}
           />
 
           <DashboardCard
@@ -173,6 +203,7 @@ export default function WorkshopDashboardPage() {
             title="Daune mecanice"
             description="Cererile clienților"
             value={stats.mechanicalRequests}
+            badge={stats.directMechanicalUnread}
           />
 
           <DashboardCard

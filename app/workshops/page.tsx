@@ -120,6 +120,16 @@ export default function WorkshopsPage() {
         }
 
         setAuthorized(true);
+
+        await supabase
+          .from("repair_requests")
+          .update({ target_workshop_read_at: new Date().toISOString() })
+          .eq("target_workshop_id", authData.user.id)
+          .eq("service_type", "bodywork")
+          .is("target_workshop_read_at", null);
+
+        window.dispatchEvent(new Event("direct-requests-read-updated"));
+
         await loadRequests();
       } catch (error) {
         console.error("Access check failed:", error);
