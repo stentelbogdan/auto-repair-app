@@ -92,12 +92,18 @@ export default function WorkshopWonJobsPage() {
 
         setAuthorized(true);
 
-        await supabase
+        const { error: readError } = await supabase
           .from("repair_offers")
-          .update({ workshop_read_at: new Date().toISOString() })
+          .update({
+            workshop_read_at: new Date().toISOString(),
+          })
           .eq("workshop_user_id", authData.user.id)
           .eq("status", "accepted")
           .is("workshop_read_at", null);
+
+        if (readError) {
+          console.error("Failed to mark won jobs as read:", readError);
+        }
 
         await loadWonJobs(authData.user.id);
 
