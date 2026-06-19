@@ -32,6 +32,7 @@ export default function AppNavbar() {
   const lastProgressCountRef = useRef(0);
   const [showProgressToast, setShowProgressToast] = useState(false);
   const isAdmin = userRoles.includes("admin");
+  const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -132,6 +133,7 @@ export default function AppNavbar() {
       setUnreadCount(0);
       setProgressUnreadCount(0);
       setOfferUnreadCount(0);
+      setWonJobsUnreadCount(0);
       return;
     }
 
@@ -262,9 +264,27 @@ export default function AppNavbar() {
       setOfferUnreadCount(count || 0);
     };
 
+    const loadUnreadWonJobs = async () => {
+      const { count, error } = await supabase
+        .from("repair_offers")
+        .select("id", { count: "exact", head: true })
+        .eq("workshop_user_id", userId)
+        .eq("status", "accepted")
+        .is("workshop_read_at", null);
+
+      if (error) {
+        console.error("Failed to load unread won jobs:", error);
+        setWonJobsUnreadCount(0);
+        return;
+      }
+
+      setWonJobsUnreadCount(count || 0);
+    };
+
     loadUnreadMessages();
     loadUnreadProgress();
     loadUnreadOffers();
+    loadUnreadWonJobs();
 
     const channel = supabase
       .channel(`navbar-live-badges-${userId}`)
@@ -278,6 +298,7 @@ export default function AppNavbar() {
         },
         async () => {
           await loadUnreadOffers();
+          await loadUnreadWonJobs();
         },
       )
 
@@ -334,6 +355,7 @@ export default function AppNavbar() {
           loadUnreadMessages();
           loadUnreadProgress();
           loadUnreadOffers();
+          loadUnreadWonJobs();
         }
       });
 
@@ -341,6 +363,7 @@ export default function AppNavbar() {
       loadUnreadMessages();
       loadUnreadProgress();
       loadUnreadOffers();
+      loadUnreadWonJobs();
     };
 
     window.addEventListener("focus", refreshBadges);
@@ -536,6 +559,12 @@ export default function AppNavbar() {
               {isClientMode && progressUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
                   {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
+                </span>
+              )}
+
+              {isWorkshopMode && wonJobsUnreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {wonJobsUnreadCount > 9 ? "9+" : wonJobsUnreadCount}
                 </span>
               )}
             </button>

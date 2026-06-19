@@ -99,7 +99,10 @@ export async function acceptRepairOffer(input: {
 
   const { error: acceptError } = await supabase
     .from("repair_offers")
-    .update({ status: "accepted" })
+    .update({
+      status: "accepted",
+      workshop_read_at: null,
+    })
     .eq("id", input.offerId);
 
   if (acceptError) {
