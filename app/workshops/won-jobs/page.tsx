@@ -100,7 +100,7 @@ export default function WorkshopWonJobsPage() {
           .is("workshop_read_at", null);
 
         window.dispatchEvent(new Event("offers-read-updated"));
-        
+
         await loadWonJobs(authData.user.id);
       } catch (error) {
         console.error("Access check failed:", error);
@@ -121,22 +121,40 @@ export default function WorkshopWonJobsPage() {
         .from("repair_offers")
         .select(
           `
-          id,
-          request_id,
-          workshop_user_id,
-          workshop_name,
-          price,
-          days,
-          message,
-          status,
-          created_at
-        `,
+  id,
+  request_id,
+  workshop_user_id,
+  workshop_name,
+  price,
+  days,
+  message,
+  status,
+  created_at,
+  workshop_read_at
+`,
         )
         .eq("workshop_user_id", userId)
         .eq("status", "accepted")
         .order("created_at", { ascending: false });
 
       if (offersError) throw offersError;
+
+      const unreadAcceptedOfferIds = (offersData || [])
+        .filter((offer: any) => !offer.workshop_read_at)
+        .map((offer: any) => offer.id);
+
+      if (unreadAcceptedOfferIds.length > 0) {
+        const { error: markReadError } = await supabase
+          .from("repair_offers")
+          .update({ workshop_read_at: new Date().toISOString() })
+          .in("id", unreadAcceptedOfferIds);
+
+        if (markReadError) {
+          console.error("Failed to mark won jobs as read:", markReadError);
+        } else {
+          window.dispatchEvent(new Event("offers-read-updated"));
+        }
+      }
 
       const requestIds = (offersData || []).map(
         (offer: any) => offer.request_id,
