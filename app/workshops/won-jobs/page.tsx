@@ -99,9 +99,11 @@ export default function WorkshopWonJobsPage() {
           .eq("status", "accepted")
           .is("workshop_read_at", null);
 
-        window.dispatchEvent(new Event("offers-read-updated"));
-
         await loadWonJobs(authData.user.id);
+
+        setTimeout(() => {
+          window.dispatchEvent(new Event("offers-read-updated"));
+        }, 300);
       } catch (error) {
         console.error("Access check failed:", error);
         router.push("/login");
@@ -152,7 +154,9 @@ export default function WorkshopWonJobsPage() {
         if (markReadError) {
           console.error("Failed to mark won jobs as read:", markReadError);
         } else {
-          window.dispatchEvent(new Event("offers-read-updated"));
+          setTimeout(() => {
+            window.dispatchEvent(new Event("offers-read-updated"));
+          }, 300);
         }
       }
 
