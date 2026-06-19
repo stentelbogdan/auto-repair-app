@@ -251,7 +251,7 @@ function DashboardCard({
           {value}
         </div>
 
-        {badge && badge > 0 && (
+        {typeof badge === "number" && badge > 0 && (
           <div className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white shadow-md">
             {badge > 9 ? "9+" : badge}
           </div>

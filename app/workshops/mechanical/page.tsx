@@ -98,7 +98,7 @@ export default function WorkshopsPage() {
           return;
         }
 
-        await supabase
+        const { error: readError } = await supabase
           .from("repair_requests")
           .update({
             target_workshop_read_at: new Date().toISOString(),
@@ -108,11 +108,12 @@ export default function WorkshopsPage() {
           .eq("request_type", "direct_request")
           .is("target_workshop_read_at", null);
 
+        console.log("mechanical read update", readError);
+
         window.dispatchEvent(new Event("direct-requests-read-updated"));
 
         setAuthorized(true);
         await loadRequests();
-        
       } catch (error) {
         console.error("Access check failed:", error);
         router.push("/login");
