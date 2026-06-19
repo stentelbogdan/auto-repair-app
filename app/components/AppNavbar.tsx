@@ -281,10 +281,26 @@ export default function AppNavbar() {
       setWonJobsUnreadCount(count || 0);
     };
 
+    const loadUnreadDirectRequests = async () => {
+      const { count, error } = await supabase
+        .from("repair_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("target_workshop_id", userId)
+        .is("target_workshop_read_at", null);
+
+      if (error) {
+        console.error("Failed to load unread direct requests:", error);
+        return;
+      }
+
+      setWonJobsUnreadCount((count || 0) + wonJobsUnreadCount);
+    };
+
     loadUnreadMessages();
     loadUnreadProgress();
     loadUnreadOffers();
     loadUnreadWonJobs();
+    loadUnreadDirectRequests();
 
     const channel = supabase
       .channel(`navbar-live-badges-${userId}`)
@@ -299,6 +315,18 @@ export default function AppNavbar() {
         async () => {
           await loadUnreadOffers();
           await loadUnreadWonJobs();
+        },
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_requests",
+        },
+        async () => {
+          await loadUnreadDirectRequests();
         },
       )
 
