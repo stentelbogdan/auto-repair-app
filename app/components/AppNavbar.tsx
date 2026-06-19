@@ -33,6 +33,7 @@ export default function AppNavbar() {
   const [showProgressToast, setShowProgressToast] = useState(false);
   const isAdmin = userRoles.includes("admin");
   const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
+  const [directRequestsUnreadCount, setDirectRequestsUnreadCount] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -134,6 +135,7 @@ export default function AppNavbar() {
       setProgressUnreadCount(0);
       setOfferUnreadCount(0);
       setWonJobsUnreadCount(0);
+      setDirectRequestsUnreadCount(0);
       return;
     }
 
@@ -293,7 +295,7 @@ export default function AppNavbar() {
         return;
       }
 
-      setWonJobsUnreadCount((count || 0) + wonJobsUnreadCount);
+      setDirectRequestsUnreadCount(count || 0);
     };
 
     loadUnreadMessages();
@@ -384,6 +386,7 @@ export default function AppNavbar() {
           loadUnreadProgress();
           loadUnreadOffers();
           loadUnreadWonJobs();
+          loadUnreadDirectRequests();
         }
       });
 
@@ -392,6 +395,7 @@ export default function AppNavbar() {
       loadUnreadProgress();
       loadUnreadOffers();
       loadUnreadWonJobs();
+      loadUnreadDirectRequests();
     };
 
     window.addEventListener("focus", refreshBadges);
@@ -587,12 +591,6 @@ export default function AppNavbar() {
               {isClientMode && progressUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
                   {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
-                </span>
-              )}
-
-              {isWorkshopMode && wonJobsUnreadCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {wonJobsUnreadCount > 9 ? "9+" : wonJobsUnreadCount}
                 </span>
               )}
             </button>

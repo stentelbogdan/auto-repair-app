@@ -15,6 +15,7 @@ type DashboardStats = {
   mechanicalRequests: number;
   myOffers: number;
   wonJobs: number;
+  directRequestsUnread: number;
 };
 
 export default function WorkshopDashboardPage() {
@@ -27,6 +28,7 @@ export default function WorkshopDashboardPage() {
     mechanicalRequests: 0,
     myOffers: 0,
     wonJobs: 0,
+    directRequestsUnread: 0,
   });
 
   useEffect(() => {
@@ -112,11 +114,18 @@ export default function WorkshopDashboardPage() {
           return (request?.status || "matched") !== "completed";
         }).length || 0;
 
+      const directRequestsResult = await supabase
+        .from("repair_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("target_workshop_id", userId)
+        .is("target_workshop_read_at", null);
+
       setStats({
         bodyworkRequests: bodyworkRequestsCount,
         mechanicalRequests: mechanicalRequestsCount,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
+        directRequestsUnread: directRequestsResult.count || 0,
       });
     } catch {
       setStats({
@@ -124,6 +133,7 @@ export default function WorkshopDashboardPage() {
         mechanicalRequests: 0,
         myOffers: 0,
         wonJobs: 0,
+        directRequestsUnread: 0,
       });
     }
   };
@@ -154,6 +164,7 @@ export default function WorkshopDashboardPage() {
             title="Daune estetice"
             description="Cererile clienților"
             value={stats.bodyworkRequests}
+            badge={stats.directRequestsUnread}
           />
 
           <DashboardCard
@@ -191,12 +202,14 @@ function DashboardCard({
   title,
   description,
   value,
+  badge,
 }: {
   href: string;
   icon: string;
   title: string;
   description: string;
   value: string | number;
+  badge?: number;
 }) {
   return (
     <Link href={href} className="w-full">
@@ -204,6 +217,12 @@ function DashboardCard({
         <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
           {value}
         </div>
+
+        {badge && badge > 0 && (
+          <div className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white shadow-md">
+            {badge > 9 ? "9+" : badge}
+          </div>
+        )}
 
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold md:h-14 md:w-14 md:text-3xl">
           {icon}
