@@ -318,7 +318,7 @@ export default function AppNavbar() {
           await loadUnreadOffers();
           await loadUnreadWonJobs();
         },
-      ) 
+      )
 
       .on(
         "postgres_changes",
@@ -602,9 +602,16 @@ export default function AppNavbar() {
               className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
             >
               <Wrench size={17} strokeWidth={2.25} />
+
               {isClientMode && progressUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
                   {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
+                </span>
+              )}
+
+              {isWorkshopMode && wonJobsUnreadCount > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                  {wonJobsUnreadCount > 9 ? "9+" : wonJobsUnreadCount}
                 </span>
               )}
             </button>
