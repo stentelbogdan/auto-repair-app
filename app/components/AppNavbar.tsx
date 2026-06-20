@@ -312,6 +312,19 @@ export default function AppNavbar() {
         {
           event: "*",
           schema: "public",
+          table: "repair_offers",
+        },
+        async () => {
+          await loadUnreadOffers();
+          await loadUnreadWonJobs();
+        },
+      ) 
+
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
           table: "repair_requests",
         },
         async () => {
