@@ -98,7 +98,7 @@ export default function WorkshopsPage() {
           return;
         }
 
-        const { error: readError } = await supabase
+        const { data: readData, error: readError } = await supabase
           .from("repair_requests")
           .update({
             target_workshop_read_at: new Date().toISOString(),
@@ -106,9 +106,10 @@ export default function WorkshopsPage() {
           .eq("target_workshop_id", authData.user.id)
           .eq("service_type", "mechanical")
           .eq("request_type", "direct_request")
-          .is("target_workshop_read_at", null);
-
-        console.log("mechanical read update", readError);
+          .is("target_workshop_read_at", null)
+          .select(
+            "id, service_type, request_type, target_workshop_id, target_workshop_read_at",
+          );
 
         window.dispatchEvent(new Event("direct-requests-read-updated"));
 
