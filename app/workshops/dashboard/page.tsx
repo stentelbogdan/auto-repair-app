@@ -69,6 +69,43 @@ export default function WorkshopDashboardPage() {
     checkUserAndLoad();
   }, [router]);
 
+  useEffect(() => {
+    if (!authorized) return;
+
+    let active = true;
+
+    const refreshStats = async () => {
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!active || !authData.user) return;
+
+      await loadStats(authData.user.id);
+    };
+
+    const channel = supabase
+      .channel("workshop-dashboard-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_requests",
+        },
+        refreshStats,
+      )
+      .subscribe();
+
+    window.addEventListener("direct-requests-read-updated", refreshStats);
+    window.addEventListener("focus", refreshStats);
+
+    return () => {
+      active = false;
+      window.removeEventListener("direct-requests-read-updated", refreshStats);
+      window.removeEventListener("focus", refreshStats);
+      supabase.removeChannel(channel);
+    };
+  }, [authorized]);
+
   const loadStats = async (userId: string) => {
     try {
       const rows = await getWorkshopRepairRequests();

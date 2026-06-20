@@ -312,11 +312,10 @@ export default function AppNavbar() {
         {
           event: "*",
           schema: "public",
-          table: "repair_offers",
+          table: "repair_requests",
         },
         async () => {
-          await loadUnreadOffers();
-          await loadUnreadWonJobs();
+          await loadUnreadDirectRequests();
         },
       )
 
