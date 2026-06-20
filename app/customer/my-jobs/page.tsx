@@ -11,9 +11,15 @@ import {
   getOffersForCustomerRequests,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
-type LatestProgress = {
-  status: string | null;
-  created_at: string;
+
+type RepairAppointment = {
+  id: string;
+  request_id: string;
+  appointment_date: string;
+  appointment_time: string;
+  handover_method: "customer_dropoff" | "workshop_pickup";
+  pickup_address: string | null;
+  status: "requested" | "confirmed" | "declined" | "cancelled";
 };
 
 export default function MyJobsPage() {
@@ -28,8 +34,11 @@ export default function MyJobsPage() {
   const [unreadByRequestId, setUnreadByRequestId] = useState<
     Record<string, number>
   >({});
-  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
+  const [appointments, setAppointments] = useState<RepairAppointment[]>([]);
+  const [activeTab, setActiveTab] = useState<
+    "needs_schedule" | "scheduled" | "in_progress" | "completed"
+  >("needs_schedule");
 
   const loadJobs = async () => {
     try {
@@ -56,6 +65,20 @@ export default function MyJobsPage() {
 
       setRequests(requestRows);
       setOffers(offerRows);
+
+      const { data: appointmentsData, error: appointmentsError } =
+        await supabase
+          .from("repair_appointments")
+          .select(
+            "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, status",
+          )
+          .eq("customer_id", authData.user.id);
+
+      if (appointmentsError) {
+        console.error("Failed to load appointments:", appointmentsError);
+      }
+
+      setAppointments((appointmentsData || []) as RepairAppointment[]);
 
       const progressMap: Record<
         string,
@@ -135,15 +158,46 @@ export default function MyJobsPage() {
       });
   }, [requests, offers]);
 
-  const completedJobs = jobs.filter(
+  const jobsWithAppointments = jobs.map((job) => {
+    const appointment = appointments.find(
+      (item) => item.request_id === job.request.id,
+    );
+
+    return {
+      ...job,
+      appointment,
+    };
+  });
+
+  const needsScheduleJobs = jobsWithAppointments.filter(
+    ({ request, appointment }) =>
+      request.status === "matched" &&
+      (!appointment || ["declined", "cancelled"].includes(appointment.status)),
+  );
+
+  const scheduledJobs = jobsWithAppointments.filter(
+    ({ request, appointment }) =>
+      request.status === "matched" &&
+      appointment &&
+      ["requested", "confirmed"].includes(appointment.status),
+  );
+
+  const inProgressJobs = jobsWithAppointments.filter(
+    ({ request }) => request.status === "in_progress",
+  );
+
+  const completedJobs = jobsWithAppointments.filter(
     ({ request }) => request.status === "completed",
   );
 
-  const activeJobs = jobs.filter(
-    ({ request }) => request.status !== "completed",
-  );
-
-  const visibleJobs = activeTab === "active" ? activeJobs : completedJobs;
+  const visibleJobs =
+    activeTab === "needs_schedule"
+      ? needsScheduleJobs
+      : activeTab === "scheduled"
+        ? scheduledJobs
+        : activeTab === "in_progress"
+          ? inProgressJobs
+          : completedJobs;
 
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
@@ -164,28 +218,34 @@ export default function MyJobsPage() {
           </button>
         </div>
 
-        <div className="mb-5 flex gap-3">
-          <button
-            onClick={() => setActiveTab("active")}
-            className={`rounded-full px-5 py-2 font-semibold transition ${
-              activeTab === "active"
-                ? "bg-orange-500 text-black"
-                : "bg-white/10 text-white"
-            }`}
-          >
-            Active ({activeJobs.length})
-          </button>
+        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+          <TabButton
+            label="Necesită programare"
+            count={needsScheduleJobs.length}
+            active={activeTab === "needs_schedule"}
+            onClick={() => setActiveTab("needs_schedule")}
+          />
 
-          <button
+          <TabButton
+            label="Programate"
+            count={scheduledJobs.length}
+            active={activeTab === "scheduled"}
+            onClick={() => setActiveTab("scheduled")}
+          />
+
+          <TabButton
+            label="În lucru"
+            count={inProgressJobs.length}
+            active={activeTab === "in_progress"}
+            onClick={() => setActiveTab("in_progress")}
+          />
+
+          <TabButton
+            label="Finalizate"
+            count={completedJobs.length}
+            active={activeTab === "completed"}
             onClick={() => setActiveTab("completed")}
-            className={`rounded-full px-5 py-2 font-semibold transition ${
-              activeTab === "completed"
-                ? "bg-orange-500 text-black"
-                : "bg-white/10 text-white"
-            }`}
-          >
-            Finalizate ({completedJobs.length})
-          </button>
+          />
         </div>
 
         {loading ? (
@@ -206,13 +266,17 @@ export default function MyJobsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {visibleJobs.map(({ request, acceptedOffer }) => {
+            {visibleJobs.length === 0 && (
+              <div className="rounded-[22px] bg-white p-6 text-center text-black">
+                <h2 className="text-xl font-bold">Nimic aici momentan</h2>
+                <p className="mt-2 text-sm text-black/60">
+                  Când apare o lucrare în această etapă, o vei vedea aici.
+                </p>
+              </div>
+            )}
+            {visibleJobs.map(({ request, acceptedOffer, appointment }) => {
               const image =
                 request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
-
-              const latestProgress = progressByRequestId[request.id];
-              const displayStatus =
-                latestProgress?.latestStatus || request.status;
 
               return (
                 <div
@@ -288,6 +352,31 @@ export default function MyJobsPage() {
                         </div>
                       )}
 
+                      {appointment && (
+                        <div className="mt-3 rounded-2xl bg-orange-50 p-3">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
+                            Programare
+                          </p>
+
+                          <p className="mt-1 font-black text-black">
+                            {new Date(
+                              appointment.appointment_date,
+                            ).toLocaleDateString("ro-RO")}{" "}
+                            • {appointment.appointment_time}
+                          </p>
+
+                          <p className="mt-1 text-sm text-black/55">
+                            {appointment.handover_method === "customer_dropoff"
+                              ? "Aduci mașina la service"
+                              : "Service-ul ridică mașina"}
+                          </p>
+
+                          <span className="mt-2 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
+                            {formatAppointmentStatus(appointment.status)}
+                          </span>
+                        </div>
+                      )}
+
                       {progressByRequestId[request.id] && (
                         <div className="mt-3 flex flex-wrap gap-2">
                           <span className="rounded-full bg-orange-100 px-3 py-1 text-[11px] font-bold text-orange-700">
@@ -325,6 +414,21 @@ export default function MyJobsPage() {
                         >
                           Chat cu service-ul
                         </button>
+
+                        {activeTab === "needs_schedule" && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(
+                                `/customer/schedule-damage/${request.id}`,
+                              );
+                            }}
+                            className="mt-3 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
+                          >
+                            📅 Programează acum
+                          </button>
+                        )}
 
                         {request.status === "completed" &&
                           (reviewedRequestIds.includes(request.id) ? (
@@ -401,10 +505,10 @@ function formatJobStatus(status?: string | null) {
       return "Finalizată";
 
     case "matched":
-      return "Programată";
+      return "Necesită programare";
 
     default:
-      return "Programată";
+      return "Necesită programare";
   }
 }
 
@@ -449,9 +553,52 @@ function getStatusClass(status?: string | null) {
       return "bg-green-100 text-green-700";
 
     case "matched":
-      return "bg-orange-100 text-orange-700";
+      return "bg-yellow-100 text-yellow-700";
 
     default:
       return "bg-orange-100 text-orange-700";
   }
+}
+
+function formatAppointmentStatus(status?: string | null) {
+  switch (status) {
+    case "requested":
+      return "Așteaptă confirmare";
+
+    case "confirmed":
+      return "Confirmată";
+
+    case "declined":
+      return "Refuzată";
+
+    case "cancelled":
+      return "Anulată";
+
+    default:
+      return "Programare";
+  }
+}
+
+function TabButton({
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${
+        active ? "bg-orange-500 text-black" : "bg-white/10 text-white"
+      }`}
+    >
+      {label} ({count})
+    </button>
+  );
 }
