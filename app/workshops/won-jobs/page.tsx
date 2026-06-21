@@ -30,6 +30,7 @@ type RepairAppointment = {
   workshop_note: string | null;
   proposed_date: string | null;
   proposed_time: string | null;
+  updated_at?: string | null;
   status: "requested" | "confirmed" | "declined" | "cancelled";
 };
 
@@ -217,9 +218,10 @@ export default function WorkshopWonJobsPage() {
           await supabase
             .from("repair_appointments")
             .select(
-              "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status",
+              "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status, updated_at",
             )
-            .in("request_id", requestIds);
+            .in("request_id", requestIds)
+            .order("updated_at", { ascending: false });
 
         if (appointmentsError) {
           console.error("Failed to load appointments:", appointmentsError);

@@ -25,6 +25,8 @@ type RepairAppointment = {
   proposed_date: string | null;
   proposed_time: string | null;
 
+  updated_at?: string | null;
+
   status: "requested" | "confirmed" | "declined" | "cancelled";
 };
 
@@ -76,9 +78,10 @@ export default function MyJobsPage() {
         await supabase
           .from("repair_appointments")
           .select(
-            "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status",
+            "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status, updated_at",
           )
-          .eq("customer_id", authData.user.id);
+          .eq("customer_id", authData.user.id)
+          .order("updated_at", { ascending: false });
 
       if (appointmentsError) {
         console.error("Failed to load appointments:", appointmentsError);
@@ -185,10 +188,22 @@ export default function MyJobsPage() {
       });
   }, [requests, offers]);
 
+  const latestAppointmentByRequestId = new Map<string, RepairAppointment>();
+
+  appointments.forEach((appointment) => {
+    const current = latestAppointmentByRequestId.get(appointment.request_id);
+
+    if (
+      !current ||
+      new Date(appointment.updated_at || 0).getTime() >
+        new Date(current.updated_at || 0).getTime()
+    ) {
+      latestAppointmentByRequestId.set(appointment.request_id, appointment);
+    }
+  });
+
   const jobsWithAppointments = jobs.map((job) => {
-    const appointment = appointments.find(
-      (item) => item.request_id === job.request.id,
-    );
+    const appointment = latestAppointmentByRequestId.get(job.request.id);
 
     return {
       ...job,
