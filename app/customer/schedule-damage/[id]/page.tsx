@@ -3,28 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import {
+  getOwnRepairRequests,
+  type RepairRequestRow,
+} from "@/lib/supabase/repair-requests";
+import {
+  getOffersForCustomerRequests,
+  type RepairOfferRow,
+} from "@/lib/supabase/repair-offers";
 
 type HandoverMethod = "customer_dropoff" | "workshop_pickup";
 
-type RepairRequest = {
-  id: string;
-  customer_id: string;
-  accepted_offer_id: string | null;
-  car_brand: string | null;
-  car_model: string | null;
-  car_year: string | number | null;
-  city: string | null;
-  description: string | null;
-  status: string | null;
-};
-
-type RepairOffer = {
-  id: string;
-  workshop_id: string;
-  workshop_name: string | null;
-  price: string | number | null;
-  days: string | number | null;
-};
+type RepairRequest = RepairRequestRow;
+type RepairOffer = RepairOfferRow;
 
 const timeSlots = [
   "08:00",
@@ -70,47 +61,45 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      const { data: requestData, error: requestError } = await supabase
-        .from("repair_requests")
-        .select(
-          "id, customer_id, accepted_offer_id, car_brand, car_model, car_year, city, description, status",
-        )
-        .eq("id", requestId)
-        .single();
+      const [requestRows, offerRows] = await Promise.all([
+        getOwnRepairRequests(authData.user.id),
+        getOffersForCustomerRequests(authData.user.id),
+      ]);
 
-      if (requestError || !requestData) {
+      console.log("requestId din URL:", requestId);
+      console.log(
+        "requestRows:",
+        requestRows.map((item) => item.id),
+      );
+
+      const foundRequest = requestRows.find((item) => item.id === requestId);
+
+      if (!foundRequest) {
         alert("Lucrarea nu a fost găsită.");
         router.push("/customer/my-jobs");
         return;
       }
 
-      if (requestData.customer_id !== authData.user.id) {
-        alert("Nu ai acces la această lucrare.");
-        router.push("/customer/my-jobs");
-        return;
-      }
-
-      setRequest(requestData as RepairRequest);
-
-      if (!requestData.accepted_offer_id) {
+      if (!foundRequest.accepted_offer_id) {
         alert("Această lucrare nu are încă o ofertă acceptată.");
         router.push("/customer/my-jobs");
         return;
       }
 
-      const { data: offerData, error: offerError } = await supabase
-        .from("repair_offers")
-        .select("id, workshop_id, workshop_name, price, days")
-        .eq("id", requestData.accepted_offer_id)
-        .single();
+      const foundOffer = offerRows.find(
+        (offer) =>
+          offer.id === foundRequest.accepted_offer_id ||
+          (offer.request_id === foundRequest.id && offer.status === "accepted"),
+      );
 
-      if (offerError || !offerData) {
+      if (!foundOffer) {
         alert("Oferta acceptată nu a fost găsită.");
         router.push("/customer/my-jobs");
         return;
       }
 
-      setOffer(offerData as RepairOffer);
+      setRequest(foundRequest);
+      setOffer(foundOffer);
     } catch (error) {
       console.error("Failed to load schedule page:", error);
       alert("Nu am putut încărca pagina de programare.");
@@ -136,7 +125,10 @@ export default function ScheduleDamagePage() {
       return;
     }
 
-    if (handoverMethod === "workshop_pickup" && pickupAddress.trim().length < 5) {
+    if (
+      handoverMethod === "workshop_pickup" &&
+      pickupAddress.trim().length < 5
+    ) {
       alert("Introdu adresa de ridicare.");
       return;
     }
@@ -144,11 +136,18 @@ export default function ScheduleDamagePage() {
     setSaving(true);
 
     try {
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        router.push("/login");
+        return;
+      }
+
       const { error } = await supabase.from("repair_appointments").insert({
         request_id: request.id,
         offer_id: offer.id,
-        customer_id: request.customer_id,
-        workshop_id: offer.workshop_id,
+        customer_id: authData.user.id,
+        workshop_id: offer.workshop_user_id,
         appointment_date: appointmentDate,
         appointment_time: appointmentTime,
         handover_method: handoverMethod,
