@@ -143,6 +143,27 @@ export default function MyJobsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("customer-appointments-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_appointments",
+        },
+        () => {
+          loadJobs();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const jobs = useMemo(() => {
     return requests
       .filter((request) => {

@@ -543,11 +543,10 @@ export default function WorkshopWonJobsPage() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", job.appointment.id)
-        .select();
-
-      console.log("APPOINTMENT ID:", job.appointment.id);
-      console.log("UPDATE DATA:", data);
-      console.log("UPDATE ERROR:", error);
+        .select(
+          "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status",
+        )
+        .single();
 
       if (error) throw error;
 
@@ -556,19 +555,17 @@ export default function WorkshopWonJobsPage() {
           item.requestId === job.requestId
             ? {
                 ...item,
-                appointment: item.appointment
-                  ? {
-                      ...item.appointment,
-                      proposed_date: newDate.trim(),
-                      proposed_time: newTime.trim(),
-                      status: "requested",
-                      workshop_note: "Service-ul a propus o altă dată.",
-                    }
-                  : item.appointment,
+                appointment: data as RepairAppointment,
               }
             : item,
         ),
       );
+
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (authData.user) {
+        await loadWonJobs(authData.user.id);
+      }
 
       alert("Noua dată a fost propusă clientului.");
     } catch (error) {
