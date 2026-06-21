@@ -74,7 +74,12 @@ export default function WorkshopWonJobsPage() {
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [lightboxImages, setLightboxImages] = useState<{ src: string }[]>([]);
-  const [progressUnreadCount, setProgressUnreadCount] = useState(0);
+
+  const [editingAppointmentId, setEditingAppointmentId] = useState<
+    string | null
+  >(null);
+  const [newAppointmentDate, setNewAppointmentDate] = useState("");
+  const [newAppointmentTime, setNewAppointmentTime] = useState("");
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -557,25 +562,24 @@ export default function WorkshopWonJobsPage() {
   const proposeAnotherAppointment = async (job: WonJob) => {
     if (!job.appointment) return;
 
-    const newDate = prompt("Introdu data nouă în format YYYY-MM-DD:");
-    if (!newDate) return;
-
-    const newTime = prompt("Introdu ora nouă, ex: 10:00:");
-    if (!newTime) return;
+    if (!newAppointmentDate || !newAppointmentTime) {
+      alert("Alege data și ora pentru noua propunere.");
+      return;
+    }
 
     try {
       const { data, error } = await supabase
         .from("repair_appointments")
         .update({
-          proposed_date: newDate.trim(),
-          proposed_time: newTime.trim(),
+          proposed_date: newAppointmentDate,
+          proposed_time: newAppointmentTime,
           status: "requested",
           workshop_note: "Service-ul a propus o altă dată.",
           updated_at: new Date().toISOString(),
         })
         .eq("id", job.appointment.id)
         .select(
-          "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status",
+          "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status, updated_at",
         )
         .single();
 
@@ -592,11 +596,9 @@ export default function WorkshopWonJobsPage() {
         ),
       );
 
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (authData.user) {
-        await loadWonJobs(authData.user.id);
-      }
+      setEditingAppointmentId(null);
+      setNewAppointmentDate("");
+      setNewAppointmentTime("");
 
       alert("Noua dată a fost propusă clientului.");
     } catch (error) {
@@ -896,9 +898,17 @@ export default function WorkshopWonJobsPage() {
                     </div>
 
                     {job.appointment && (
-                      <div className="mt-4 rounded-2xl border border-orange-500/25 bg-orange-500/10 p-4">
+                      <div
+                        className={`mt-4 rounded-2xl border p-4 ${
+                          job.appointment.status === "declined"
+                            ? "border-red-500/25 bg-red-500/10"
+                            : "border-orange-500/25 bg-orange-500/10"
+                        }`}
+                      >
                         <p className="text-[11px] uppercase tracking-[0.18em] text-orange-300">
-                          Programare solicitată
+                          {job.appointment.status === "declined"
+                            ? "Programare refuzată"
+                            : "Programare solicitată"}
                         </p>
 
                         <div className="mt-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-orange-500/20 p-3">
@@ -981,18 +991,120 @@ export default function WorkshopWonJobsPage() {
                       </div>
                     )}
 
-                    {job.appointment?.status === "requested" && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          proposeAnotherAppointment(job);
-                        }}
-                        className="mt-3 w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-300"
-                      >
-                        Propune altă dată
-                      </button>
-                    )}
+                    {job.appointment &&
+                      ["requested", "declined"].includes(
+                        job.appointment.status,
+                      ) && (
+                        <div
+                          className="mt-3"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {editingAppointmentId === job.appointment.id ? (
+                            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4">
+                              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
+                                Alege noua dată
+                              </p>
+
+                              <div className="mt-4 grid grid-cols-3 gap-2">
+                                {getNextDays(10).map((day) => (
+                                  <button
+                                    key={day.value}
+                                    type="button"
+                                    onClick={() =>
+                                      setNewAppointmentDate(day.value)
+                                    }
+                                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-bold ${
+                                      newAppointmentDate === day.value
+                                        ? "border-orange-500 bg-orange-500 text-black"
+                                        : "border-white/10 bg-black text-white"
+                                    }`}
+                                  >
+                                    <span className="block text-xs opacity-70">
+                                      {day.weekday}
+                                    </span>
+                                    <span>{day.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
+                                Alege ora
+                              </p>
+
+                              <div className="mt-3 grid grid-cols-3 gap-2">
+                                {[
+                                  "08:00",
+                                  "09:00",
+                                  "10:00",
+                                  "11:00",
+                                  "12:00",
+                                  "13:00",
+                                  "14:00",
+                                  "15:00",
+                                  "16:00",
+                                ].map((time) => (
+                                  <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() => setNewAppointmentTime(time)}
+                                    className={`rounded-2xl border px-3 py-3 text-sm font-black ${
+                                      newAppointmentTime === time
+                                        ? "border-orange-500 bg-orange-500 text-black"
+                                        : "border-white/10 bg-black text-white"
+                                    }`}
+                                  >
+                                    {time}
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => proposeAnotherAppointment(job)}
+                                  className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-black"
+                                >
+                                  Trimite
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingAppointmentId(null);
+                                    setNewAppointmentDate("");
+                                    setNewAppointmentTime("");
+                                  }}
+                                  className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white"
+                                >
+                                  Anulează
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingAppointmentId(job.appointment!.id);
+
+                                setNewAppointmentDate(
+                                  job.appointment?.proposed_date ||
+                                    job.appointment?.appointment_date ||
+                                    "",
+                                );
+
+                                setNewAppointmentTime(
+                                  job.appointment?.proposed_time ||
+                                    job.appointment?.appointment_time ||
+                                    "",
+                                );
+                              }}
+                              className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-300"
+                            >
+                              Propune altă dată
+                            </button>
+                          )}
+                        </div>
+                      )}
 
                     <div className="mt-5 space-y-3">
                       <button
@@ -1153,6 +1265,31 @@ function formatAppointmentDate(date: string) {
     month: "long",
     year: "numeric",
   });
+}
+
+function getNextDays(count: number) {
+  const days = [];
+
+  for (let i = 0; i < count; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() + i);
+
+    const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+      2,
+      "0",
+    )}-${String(date.getDate()).padStart(2, "0")}`;
+
+    days.push({
+      value,
+      weekday: date.toLocaleDateString("ro-RO", { weekday: "short" }),
+      label: date.toLocaleDateString("ro-RO", {
+        day: "numeric",
+        month: "short",
+      }),
+    });
+  }
+
+  return days;
 }
 
 function formatJobStatus(value?: string | null) {
