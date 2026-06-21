@@ -469,15 +469,12 @@ export default function MyJobsPage() {
                                   <p className="text-base font-black text-black">
                                     📅{" "}
                                     {formatAppointmentDate(
-                                      appointment.proposed_date ||
-                                        appointment.appointment_date,
+                                      appointment.proposed_date,
                                     )}
                                   </p>
 
                                   <p className="mt-1 text-sm font-semibold text-black/65">
-                                    🕐 Ora{" "}
-                                    {appointment.proposed_time ||
-                                      appointment.appointment_time}
+                                    🕐 Ora {appointment.proposed_time}
                                   </p>
                                 </div>
 
