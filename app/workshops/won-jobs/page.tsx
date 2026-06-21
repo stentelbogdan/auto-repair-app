@@ -136,6 +136,31 @@ export default function WorkshopWonJobsPage() {
     checkUserAndLoad();
   }, [router]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("workshop-appointments-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_appointments",
+        },
+        async () => {
+          const { data: authData } = await supabase.auth.getUser();
+
+          if (authData.user) {
+            await loadWonJobs(authData.user.id);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const loadWonJobs = async (userId: string) => {
     setLoadingJobs(true);
 
