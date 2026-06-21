@@ -225,7 +225,7 @@ export default function ScheduleDamagePage() {
                 min={minDate}
                 value={appointmentDate}
                 onChange={(event) => setAppointmentDate(event.target.value)}
-                className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-lg outline-none focus:border-orange-500"
+                className="mt-2 box-border w-full max-w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-lg outline-none focus:border-orange-500"
               />
 
               <label className="mt-5 block text-sm font-bold text-black/70">
