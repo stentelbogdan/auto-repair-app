@@ -148,23 +148,39 @@ export default function AppNavbar() {
       }
 
       const currentUserId = authData.user.id;
-
-      let requestsQuery = supabase.from("repair_requests").select("id");
+      let requestIds: string[] = [];
 
       if (isWorkshopMode) {
-        requestsQuery = requestsQuery.eq("target_workshop_id", currentUserId);
+        const { data: directRequests } = await supabase
+          .from("repair_requests")
+          .select("id")
+          .eq("target_workshop_id", currentUserId);
+
+        const { data: wonOffers } = await supabase
+          .from("repair_offers")
+          .select("request_id")
+          .eq("workshop_user_id", currentUserId)
+          .eq("status", "accepted");
+
+        requestIds = [
+          ...(directRequests || []).map((request) => request.id),
+          ...(wonOffers || []).map((offer) => offer.request_id),
+        ];
       } else {
-        requestsQuery = requestsQuery.eq("user_id", currentUserId);
+        const { data: customerRequests } = await supabase
+          .from("repair_requests")
+          .select("id")
+          .eq("user_id", currentUserId);
+
+        requestIds = (customerRequests || []).map((request) => request.id);
       }
 
-      const { data: requestsData, error: requestsError } = await requestsQuery;
+      requestIds = Array.from(new Set(requestIds)).filter(Boolean);
 
-      if (requestsError || !requestsData?.length) {
+      if (requestIds.length === 0) {
         setUnreadCount(0);
         return;
       }
-
-      const requestIds = requestsData.map((request) => request.id);
 
       const { data: readsData } = await supabase
         .from("conversation_reads")
@@ -183,6 +199,7 @@ export default function AppNavbar() {
         .in("request_id", requestIds);
 
       if (messagesError) {
+        console.error("Failed to load unread messages:", messagesError);
         setUnreadCount(0);
         return;
       }
