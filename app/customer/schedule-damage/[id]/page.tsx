@@ -222,11 +222,15 @@ export default function ScheduleDamagePage() {
               <label className="text-sm font-bold text-black/70">Data</label>
 
               <input
-                type="text"
+                type="date"
                 min={minDate}
                 value={appointmentDate}
-                onChange={(event) => setAppointmentDate(event.target.value)}
-                className="mt-2 box-border w-full max-w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-lg outline-none focus:border-orange-500"
+                onChange={(e) => setAppointmentDate(e.target.value)}
+                className="mt-2 h-14 w-full max-w-full rounded-2xl border border-black/10 bg-gray-50 px-4 outline-none"
+                style={{
+                  WebkitAppearance: "none",
+                  appearance: "none",
+                }}
               />
 
               <label className="mt-5 block text-sm font-bold text-black/70">
