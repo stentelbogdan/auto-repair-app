@@ -19,6 +19,20 @@ type JobImage = {
   url?: string;
 };
 
+type RepairAppointment = {
+  id: string;
+  request_id: string;
+  appointment_date: string;
+  appointment_time: string;
+  handover_method: "customer_dropoff" | "workshop_pickup";
+  pickup_address: string | null;
+  customer_note: string | null;
+  workshop_note: string | null;
+  proposed_date: string | null;
+  proposed_time: string | null;
+  status: "requested" | "confirmed" | "declined" | "cancelled";
+};
+
 type WonJob = {
   offerId: string;
   requestId: string;
@@ -29,6 +43,7 @@ type WonJob = {
   offerStatus: string;
   createdAt: string;
   latestProgressStatus?: string | null;
+  appointment?: RepairAppointment | null;
   request: {
     id: string;
     carBrand: string;
@@ -170,6 +185,29 @@ export default function WorkshopWonJobsPage() {
         (offer: any) => offer.request_id,
       );
 
+      let appointmentsMap = new Map<string, RepairAppointment>();
+
+      if (requestIds.length > 0) {
+        const { data: appointmentsData, error: appointmentsError } =
+          await supabase
+            .from("repair_appointments")
+            .select(
+              "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status",
+            )
+            .in("request_id", requestIds);
+
+        if (appointmentsError) {
+          console.error("Failed to load appointments:", appointmentsError);
+        }
+
+        appointmentsMap = new Map(
+          (appointmentsData || []).map((appointment: any) => [
+            appointment.request_id,
+            appointment as RepairAppointment,
+          ]),
+        );
+      }
+
       let requestsMap = new Map<string, any>();
 
       let latestProgressMap = new Map<string, string>();
@@ -230,6 +268,7 @@ export default function WorkshopWonJobsPage() {
           offerStatus: row.status || "accepted",
           latestProgressStatus: latestProgressMap.get(row.request_id) || null,
           createdAt: row.created_at,
+          appointment: appointmentsMap.get(row.request_id) || null,
           request: {
             id: row.request_id,
             carBrand: request?.car_brand || "Lucrare acceptată",
@@ -409,6 +448,132 @@ export default function WorkshopWonJobsPage() {
         JSON.stringify(err, null, 2),
       );
       alert("Nu am putut finaliza lucrarea.");
+    }
+  };
+
+  const updateAppointmentStatus = async (
+    job: WonJob,
+    status: "confirmed" | "declined",
+  ) => {
+    if (!job.appointment) return;
+
+    try {
+      const { error } = await supabase
+        .from("repair_appointments")
+        .update({
+          status,
+          appointment_date:
+            status === "confirmed" && job.appointment.proposed_date
+              ? job.appointment.proposed_date
+              : job.appointment.appointment_date,
+          appointment_time:
+            status === "confirmed" && job.appointment.proposed_time
+              ? job.appointment.proposed_time
+              : job.appointment.appointment_time,
+          proposed_date:
+            status === "confirmed" ? null : job.appointment.proposed_date,
+          proposed_time:
+            status === "confirmed" ? null : job.appointment.proposed_time,
+          workshop_note:
+            status === "confirmed" ? null : job.appointment.workshop_note,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.appointment.id);
+
+      if (error) throw error;
+
+      setJobs((prev) =>
+        prev.map((item) =>
+          item.requestId === job.requestId
+            ? {
+                ...item,
+                appointment: item.appointment
+                  ? {
+                      ...item.appointment,
+                      status,
+                      appointment_date:
+                        status === "confirmed" && item.appointment.proposed_date
+                          ? item.appointment.proposed_date
+                          : item.appointment.appointment_date,
+                      appointment_time:
+                        status === "confirmed" && item.appointment.proposed_time
+                          ? item.appointment.proposed_time
+                          : item.appointment.appointment_time,
+                      proposed_date:
+                        status === "confirmed"
+                          ? null
+                          : item.appointment.proposed_date,
+                      proposed_time:
+                        status === "confirmed"
+                          ? null
+                          : item.appointment.proposed_time,
+                      workshop_note:
+                        status === "confirmed"
+                          ? null
+                          : item.appointment.workshop_note,
+                    }
+                  : item.appointment,
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to update appointment:", error);
+      alert("Nu am putut actualiza programarea.");
+    }
+  };
+
+  const proposeAnotherAppointment = async (job: WonJob) => {
+    if (!job.appointment) return;
+
+    const newDate = prompt("Introdu data nouă în format YYYY-MM-DD:");
+    if (!newDate) return;
+
+    const newTime = prompt("Introdu ora nouă, ex: 10:00:");
+    if (!newTime) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("repair_appointments")
+        .update({
+          proposed_date: newDate.trim(),
+          proposed_time: newTime.trim(),
+          status: "requested",
+          workshop_note: "Service-ul a propus o altă dată.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.appointment.id)
+        .select();
+
+      console.log("APPOINTMENT ID:", job.appointment.id);
+      console.log("UPDATE DATA:", data);
+      console.log("UPDATE ERROR:", error);
+
+      if (error) throw error;
+
+      setJobs((prev) =>
+        prev.map((item) =>
+          item.requestId === job.requestId
+            ? {
+                ...item,
+                appointment: item.appointment
+                  ? {
+                      ...item.appointment,
+                      proposed_date: newDate.trim(),
+                      proposed_time: newTime.trim(),
+                      status: "requested",
+                      workshop_note: "Service-ul a propus o altă dată.",
+                    }
+                  : item.appointment,
+              }
+            : item,
+        ),
+      );
+
+      alert("Noua dată a fost propusă clientului.");
+    } catch (error) {
+      console.error("Failed to propose another appointment:", error);
+      alert("Nu am putut propune altă dată.");
     }
   };
 
@@ -702,6 +867,105 @@ export default function WorkshopWonJobsPage() {
                       </p>
                     </div>
 
+                    {job.appointment && (
+                      <div className="mt-4 rounded-2xl border border-orange-500/25 bg-orange-500/10 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-orange-300">
+                          Programare solicitată
+                        </p>
+
+                        <div className="mt-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-orange-500/20 p-3">
+                          <p className="text-base font-black text-white">
+                            📅{" "}
+                            {formatAppointmentDate(
+                              job.appointment.proposed_date ||
+                                job.appointment.appointment_date,
+                            )}
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold text-white/70">
+                            🕐 Ora{" "}
+                            {job.appointment.proposed_time ||
+                              job.appointment.appointment_time}
+                          </p>
+                        </div>
+
+                        <p className="mt-1 text-sm text-white/70">
+                          {job.appointment.handover_method ===
+                          "customer_dropoff"
+                            ? "Clientul aduce mașina la service"
+                            : "Service-ul ridică mașina"}
+                        </p>
+
+                        {job.appointment.pickup_address && (
+                          <p className="mt-2 text-sm text-white/70">
+                            Adresă: {job.appointment.pickup_address}
+                          </p>
+                        )}
+
+                        {job.appointment.customer_note && (
+                          <p className="mt-2 text-sm text-white/70">
+                            Mesaj client: {job.appointment.customer_note}
+                          </p>
+                        )}
+
+                        <span className="mt-3 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
+                          {job.appointment.status === "confirmed"
+                            ? "Confirmată"
+                            : job.appointment.status === "declined"
+                              ? "Refuzată"
+                              : job.appointment.status === "cancelled"
+                                ? "Anulată"
+                                : "Așteaptă confirmare"}
+                        </span>
+
+                        {job.appointment.status === "requested" && (
+                          <div className="mt-4 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                updateAppointmentStatus(job, "confirmed");
+                              }}
+                              className="rounded-2xl bg-green-500 px-4 py-3 text-sm font-black text-black"
+                            >
+                              Confirmă
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+
+                                if (
+                                  confirm(
+                                    "Sigur vrei să refuzi această programare?",
+                                  )
+                                ) {
+                                  updateAppointmentStatus(job, "declined");
+                                }
+                              }}
+                              className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-300"
+                            >
+                              Refuză
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {job.appointment?.status === "requested" && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          proposeAnotherAppointment(job);
+                        }}
+                        className="mt-3 w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-300"
+                      >
+                        Propune altă dată
+                      </button>
+                    )}
+
                     <div className="mt-5 space-y-3">
                       <button
                         onClick={() =>
@@ -724,22 +988,23 @@ export default function WorkshopWonJobsPage() {
                         Chat cu clientul
                       </button>
 
-                      {job.request.status === "matched" && (
-                        <button
-                          onClick={() => {
-                            if (
-                              confirm(
-                                "Ești sigur că vrei să începi această lucrare?",
-                              )
-                            ) {
-                              startJob(job);
-                            }
-                          }}
-                          className="hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 md:block sm:col-span-2"
-                        >
-                          Începe lucrarea
-                        </button>
-                      )}
+                      {job.request.status === "matched" &&
+                        job.appointment?.status === "confirmed" && (
+                          <button
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  "Ești sigur că vrei să începi această lucrare?",
+                                )
+                              ) {
+                                startJob(job);
+                              }
+                            }}
+                            className="hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 md:block sm:col-span-2"
+                          >
+                            Începe lucrarea
+                          </button>
+                        )}
 
                       {job.request.status === "in_progress" && (
                         <button
@@ -769,20 +1034,21 @@ export default function WorkshopWonJobsPage() {
       {stickyJob && stickyJob.request.status !== "completed" && (
         <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/80 backdrop-blur md:hidden">
           <div className="mx-auto max-w-7xl px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
-            {stickyJob.request.status === "matched" && (
-              <button
-                onClick={() => {
-                  if (
-                    confirm("Ești sigur că vrei să începi această lucrare?")
-                  ) {
-                    startJob(stickyJob);
-                  }
-                }}
-                className="w-full rounded-2xl bg-blue-500 px-6 py-4 text-lg font-bold text-black shadow-[0_20px_60px_rgba(59,130,246,0.35)] transition active:scale-[0.99]"
-              >
-                Începe lucrarea
-              </button>
-            )}
+            {stickyJob.request.status === "matched" &&
+              stickyJob.appointment?.status === "confirmed" && (
+                <button
+                  onClick={() => {
+                    if (
+                      confirm("Ești sigur că vrei să începi această lucrare?")
+                    ) {
+                      startJob(stickyJob);
+                    }
+                  }}
+                  className="w-full rounded-2xl bg-blue-500 px-6 py-4 text-lg font-bold text-black shadow-[0_20px_60px_rgba(59,130,246,0.35)] transition active:scale-[0.99]"
+                >
+                  Începe lucrarea
+                </button>
+              )}
 
             {stickyJob.request.status === "in_progress" && (
               <button
@@ -851,6 +1117,14 @@ function formatDamageType(value: string) {
     default:
       return "Altele";
   }
+}
+
+function formatAppointmentDate(date: string) {
+  return new Date(date).toLocaleDateString("ro-RO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function formatJobStatus(value?: string | null) {

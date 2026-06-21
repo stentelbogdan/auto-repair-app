@@ -227,10 +227,6 @@ export default function ScheduleDamagePage() {
                 value={appointmentDate}
                 onChange={(e) => setAppointmentDate(e.target.value)}
                 className="mt-2 h-14 w-full max-w-full rounded-2xl border border-black/10 bg-gray-50 px-4 outline-none"
-                style={{
-                  WebkitAppearance: "none",
-                  appearance: "none",
-                }}
               />
 
               <label className="mt-5 block text-sm font-bold text-black/70">

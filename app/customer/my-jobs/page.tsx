@@ -19,6 +19,12 @@ type RepairAppointment = {
   appointment_time: string;
   handover_method: "customer_dropoff" | "workshop_pickup";
   pickup_address: string | null;
+  customer_note: string | null;
+  workshop_note: string | null;
+
+  proposed_date: string | null;
+  proposed_time: string | null;
+
   status: "requested" | "confirmed" | "declined" | "cancelled";
 };
 
@@ -70,7 +76,7 @@ export default function MyJobsPage() {
         await supabase
           .from("repair_appointments")
           .select(
-            "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, status",
+            "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status",
           )
           .eq("customer_id", authData.user.id);
 
@@ -199,6 +205,39 @@ export default function MyJobsPage() {
           ? inProgressJobs
           : completedJobs;
 
+  const acceptAppointmentProposal = async (appointmentId: string) => {
+    const appointment = appointments.find((a) => a.id === appointmentId);
+
+    if (!appointment) return;
+
+    if (!appointment.proposed_date || !appointment.proposed_time) {
+      alert("Nu există o dată propusă de service.");
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("repair_appointments")
+        .update({
+          status: "confirmed",
+          appointment_date: appointment.proposed_date,
+          appointment_time: appointment.proposed_time,
+          proposed_date: null,
+          proposed_time: null,
+          workshop_note: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appointmentId);
+
+      if (error) throw error;
+
+      await loadJobs();
+    } catch (error) {
+      console.error("Failed to accept appointment:", error);
+      alert("Nu am putut confirma programarea.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
@@ -319,15 +358,31 @@ export default function MyJobsPage() {
                         </div>
 
                         <span
-                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${getStatusClass(
-                            progressByRequestId[request.id]?.latestStatus ||
-                              request.status,
-                          )}`}
+                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                            appointment
+                              ? getAppointmentBadgeClass(
+                                  appointment.status,
+                                  appointment.proposed_date,
+                                  appointment.proposed_time,
+                                )
+                              : getStatusClass(
+                                  progressByRequestId[request.id]
+                                    ?.latestStatus || request.status,
+                                )
+                          }`}
                         >
-                          {formatJobStatus(
-                            progressByRequestId[request.id]?.latestStatus ||
-                              request.status,
-                          )}
+                          {appointment
+                            ? appointment.status === "confirmed"
+                              ? "Programată"
+                              : appointment.proposed_date &&
+                                  appointment.proposed_time &&
+                                  appointment.status === "requested"
+                                ? "Dată propusă"
+                                : "Așteaptă confirmare"
+                            : formatJobStatus(
+                                progressByRequestId[request.id]?.latestStatus ||
+                                  request.status,
+                              )}
                         </span>
                       </div>
 
@@ -358,12 +413,18 @@ export default function MyJobsPage() {
                             Programare
                           </p>
 
-                          <p className="mt-1 font-black text-black">
-                            {new Date(
-                              appointment.appointment_date,
-                            ).toLocaleDateString("ro-RO")}{" "}
-                            • {appointment.appointment_time}
-                          </p>
+                          <div className="mt-3 rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 p-3">
+                            <p className="text-base font-black text-black">
+                              📅{" "}
+                              {formatAppointmentDate(
+                                appointment.appointment_date,
+                              )}
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold text-black/65">
+                              🕐 Ora {appointment.appointment_time}
+                            </p>
+                          </div>
 
                           <p className="mt-1 text-sm text-black/55">
                             {appointment.handover_method === "customer_dropoff"
@@ -374,6 +435,66 @@ export default function MyJobsPage() {
                           <span className="mt-2 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
                             {formatAppointmentStatus(appointment.status)}
                           </span>
+
+                          {appointment.proposed_date &&
+                            appointment.proposed_time &&
+                            appointment.status === "requested" && (
+                              <div className="mt-3 rounded-2xl border border-orange-200 bg-white p-3">
+                                <p className="text-xs font-black uppercase tracking-[0.16em] text-orange-600">
+                                  NOUĂ DATĂ PROPUSĂ
+                                </p>
+
+                                <div className="mt-3 rounded-2xl border border-orange-300 bg-gradient-to-r from-orange-50 to-orange-100 p-3">
+                                  <p className="text-base font-black text-black">
+                                    📅{" "}
+                                    {formatAppointmentDate(
+                                      appointment.proposed_date ||
+                                        appointment.appointment_date,
+                                    )}
+                                  </p>
+
+                                  <p className="mt-1 text-sm font-semibold text-black/65">
+                                    🕐 Ora{" "}
+                                    {appointment.proposed_time ||
+                                      appointment.appointment_time}
+                                  </p>
+                                </div>
+
+                                {appointment.workshop_note &&
+                                  appointment.workshop_note !==
+                                    "Service-ul a propus o altă dată." && (
+                                    <p className="mt-2 text-sm text-black/70">
+                                      {appointment.workshop_note}
+                                    </p>
+                                  )}
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      acceptAppointmentProposal(appointment.id);
+                                    }}
+                                    className="rounded-2xl bg-green-500 px-4 py-3 text-sm font-black text-black"
+                                  >
+                                    Accept noua dată
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      router.push(
+                                        `/customer/schedule-damage/${request.id}`,
+                                      );
+                                    }}
+                                    className="rounded-2xl bg-black px-4 py-3 text-sm font-black text-white"
+                                  >
+                                    Aleg altă dată
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                         </div>
                       )}
 
@@ -462,6 +583,29 @@ export default function MyJobsPage() {
       </div>
     </main>
   );
+}
+
+function getAppointmentBadgeClass(
+  status?: string | null,
+  proposedDate?: string | null,
+  proposedTime?: string | null,
+) {
+  if (status === "confirmed") return "bg-green-100 text-green-700";
+  if (status === "requested" && proposedDate && proposedTime)
+    return "bg-orange-500 text-white";
+  if (status === "requested") return "bg-yellow-100 text-yellow-700";
+  if (status === "declined") return "bg-red-100 text-red-700";
+  if (status === "cancelled") return "bg-gray-100 text-gray-700";
+
+  return "bg-orange-100 text-orange-700";
+}
+
+function formatAppointmentDate(date: string) {
+  return new Date(date).toLocaleDateString("ro-RO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function formatJobStatus(status?: string | null) {
