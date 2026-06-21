@@ -222,7 +222,7 @@ export default function ScheduleDamagePage() {
               <label className="text-sm font-bold text-black/70">Data</label>
 
               <input
-                type="date"
+                type="text"
                 min={minDate}
                 value={appointmentDate}
                 onChange={(event) => setAppointmentDate(event.target.value)}
