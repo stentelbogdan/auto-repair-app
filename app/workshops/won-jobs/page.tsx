@@ -227,12 +227,16 @@ export default function WorkshopWonJobsPage() {
           console.error("Failed to load appointments:", appointmentsError);
         }
 
-        appointmentsMap = new Map(
-          (appointmentsData || []).map((appointment: any) => [
-            appointment.request_id,
-            appointment as RepairAppointment,
-          ]),
-        );
+        appointmentsMap = new Map();
+
+        (appointmentsData || []).forEach((appointment: any) => {
+          if (!appointmentsMap.has(appointment.request_id)) {
+            appointmentsMap.set(
+              appointment.request_id,
+              appointment as RepairAppointment,
+            );
+          }
+        });
       }
 
       let requestsMap = new Map<string, any>();
