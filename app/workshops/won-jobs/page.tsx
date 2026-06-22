@@ -1117,7 +1117,9 @@ export default function WorkshopWonJobsPage() {
                       </button>
 
                       <button
-                        onClick={() => {
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
                           localStorage.setItem("activeRole", "workshop");
                           router.push(
                             `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,

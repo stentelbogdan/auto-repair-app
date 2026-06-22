@@ -444,29 +444,61 @@ export default function MyJobsPage() {
                       )}
 
                       {appointment && (
-                        <div className="mt-3 rounded-2xl bg-orange-50 p-3">
-                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
-                            Programare
+                        <div
+                          className={`mt-3 rounded-2xl p-3 ${
+                            appointment.status === "declined"
+                              ? "bg-red-50"
+                              : "bg-orange-50"
+                          }`}
+                        >
+                          <p
+                            className={`text-xs font-bold uppercase tracking-[0.18em] ${
+                              appointment.status === "declined"
+                                ? "text-red-600"
+                                : "text-orange-600"
+                            }`}
+                          >
+                            {appointment.status === "declined"
+                              ? "Programare refuzată"
+                              : "Programare"}
                           </p>
 
-                          <div className="mt-3 rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 p-3">
-                            <p className="text-base font-black text-black">
-                              📅{" "}
-                              {formatAppointmentDate(
-                                appointment.appointment_date,
-                              )}
-                            </p>
+                          {appointment.status !== "declined" && (
+                            <>
+                              <div className="mt-3 rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 p-3">
+                                <p className="text-base font-black text-black">
+                                  📅{" "}
+                                  {formatAppointmentDate(
+                                    appointment.appointment_date,
+                                  )}
+                                </p>
 
-                            <p className="mt-1 text-sm font-semibold text-black/65">
-                              🕐 Ora {appointment.appointment_time}
-                            </p>
-                          </div>
+                                <p className="mt-1 text-sm font-semibold text-black/65">
+                                  🕐 Ora {appointment.appointment_time}
+                                </p>
+                              </div>
 
-                          <p className="mt-1 text-sm text-black/55">
-                            {appointment.handover_method === "customer_dropoff"
-                              ? "Aduci mașina la service"
-                              : "Service-ul ridică mașina"}
-                          </p>
+                              <p className="mt-1 text-sm text-black/55">
+                                {appointment.handover_method ===
+                                "customer_dropoff"
+                                  ? "Aduci mașina la service"
+                                  : "Service-ul ridică mașina"}
+                              </p>
+                            </>
+                          )}
+
+                          {appointment.status === "declined" && (
+                            <div className="mt-3 rounded-2xl border border-red-200 bg-white p-3">
+                              <p className="font-semibold text-red-700">
+                                ⚠️ Service-ul nu poate prelua mașina la data
+                                selectată.
+                              </p>
+
+                              <p className="mt-1 text-sm text-red-600">
+                                Alege o altă dată pentru reprogramare.
+                              </p>
+                            </div>
+                          )}
 
                           <span className="mt-2 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
                             {formatAppointmentStatus(appointment.status)}
@@ -492,14 +524,6 @@ export default function MyJobsPage() {
                                     🕐 Ora {appointment.proposed_time}
                                   </p>
                                 </div>
-
-                                {appointment.workshop_note &&
-                                  appointment.workshop_note !==
-                                    "Service-ul a propus o altă dată." && (
-                                    <p className="mt-2 text-sm text-black/70">
-                                      {appointment.workshop_note}
-                                    </p>
-                                  )}
 
                                 <div className="mt-3 flex flex-wrap gap-2">
                                   <button
