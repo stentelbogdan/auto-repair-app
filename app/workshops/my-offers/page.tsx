@@ -171,50 +171,14 @@ export default function WorkshopMyOffersPage() {
   }, [router]);
 
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
-    return offers
-      .map((offer) => {
-        const requestStatus =
-          offer.repair_requests?.status?.toLowerCase() || "";
-        const offerStatus = offer.status?.toLowerCase() || "";
-        const acceptedOfferId =
-          offer.repair_requests?.accepted_offer_id || null;
-
-        let derivedStatus: "pending" | "won" | "lost" = "pending";
-
-        if (
-          offerStatus === "accepted" ||
-          (requestStatus === "matched" && acceptedOfferId === offer.id) ||
-          requestStatus === "in_progress" ||
-          requestStatus === "completed"
-        ) {
-          derivedStatus = "won";
-        } else if (
-          offerStatus === "rejected" ||
-          (requestStatus === "matched" &&
-            acceptedOfferId !== null &&
-            acceptedOfferId !== offer.id)
-        ) {
-          derivedStatus = "lost";
-        }
-
-        return { ...offer, derivedStatus };
-      })
-      .sort((a, b) => {
-        const order = {
-          pending: 0,
-          won: 1,
-          lost: 2,
-        };
-
-        const statusDiff = order[a.derivedStatus] - order[b.derivedStatus];
-
-        if (statusDiff !== 0) return statusDiff;
-
-        return (
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
-      });
-  }, [offers]);
+  return offers
+    .map((offer) => ({ ...offer, derivedStatus: "pending" as const }))
+    .filter((offer) => (offer.status || "pending") === "pending")
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+}, [offers]);
 
   const openGallery = (images: RepairImage[] | undefined, index = 0) => {
     const slides =
@@ -246,7 +210,7 @@ export default function WorkshopMyOffersPage() {
             Service auto
           </p>
           <h1 className="mt-2 text-4xl font-black">
-            Lucrările și ofertele tale
+            Oferte trimise
           </h1>
           <p className="mt-3 max-w-2xl text-white/60">
             Urmărește ofertele trimise și vezi rapid ce lucrări ai câștigat.
@@ -286,13 +250,8 @@ export default function WorkshopMyOffersPage() {
               return (
                 <article
                   key={offer.id}
-                  onClick={() => {
-                    if (isWon) {
-                      router.push(`/workshops/${offer.request_id}`);
-                    }
-                  }}
                   className={`rounded-[28px] bg-white p-5 text-black shadow-lg transition active:scale-[0.99] ${
-                    isWon ? "cursor-pointer ring-2 ring-green-500/25" : ""
+                    ""
                   } ${isLost ? "opacity-70" : ""}`}
                 >
                   <div className="flex gap-4">
@@ -350,7 +309,7 @@ export default function WorkshopMyOffersPage() {
 
                         <div className="mt-1 flex items-center justify-between">
                           <span className="text-sm text-black/60">
-                            {offer.days} zile
+                            {offer.days}
                           </span>
 
                           <span className="text-xl font-black">

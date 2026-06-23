@@ -136,6 +136,24 @@ export default function WorkshopsPage() {
       const { data: authData } = await supabase.auth.getUser();
       const workshopUserId = authData.user?.id;
 
+      let offeredRequestIds: string[] = [];
+
+      if (workshopUserId) {
+        const { data: existingOffers, error: existingOffersError } =
+          await supabase
+            .from("repair_offers")
+            .select("request_id")
+            .eq("workshop_user_id", workshopUserId);
+
+        if (existingOffersError) {
+          console.error("Failed to load existing offers:", existingOffersError);
+        }
+
+        offeredRequestIds = (existingOffers || [])
+          .map((offer) => offer.request_id)
+          .filter(Boolean);
+      }
+
       const bodyworkRows = rows.filter((req) => {
         const requestType = req.request_type ?? "repair";
 
@@ -147,7 +165,8 @@ export default function WorkshopsPage() {
         return (
           (req.service_type ?? "bodywork") === "bodywork" &&
           req.status === "open" &&
-          isVisibleToWorkshop
+          isVisibleToWorkshop &&
+          !offeredRequestIds.includes(req.id)
         );
       });
 

@@ -31,6 +31,7 @@ export default function MakeOfferPage() {
   const [availableTime, setAvailableTime] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
+  const [hasExistingOffer, setHasExistingOffer] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -70,6 +71,17 @@ export default function MakeOfferPage() {
 
         setRequest(data);
 
+        const { data: existingOffer } = await supabase
+          .from("repair_offers")
+          .select("id")
+          .eq("request_id", id)
+          .eq("workshop_user_id", authData.user.id)
+          .maybeSingle();
+
+        if (existingOffer) {
+          setHasExistingOffer(true);
+        }
+
         if (data.status === "matched") {
           setIsClosed(true);
         }
@@ -86,7 +98,7 @@ export default function MakeOfferPage() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (isClosed || isSubmitting) return;
+    if (isClosed || hasExistingOffer || isSubmitting) return;
 
     setIsSubmitting(true);
 
@@ -153,6 +165,30 @@ export default function MakeOfferPage() {
               className="mt-6 rounded-full bg-black px-6 py-3 text-sm font-semibold text-white"
             >
               Înapoi la daună
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (hasExistingOffer) {
+    return (
+      <main className="min-h-screen bg-black px-4 py-8 text-white">
+        <div className="mx-auto max-w-md">
+          <div className="rounded-[28px] bg-white p-6 text-center text-black shadow-xl">
+            <h1 className="text-2xl font-bold">Ai trimis deja o ofertă</h1>
+
+            <p className="mt-2 text-sm text-black/55">
+              Pentru această lucrare există deja o ofertă trimisă de service-ul
+              tău. Așteaptă răspunsul clientului.
+            </p>
+
+            <button
+              onClick={() => router.push("/workshops/my-offers")}
+              className="mt-6 rounded-full bg-black px-6 py-3 text-sm font-semibold text-white"
+            >
+              Vezi ofertele tale
             </button>
           </div>
         </div>
@@ -233,7 +269,7 @@ export default function MakeOfferPage() {
           </div>
 
           <label className="mt-5 block text-sm font-bold text-black">
-            Prima dată disponibilă
+            Prima dată disponibilă pentru programare
           </label>
 
           <input
@@ -241,10 +277,11 @@ export default function MakeOfferPage() {
             value={availableDate}
             onChange={(event) => setAvailableDate(event.target.value)}
             className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-black outline-none"
+            required
           />
 
           <label className="mt-5 block text-sm font-bold text-black">
-            Ora programării
+            Ora la care clientul poate aduce mașina
           </label>
 
           <input

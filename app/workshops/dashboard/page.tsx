@@ -110,6 +110,20 @@ export default function WorkshopDashboardPage() {
     try {
       const rows = await getWorkshopRepairRequests();
 
+      const { data: existingOffers, error: existingOffersError } =
+        await supabase
+          .from("repair_offers")
+          .select("request_id")
+          .eq("workshop_user_id", userId);
+
+      if (existingOffersError) {
+        console.error("Failed to load existing offers:", existingOffersError);
+      }
+
+      const offeredRequestIds = (existingOffers || [])
+        .map((offer) => offer.request_id)
+        .filter(Boolean);
+
       const visibleBodyworkRows = rows.filter((req) => {
         const requestType = req.request_type ?? "repair";
 
@@ -121,7 +135,8 @@ export default function WorkshopDashboardPage() {
         return (
           (req.service_type ?? "bodywork") === "bodywork" &&
           req.status === "open" &&
-          isVisible
+          isVisible &&
+          !offeredRequestIds.includes(req.id)
         );
       });
 
@@ -160,7 +175,8 @@ export default function WorkshopDashboardPage() {
         supabase
           .from("repair_offers")
           .select("id", { count: "exact", head: true })
-          .eq("workshop_user_id", userId),
+          .eq("workshop_user_id", userId)
+          .eq("status", "pending"),
 
         supabase
           .from("repair_offers")
