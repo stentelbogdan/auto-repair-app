@@ -27,6 +27,8 @@ export default function MakeOfferPage() {
   const [price, setPrice] = useState("");
   const [days, setDays] = useState("");
   const [message, setMessage] = useState("");
+  const [availableDate, setAvailableDate] = useState("");
+  const [availableTime, setAvailableTime] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -116,6 +118,8 @@ export default function MakeOfferPage() {
         days,
         message,
         workshopName,
+        availableDate,
+        availableTime,
       });
 
       router.push("/workshops/my-offers");
@@ -205,18 +209,50 @@ export default function MakeOfferPage() {
 
           <div className="mt-4">
             <label className="mb-2 block text-sm font-semibold">
-              Durată estimată (zile)
+              Durată estimată
             </label>
-            <input
-              type="number"
-              min="1"
+
+            <select
               value={days}
               onChange={(e) => setDays(e.target.value)}
-              placeholder="3"
               className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-base outline-none focus:border-black/30"
               required
-            />
+            >
+              <option value="">Alege durata estimată</option>
+              <option value="30 minute">30 minute</option>
+              <option value="1 oră">1 oră</option>
+              <option value="2 ore">2 ore</option>
+              <option value="3 ore">3 ore</option>
+              <option value="Jumătate de zi">Jumătate de zi</option>
+              <option value="1 zi">1 zi</option>
+              <option value="2 zile">2 zile</option>
+              <option value="3 zile">3 zile</option>
+              <option value="4-5 zile">4-5 zile</option>
+              <option value="O săptămână">O săptămână</option>
+            </select>
           </div>
+
+          <label className="mt-5 block text-sm font-bold text-black">
+            Prima dată disponibilă
+          </label>
+
+          <input
+            type="date"
+            value={availableDate}
+            onChange={(event) => setAvailableDate(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-black outline-none"
+          />
+
+          <label className="mt-5 block text-sm font-bold text-black">
+            Ora programării
+          </label>
+
+          <input
+            type="time"
+            value={availableTime}
+            onChange={(event) => setAvailableTime(event.target.value)}
+            className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-black outline-none"
+          />
 
           <div className="mt-4">
             <label className="mb-2 block text-sm font-semibold">

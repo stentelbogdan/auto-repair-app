@@ -200,8 +200,19 @@ export default function WorkshopMyOffersPage() {
         return { ...offer, derivedStatus };
       })
       .sort((a, b) => {
-        const order = { won: 0, pending: 1, lost: 2 };
-        return order[a.derivedStatus] - order[b.derivedStatus];
+        const order = {
+          pending: 0,
+          won: 1,
+          lost: 2,
+        };
+
+        const statusDiff = order[a.derivedStatus] - order[b.derivedStatus];
+
+        if (statusDiff !== 0) return statusDiff;
+
+        return (
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
       });
   }, [offers]);
 

@@ -39,6 +39,8 @@ type RepairOffer = {
   createdAt: string;
   status?: string;
   workshopLogoUrl: string | null;
+  availableDate: string | null;
+  availableTime: string | null;
 };
 
 type WorkshopRating = {
@@ -329,6 +331,8 @@ export default function OffersPage() {
             createdAt: offer.created_at,
             status: offer.status,
             workshopLogoUrl: workshopProfile?.workshop_logo_url || null,
+            availableDate: offer.available_date || null,
+            availableTime: offer.available_time || null,
           },
           request: matchingRequest,
         });
@@ -470,13 +474,35 @@ export default function OffersPage() {
 
                         <div className="mt-1 flex items-center justify-between">
                           <span className="text-sm text-black/60">
-                            {offer.days} zile
+                            {offer.days}
                           </span>
 
                           <span className="text-xl font-black">
                             €{offer.price}
                           </span>
                         </div>
+
+                        {(offer.availableDate || offer.availableTime) && (
+                          <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm text-black/70">
+                            {offer.availableDate && (
+                              <div>
+                                <span className="font-semibold text-black">
+                                  Prima dată disponibilă:
+                                </span>{" "}
+                                {offer.availableDate}
+                              </div>
+                            )}
+
+                            {offer.availableTime && (
+                              <div className="mt-1">
+                                <span className="font-semibold text-black">
+                                  Ora predării:
+                                </span>{" "}
+                                {offer.availableTime.slice(0, 5)}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

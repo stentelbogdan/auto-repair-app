@@ -8,6 +8,8 @@ export type RepairOfferRow = {
   days: string;
   message: string | null;
   workshop_name: string;
+  available_date: string | null;
+  available_time: string | null;
   status: string;
   created_at: string;
 };
@@ -19,6 +21,8 @@ export async function createRepairOffer(input: {
   days: string;
   message: string;
   workshopName: string;
+  availableDate?: string;
+  availableTime?: string;
 }) {
   const { data, error } = await supabase
     .from("repair_offers")
@@ -29,6 +33,8 @@ export async function createRepairOffer(input: {
       days: input.days,
       message: input.message,
       workshop_name: input.workshopName,
+      available_date: input.availableDate || null,
+      available_time: input.availableTime || null,
       status: "pending",
     })
     .select()
