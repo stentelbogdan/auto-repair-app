@@ -51,9 +51,24 @@ export default function MyJobsPage() {
     images: RepairRequestRow["images"];
     index: number;
   } | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    "needs_schedule" | "scheduled" | "in_progress" | "completed"
-  >("needs_schedule");
+  type JobsTab = "needs_schedule" | "scheduled" | "in_progress" | "completed";
+
+  const isValidTab = (tab: string | null): tab is JobsTab =>
+    tab === "needs_schedule" ||
+    tab === "scheduled" ||
+    tab === "in_progress" ||
+    tab === "completed";
+
+  const [activeTab, setActiveTab] = useState<JobsTab>("needs_schedule");
+
+  useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab");
+
+  if (isValidTab(tab)) {
+    setActiveTab(tab);
+  }
+}, []);
 
   const loadJobs = async () => {
     try {
@@ -302,6 +317,15 @@ export default function MyJobsPage() {
     }
   };
 
+  const changeTab = (
+    tab: "needs_schedule" | "scheduled" | "in_progress" | "completed",
+  ) => {
+    setActiveTab(tab);
+    router.replace(`/customer/my-jobs?tab=${tab}`, {
+      scroll: false,
+    });
+  };
+
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
@@ -326,28 +350,28 @@ export default function MyJobsPage() {
             label="Necesită programare"
             count={needsScheduleJobs.length}
             active={activeTab === "needs_schedule"}
-            onClick={() => setActiveTab("needs_schedule")}
+            onClick={() => changeTab("needs_schedule")}
           />
 
           <TabButton
             label="Programate"
             count={scheduledJobs.length}
             active={activeTab === "scheduled"}
-            onClick={() => setActiveTab("scheduled")}
+            onClick={() => changeTab("scheduled")}
           />
 
           <TabButton
             label="În lucru"
             count={inProgressJobs.length}
             active={activeTab === "in_progress"}
-            onClick={() => setActiveTab("in_progress")}
+            onClick={() => changeTab("in_progress")}
           />
 
           <TabButton
             label="Finalizate"
             count={completedJobs.length}
             active={activeTab === "completed"}
-            onClick={() => setActiveTab("completed")}
+            onClick={() => changeTab("completed")}
           />
         </div>
 
