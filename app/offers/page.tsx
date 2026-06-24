@@ -146,6 +146,7 @@ export default function OffersPage() {
         .from("repair_offers")
         .select("*")
         .in("request_id", requestIds)
+        .eq("status", "pending")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -395,18 +396,15 @@ export default function OffersPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center">
-            <h2 className="text-2xl font-bold">Nu ai oferte încă</h2>
+            <h2 className="text-2xl font-bold">Nu ai oferte în așteptare</h2>
             <p className="mt-3 text-white/60">
-              Când un service trimite o ofertă, aceasta va apărea aici.
+              Ofertele acceptate apar în Programări.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {items.map(({ offer, request }) => {
               const status = offer.status || "pending";
-              const isAccepted = status === "accepted";
-              const isRejected = status === "rejected";
-              const isMatched = request.status === "matched";
               const image =
                 request.images[0]?.url || request.images[0]?.dataUrl || "";
               const workshopRating = workshopRatings[offer.workshopUserId];
@@ -414,9 +412,7 @@ export default function OffersPage() {
               return (
                 <div
                   key={offer.id}
-                  className={`rounded-[28px] bg-white p-5 text-black shadow-lg ${
-                    isAccepted ? "ring-2 ring-green-500/25" : ""
-                  } ${isRejected ? "opacity-70" : ""}`}
+                  className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <div className="flex gap-4">
                     <button
@@ -456,16 +452,8 @@ export default function OffersPage() {
                           </p>
                         </div>
 
-                        <span
-                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                            isAccepted
-                              ? "bg-green-100 text-green-700"
-                              : isRejected
-                                ? "bg-red-100 text-red-700"
-                                : "bg-orange-100 text-orange-700"
-                          }`}
-                        >
-                          {formatOfferStatus(status)}
+                        <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                          În așteptare
                         </span>
                       </div>
 
@@ -618,23 +606,15 @@ export default function OffersPage() {
                     </p>
                   )}
 
-                  {!isRejected && !isAccepted && !isMatched && (
-                    <button
-                      onClick={() => handleAcceptOffer(offer.id, request.id)}
-                      disabled={acceptingOfferId === offer.id}
-                      className="mt-4 w-full rounded-2xl bg-black px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                    >
-                      {acceptingOfferId === offer.id
-                        ? "Se confirmă..."
-                        : "Acceptă oferta"}
-                    </button>
-                  )}
-
-                  {isAccepted && (
-                    <div className="mt-4 rounded-2xl bg-green-100 px-4 py-3 text-center text-sm font-semibold text-green-700">
-                      Oferta aleasă
-                    </div>
-                  )}
+                  <button
+                    onClick={() => handleAcceptOffer(offer.id, request.id)}
+                    disabled={acceptingOfferId === offer.id}
+                    className="mt-4 w-full rounded-2xl bg-black px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {acceptingOfferId === offer.id
+                      ? "Se confirmă..."
+                      : "Acceptă oferta"}
+                  </button>
                 </div>
               );
             })}

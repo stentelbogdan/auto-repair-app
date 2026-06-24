@@ -45,7 +45,7 @@ type RepairOffer = {
 };
 
 type DerivedOffer = RepairOffer & {
-  derivedStatus: "pending" | "won" | "lost";
+  derivedStatus: "pending";
 };
 
 export default function WorkshopMyOffersPage() {
@@ -171,14 +171,17 @@ export default function WorkshopMyOffersPage() {
   }, [router]);
 
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
-  return offers
-    .map((offer) => ({ ...offer, derivedStatus: "pending" as const }))
-    .filter((offer) => (offer.status || "pending") === "pending")
-    .sort(
-      (a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
-}, [offers]);
+    return offers
+      .filter((offer) => (offer.status || "pending") === "pending")
+      .map((offer) => ({
+        ...offer,
+        derivedStatus: "pending" as const,
+      }))
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+  }, [offers]);
 
   const openGallery = (images: RepairImage[] | undefined, index = 0) => {
     const slides =
@@ -209,11 +212,9 @@ export default function WorkshopMyOffersPage() {
           <p className="text-sm uppercase tracking-[0.24em] text-orange-400">
             Service auto
           </p>
-          <h1 className="mt-2 text-4xl font-black">
-            Oferte trimise
-          </h1>
+          <h1 className="mt-2 text-4xl font-black">Oferte trimise</h1>
           <p className="mt-3 max-w-2xl text-white/60">
-            Urmărește ofertele trimise și vezi rapid ce lucrări ai câștigat.
+            Aici vezi doar ofertele care așteaptă răspunsul clientului.
           </p>
         </div>
 
@@ -223,9 +224,9 @@ export default function WorkshopMyOffersPage() {
           </div>
         ) : normalizedOffers.length === 0 ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center">
-            <h2 className="text-2xl font-bold">Nu ai trimis oferte încă</h2>
+            <h2 className="text-2xl font-bold">Nu ai oferte în așteptare</h2>
             <p className="mt-3 text-white/60">
-              Intră la daune disponibile și trimite prima ofertă.
+              Ofertele acceptate de client apar în Lucrări câștigate.
             </p>
 
             <button
@@ -244,15 +245,10 @@ export default function WorkshopMyOffersPage() {
                 request?.images?.[0]?.dataUrl ||
                 "";
 
-              const isWon = offer.derivedStatus === "won";
-              const isLost = offer.derivedStatus === "lost";
-
               return (
                 <article
                   key={offer.id}
-                  className={`rounded-[28px] bg-white p-5 text-black shadow-lg transition active:scale-[0.99] ${
-                    ""
-                  } ${isLost ? "opacity-70" : ""}`}
+                  className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <div className="flex gap-4">
                     <button
@@ -291,16 +287,8 @@ export default function WorkshopMyOffersPage() {
                           </p>
                         </div>
 
-                        <span
-                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                            isWon
-                              ? "bg-green-100 text-green-700"
-                              : isLost
-                                ? "bg-red-100 text-red-700"
-                                : "bg-orange-100 text-orange-700"
-                          }`}
-                        >
-                          {formatStatus(offer.derivedStatus)}
+                        <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+                          În așteptare
                         </span>
                       </div>
 
@@ -318,15 +306,9 @@ export default function WorkshopMyOffersPage() {
                         </div>
                       </div>
 
-                      {offer.message && !isLost && (
+                      {offer.message && (
                         <p className="mt-3 line-clamp-2 text-sm text-black/60">
                           {offer.message}
-                        </p>
-                      )}
-
-                      {isWon && (
-                        <p className="mt-3 text-xs font-semibold text-green-700">
-                          Apasă pe card pentru a deschide lucrarea →
                         </p>
                       )}
                     </div>
@@ -370,31 +352,4 @@ export default function WorkshopMyOffersPage() {
       />
     </main>
   );
-}
-
-function InfoBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-      <p className="text-sm text-white/45">{label}</p>
-      <p className="mt-1 text-xl font-bold text-white">{value}</p>
-    </div>
-  );
-}
-
-function formatStatus(status: "pending" | "won" | "lost") {
-  if (status === "won") return "Câștigată";
-  if (status === "lost") return "Respinsă";
-  return "În așteptare";
-}
-
-function statusClasses(status: "pending" | "won" | "lost") {
-  if (status === "won") {
-    return "border-green-500/20 bg-green-500/15 text-green-300";
-  }
-
-  if (status === "lost") {
-    return "border-red-500/20 bg-red-500/15 text-red-300";
-  }
-
-  return "border-yellow-500/20 bg-yellow-500/15 text-yellow-300";
 }
