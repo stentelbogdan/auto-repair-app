@@ -47,6 +47,9 @@ export default function MyJobsPage() {
   >({});
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
   const [appointments, setAppointments] = useState<RepairAppointment[]>([]);
+  const [workshopSlugs, setWorkshopSlugs] = useState<Record<string, string>>(
+    {},
+  );
   const [selectedGallery, setSelectedGallery] = useState<{
     images: RepairRequestRow["images"];
     index: number;
@@ -62,13 +65,13 @@ export default function MyJobsPage() {
   const [activeTab, setActiveTab] = useState<JobsTab>("needs_schedule");
 
   useEffect(() => {
-  const params = new URLSearchParams(window.location.search);
-  const tab = params.get("tab");
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
 
-  if (isValidTab(tab)) {
-    setActiveTab(tab);
-  }
-}, []);
+    if (isValidTab(tab)) {
+      setActiveTab(tab);
+    }
+  }, []);
 
   const loadJobs = async () => {
     try {
@@ -95,6 +98,29 @@ export default function MyJobsPage() {
 
       setRequests(requestRows);
       setOffers(offerRows);
+
+      const workshopUserIds = Array.from(
+        new Set(
+          offerRows.map((offer) => offer.workshop_user_id).filter(Boolean),
+        ),
+      );
+
+      if (workshopUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, workshop_slug")
+          .in("id", workshopUserIds);
+
+        const slugMap: Record<string, string> = {};
+
+        (profilesData || []).forEach((profile) => {
+          if (profile.id && profile.workshop_slug) {
+            slugMap[profile.id] = profile.workshop_slug;
+          }
+        });
+
+        setWorkshopSlugs(slugMap);
+      }
 
       const { data: appointmentsData, error: appointmentsError } =
         await supabase
@@ -409,9 +435,9 @@ export default function MyJobsPage() {
                 <div
                   key={request.id}
                   onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
-                  className="overflow-hidden rounded-[26px] bg-white text-black shadow-lg transition active:scale-[0.99]"
+                  className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-lg transition active:scale-[0.99]"
                 >
-                  <div className="flex gap-4 p-4">
+                  <div className="flex items-start gap-4">
                     <button
                       type="button"
                       onClick={(event) => {
@@ -424,7 +450,7 @@ export default function MyJobsPage() {
                           });
                         }
                       }}
-                      className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-black/10"
+                      className="h-28 w-28 shrink-0 overflow-hidden rounded-3xl bg-black/10"
                     >
                       {image ? (
                         <img
@@ -441,19 +467,12 @@ export default function MyJobsPage() {
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h2 className="text-xl font-black leading-tight">
-                              {request.car_brand} {request.car_model}
-                            </h2>
+                        <div className="min-w-0">
+                          <h2 className="text-2xl font-black leading-tight">
+                            {request.car_brand} {request.car_model}
+                          </h2>
 
-                            {(unreadByRequestId[request.id] || 0) > 0 && (
-                              <span className="rounded-full bg-orange-500 px-2 py-1 text-[10px] font-black text-white">
-                                NOU
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 text-sm text-black/55">
+                          <p className="mt-1 text-sm text-black/50">
                             {request.car_year} • {request.city}
                           </p>
                         </div>
@@ -486,231 +505,171 @@ export default function MyJobsPage() {
                               )}
                         </span>
                       </div>
+                    </div>
+                  </div>
 
-                      {acceptedOffer && (
-                        <div className="mt-3 rounded-2xl bg-black/[0.04] p-3">
-                          <p className="text-xs text-black/45">Service</p>
-                          <p className="font-semibold">
-                            {acceptedOffer.workshop_name}
-                          </p>
+                  {acceptedOffer && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
 
-                          <div className="mt-2 flex items-center justify-between text-sm">
-                            <span className="text-black/55">
-                              {acceptedOffer.days}{" "}
-                              {String(acceptedOffer.days) === "1"
-                                ? "zi"
-                                : "zile"}
-                            </span>
-                            <span className="font-bold">
-                              €{acceptedOffer.price}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                        const slug =
+                          workshopSlugs[acceptedOffer.workshop_user_id];
 
-                      {appointment && (
-                        <div
-                          className={`mt-3 rounded-2xl p-3 ${
-                            appointment.status === "declined"
-                              ? "bg-red-50"
-                              : "bg-orange-50"
-                          }`}
-                        >
-                          <p
-                            className={`text-xs font-bold uppercase tracking-[0.18em] ${
-                              appointment.status === "declined"
-                                ? "text-red-600"
-                                : "text-orange-600"
-                            }`}
-                          >
-                            {appointment.status === "declined"
-                              ? "Programare refuzată"
-                              : "Programare"}
-                          </p>
+                        if (!slug) {
+                          alert("Profilul service-ului nu este disponibil.");
+                          return;
+                        }
 
-                          {appointment.status !== "declined" && (
-                            <>
-                              <div className="mt-3 rounded-2xl border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 p-3">
-                                <p className="text-base font-black text-black">
-                                  📅{" "}
-                                  {formatAppointmentDate(
-                                    appointment.appointment_date,
-                                  )}
-                                </p>
-
-                                <p className="mt-1 text-sm font-semibold text-black/65">
-                                  🕐 Ora {appointment.appointment_time}
-                                </p>
-                              </div>
-
-                              <p className="mt-1 text-sm text-black/55">
-                                {appointment.handover_method ===
-                                "customer_dropoff"
-                                  ? "Aduci mașina la service"
-                                  : "Service-ul ridică mașina"}
-                              </p>
-                            </>
-                          )}
-
-                          {appointment.status === "declined" && (
-                            <div className="mt-3 rounded-2xl border border-red-200 bg-white p-3">
-                              <p className="font-semibold text-red-700">
-                                ⚠️ Service-ul nu poate prelua mașina la data
-                                selectată.
-                              </p>
-
-                              <p className="mt-1 text-sm text-red-600">
-                                Alege o altă dată pentru reprogramare.
-                              </p>
-                            </div>
-                          )}
-
-                          <span className="mt-2 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
-                            {formatAppointmentStatus(appointment.status)}
-                          </span>
-
-                          {appointment.proposed_date &&
-                            appointment.proposed_time &&
-                            appointment.status === "requested" && (
-                              <div className="mt-3 rounded-2xl border border-orange-200 bg-white p-3">
-                                <p className="text-xs font-black uppercase tracking-[0.16em] text-orange-600">
-                                  NOUĂ DATĂ PROPUSĂ
-                                </p>
-
-                                <div className="mt-3 rounded-2xl border border-orange-300 bg-gradient-to-r from-orange-50 to-orange-100 p-3">
-                                  <p className="text-base font-black text-black">
-                                    📅{" "}
-                                    {formatAppointmentDate(
-                                      appointment.proposed_date,
-                                    )}
-                                  </p>
-
-                                  <p className="mt-1 text-sm font-semibold text-black/65">
-                                    🕐 Ora {appointment.proposed_time}
-                                  </p>
-                                </div>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      acceptAppointmentProposal(appointment.id);
-                                    }}
-                                    className="rounded-2xl bg-green-500 px-4 py-3 text-sm font-black text-black"
-                                  >
-                                    Accept noua dată
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      router.push(
-                                        `/customer/schedule-damage/${request.id}`,
-                                      );
-                                    }}
-                                    className="rounded-2xl bg-black px-4 py-3 text-sm font-black text-white"
-                                  >
-                                    Aleg altă dată
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                        </div>
-                      )}
-
-                      {progressByRequestId[request.id] && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="rounded-full bg-orange-100 px-3 py-1 text-[11px] font-bold text-orange-700">
-                            {progressByRequestId[request.id].latestStatus ||
-                              "Waiting"}
-                          </span>
-
-                          <span className="rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
-                            {progressByRequestId[request.id].count} update-uri
-                          </span>
-                        </div>
-                      )}
-
-                      <p className="mt-3 line-clamp-2 text-sm text-black/65">
-                        {request.description || "Fără descriere."}
+                        router.push(`/workshops/profile/${slug}`);
+                      }}
+                      className="mt-5 w-full rounded-3xl bg-black/[0.04] p-4 text-left transition hover:bg-black/[0.07] active:scale-[0.99] md:mx-auto"
+                    >
+                      <p className="text-xs text-black/45">
+                        Detaliile service-ului
                       </p>
 
-                      <div className="mt-4 flex flex-col gap-3">
+                      <p className="mt-1 text-lg font-black">
+                        {acceptedOffer.workshop_name}
+                      </p>
+
+                      <div className="mt-3 flex items-center justify-between text-sm">
+                        <span className="text-black/55">
+                          {acceptedOffer.days}{" "}
+                          {String(acceptedOffer.days) === "1" ? "zi" : "zile"}
+                        </span>
+
+                        <span className="text-xl font-black">
+                          €{acceptedOffer.price}
+                        </span>
+                      </div>
+                    </button>
+                  )}
+
+                  {appointment && (
+                    <div
+                      className={`mt-5 rounded-[26px] p-5 ${
+                        appointment.status === "declined"
+                          ? "bg-red-50"
+                          : "bg-orange-50"
+                      }`}
+                    >
+                      <p
+                        className={`text-xs font-black uppercase tracking-[0.22em] ${
+                          appointment.status === "declined"
+                            ? "text-red-600"
+                            : "text-orange-600"
+                        }`}
+                      >
+                        Detalii programare
+                      </p>
+
+                      {appointment.status !== "declined" && (
+                        <>
+                          <div className="mt-4 rounded-3xl border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 p-4">
+                            <p className="text-lg font-black text-black">
+                              📅{" "}
+                              {formatAppointmentDate(
+                                appointment.appointment_date,
+                              )}
+                            </p>
+
+                            <p className="mt-2 text-base font-bold text-black/65">
+                              🕐 Ora {appointment.appointment_time}
+                            </p>
+                          </div>
+
+                          <p className="mt-3 text-sm text-black/55">
+                            {appointment.handover_method === "customer_dropoff"
+                              ? "Aduci mașina la service"
+                              : "Service-ul ridică mașina"}
+                          </p>
+                        </>
+                      )}
+
+                      <span className="mt-3 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
+                        {formatAppointmentStatus(appointment.status)}
+                      </span>
+                    </div>
+                  )}
+
+                  <p className="mt-5 text-sm leading-6 text-black/65">
+                    {request.description || "Fără descriere."}
+                  </p>
+
+                  <div className="mt-6 flex flex-col gap-4">
+                    <button
+                      type="button"
+                      disabled={!acceptedOffer}
+                      onClick={(event) => {
+                        event.stopPropagation();
+
+                        if (!acceptedOffer) {
+                          alert("Oferta acceptată nu a fost găsită.");
+                          return;
+                        }
+
+                        router.push(
+                          `/chat/${request.id}?offerId=${acceptedOffer.id}`,
+                        );
+                      }}
+                      className="rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:opacity-40"
+                    >
+                      Chat cu service-ul
+                    </button>
+
+                    {activeTab === "scheduled" && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          router.push(
+                            `/customer/schedule-damage/${request.id}`,
+                          );
+                        }}
+                        className="rounded-2xl border border-orange-500 px-4 py-4 text-base font-bold text-orange-600"
+                      >
+                        📅 Schimbă data
+                      </button>
+                    )}
+
+                    {activeTab === "needs_schedule" && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          router.push(
+                            `/customer/schedule-damage/${request.id}`,
+                          );
+                        }}
+                        className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
+                      >
+                        📅 Programează acum
+                      </button>
+                    )}
+
+                    {request.status === "completed" &&
+                      (reviewedRequestIds.includes(request.id) ? (
                         <button
                           type="button"
-                          disabled={!acceptedOffer}
+                          disabled
+                          className="rounded-2xl bg-emerald-100 px-4 py-4 text-base font-bold text-emerald-700"
+                        >
+                          ✓ Review trimis
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
                           onClick={(event) => {
                             event.stopPropagation();
-
-                            if (!acceptedOffer) {
-                              alert("Oferta acceptată nu a fost găsită.");
-                              return;
-                            }
-
-                            router.push(
-                              `/chat/${request.id}?offerId=${acceptedOffer.id}`,
-                            );
+                            router.push(`/review?id=${request.id}`);
                           }}
-                          className="rounded-2xl bg-black px-4 py-3 text-sm font-bold text-white disabled:opacity-40"
+                          className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
                         >
-                          Chat cu service-ul
+                          ⭐ Lasă review
                         </button>
-
-                        {activeTab === "scheduled" && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              router.push(
-                                `/customer/schedule-damage/${request.id}`,
-                              );
-                            }}
-                            className="rounded-2xl border border-orange-500 px-4 py-3 text-sm font-bold text-orange-600"
-                          >
-                            📅 Schimbă data
-                          </button>
-                        )}
-
-                        {activeTab === "needs_schedule" && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              router.push(
-                                `/customer/schedule-damage/${request.id}`,
-                              );
-                            }}
-                            className="mt-3 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
-                          >
-                            📅 Programează acum
-                          </button>
-                        )}
-
-                        {request.status === "completed" &&
-                          (reviewedRequestIds.includes(request.id) ? (
-                            <button
-                              type="button"
-                              disabled
-                              className="mt-3 rounded-2xl bg-emerald-100 px-4 py-3 text-sm font-bold text-emerald-700"
-                            >
-                              ✓ Review trimis
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                router.push(`/review?id=${request.id}`);
-                              }}
-                              className="mt-3 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
-                            >
-                              ⭐ Lasă review
-                            </button>
-                          ))}
-                      </div>
-                    </div>
+                      ))}
                   </div>
                 </div>
               );
