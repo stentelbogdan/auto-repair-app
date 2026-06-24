@@ -7,7 +7,7 @@ import Lightbox from "yet-another-react-lightbox";
 import "yet-another-react-lightbox/styles.css";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 
-type JobFilter = "active" | "completed";
+type JobFilter = "scheduled" | "in_progress" | "completed";
 
 type ProfileRow = {
   role: string[] | null;
@@ -69,7 +69,7 @@ export default function WorkshopWonJobsPage() {
   const [jobs, setJobs] = useState<WonJob[]>([]);
   const [search, setSearch] = useState("");
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
-  const [activeTab, setActiveTab] = useState<JobFilter>("active");
+  const [activeTab, setActiveTab] = useState<JobFilter>("scheduled");
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -343,8 +343,14 @@ export default function WorkshopWonJobsPage() {
     const query = search.trim().toLowerCase();
 
     return jobs.filter((job) => {
-      const isCompleted = job.request.status === "completed";
-      const matchesTab = activeTab === "completed" ? isCompleted : !isCompleted;
+      const status = job.request.status || "matched";
+
+      const matchesTab =
+        activeTab === "scheduled"
+          ? status === "matched"
+          : activeTab === "in_progress"
+            ? status === "in_progress"
+            : status === "completed";
 
       const haystack = [
         job.request.carBrand,
@@ -366,8 +372,13 @@ export default function WorkshopWonJobsPage() {
     });
   }, [jobs, search, activeTab]);
 
-  const activeJobsCount = useMemo(() => {
-    return jobs.filter((job) => job.request.status !== "completed").length;
+  const scheduledJobsCount = useMemo(() => {
+    return jobs.filter((job) => (job.request.status || "matched") === "matched")
+      .length;
+  }, [jobs]);
+
+  const inProgressJobsCount = useMemo(() => {
+    return jobs.filter((job) => job.request.status === "in_progress").length;
   }, [jobs]);
 
   const completedJobsCount = useMemo(() => {
@@ -635,8 +646,8 @@ export default function WorkshopWonJobsPage() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-white/70">
-              Acestea sunt lucrările câștigate de service-ul tău pe care le poți
-              începe.
+              Gestionează lucrările acceptate de client: programare, lucru în
+              curs și finalizare.
             </p>
           </div>
 
@@ -653,14 +664,26 @@ export default function WorkshopWonJobsPage() {
         <div className="mb-6 flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={() => setActiveTab("active")}
+            onClick={() => setActiveTab("scheduled")}
             className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "active"
+              activeTab === "scheduled"
                 ? "bg-white text-black"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            Lucrări active ({activeJobsCount})
+            Programate ({scheduledJobsCount})
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("in_progress")}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+              activeTab === "in_progress"
+                ? "bg-white text-black"
+                : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            În lucru ({inProgressJobsCount})
           </button>
 
           <button
@@ -672,7 +695,7 @@ export default function WorkshopWonJobsPage() {
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            Lucrări finalizate ({completedJobsCount})
+            Finalizate ({completedJobsCount})
           </button>
         </div>
 
@@ -685,13 +708,17 @@ export default function WorkshopWonJobsPage() {
             <h2 className="text-2xl font-semibold">
               {activeTab === "completed"
                 ? "Nu ai lucrări finalizate"
-                : "Nu ai lucrări active"}
+                : activeTab === "in_progress"
+                  ? "Nu ai lucrări în lucru"
+                  : "Nu ai lucrări programate"}
             </h2>
 
             <p className="mt-3 text-white/70">
               {activeTab === "completed"
                 ? "Lucrările finalizate vor apărea aici."
-                : "Când un client acceptă una dintre ofertele tale, lucrarea va apărea aici."}
+                : activeTab === "in_progress"
+                  ? "Lucrările începute vor apărea aici."
+                  : "Când un client acceptă o ofertă, lucrarea apare aici pentru programare."}
             </p>
 
             <div className="mt-6 flex flex-col gap-3 md:flex-row md:justify-center">
@@ -725,7 +752,7 @@ export default function WorkshopWonJobsPage() {
                   onClick={() =>
                     router.push(`/workshops/won-jobs/${job.requestId}`)
                   }
-                  className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 ..."
+                  className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-lg transition hover:border-white/20"
                 >
                   <div className="relative">
                     {currentImage?.dataUrl ? (
@@ -869,7 +896,7 @@ export default function WorkshopWonJobsPage() {
                       </span>
 
                       <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                        {job.days} {job.days === "1" ? "zi" : "zile"}
+                        {job.days}
                       </span>
 
                       <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
@@ -906,9 +933,11 @@ export default function WorkshopWonJobsPage() {
                         }`}
                       >
                         <p className="text-[11px] uppercase tracking-[0.18em] text-orange-300">
-                          {job.appointment.status === "declined"
-                            ? "Programare refuzată"
-                            : "Programare solicitată"}
+                          {job.appointment.status === "confirmed"
+                            ? "Programare confirmată"
+                            : job.appointment.status === "declined"
+                              ? "Programare refuzată"
+                              : "Programare în așteptare"}
                         </p>
 
                         <div className="mt-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-orange-500/20 p-3">
