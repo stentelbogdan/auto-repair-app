@@ -11,6 +11,9 @@ import {
   getOffersForCustomerRequests,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
+import Lightbox from "yet-another-react-lightbox";
+import "yet-another-react-lightbox/styles.css";
+import Zoom from "yet-another-react-lightbox/plugins/zoom";
 
 type RepairAppointment = {
   id: string;
@@ -44,6 +47,10 @@ export default function MyJobsPage() {
   >({});
   const [reviewedRequestIds, setReviewedRequestIds] = useState<string[]>([]);
   const [appointments, setAppointments] = useState<RepairAppointment[]>([]);
+  const [selectedGallery, setSelectedGallery] = useState<{
+    images: RepairRequestRow["images"];
+    index: number;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<
     "needs_schedule" | "scheduled" | "in_progress" | "completed"
   >("needs_schedule");
@@ -104,7 +111,28 @@ export default function MyJobsPage() {
         unreadMap[row.request_id] = row.unread_count;
       });
 
-      setUnreadByRequestId(unreadMap);
+      const unreadRequestIds = Object.keys(unreadMap).filter(
+        (requestId) => unreadMap[requestId] > 0,
+      );
+
+      if (unreadRequestIds.length > 0 && authData.user.id) {
+        await supabase.from("work_progress_reads").upsert(
+          unreadRequestIds.map((requestId) => ({
+            request_id: requestId,
+            customer_user_id: authData.user.id,
+            read_at: new Date().toISOString(),
+          })),
+          { onConflict: "request_id,customer_user_id" },
+        );
+
+        window.dispatchEvent(new Event("progress-read-updated"));
+        window.dispatchEvent(new Event("offers-read-updated"));
+        setUnreadByRequestId({});
+      }
+
+      if (unreadRequestIds.length === 0) {
+        setUnreadByRequestId(unreadMap);
+      }
 
       await Promise.all(
         requestRows.map(async (request) => {
@@ -360,7 +388,20 @@ export default function MyJobsPage() {
                   className="overflow-hidden rounded-[26px] bg-white text-black shadow-lg transition active:scale-[0.99]"
                 >
                   <div className="flex gap-4 p-4">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-black/10">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+
+                        if (request.images?.length > 0) {
+                          setSelectedGallery({
+                            images: request.images,
+                            index: 0,
+                          });
+                        }
+                      }}
+                      className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-black/10"
+                    >
                       {image ? (
                         <img
                           src={image}
@@ -372,7 +413,7 @@ export default function MyJobsPage() {
                           No photo
                         </div>
                       )}
-                    </div>
+                    </button>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
@@ -572,7 +613,7 @@ export default function MyJobsPage() {
                         {request.description || "Fără descriere."}
                       </p>
 
-                      <div className="mt-4">
+                      <div className="mt-4 flex flex-col gap-3">
                         <button
                           type="button"
                           disabled={!acceptedOffer}
@@ -602,7 +643,7 @@ export default function MyJobsPage() {
                                 `/customer/schedule-damage/${request.id}`,
                               );
                             }}
-                            className="ml-2 rounded-2xl border border-orange-500 px-4 py-3 text-sm font-bold text-orange-600"
+                            className="rounded-2xl border border-orange-500 px-4 py-3 text-sm font-bold text-orange-600"
                           >
                             📅 Schimbă data
                           </button>
@@ -653,6 +694,43 @@ export default function MyJobsPage() {
           </div>
         )}
       </div>
+
+      <Lightbox
+        open={!!selectedGallery}
+        close={() => setSelectedGallery(null)}
+        slides={
+          selectedGallery?.images
+            .map((img) => ({
+              src: img.url || img.dataUrl || "",
+            }))
+            .filter((img) => img.src) || []
+        }
+        index={selectedGallery?.index || 0}
+        plugins={[Zoom]}
+        controller={{
+          closeOnBackdropClick: true,
+          closeOnPullDown: true,
+        }}
+        animation={{
+          fade: 220,
+          swipe: 260,
+          zoom: 260,
+        }}
+        zoom={{
+          maxZoomPixelRatio: 4,
+          scrollToZoom: true,
+          doubleTapDelay: 250,
+          doubleClickDelay: 250,
+        }}
+        carousel={{
+          finite: true,
+          padding: "16px",
+          spacing: "16px",
+        }}
+        styles={{
+          button: { display: "none" },
+        }}
+      />
     </main>
   );
 }
