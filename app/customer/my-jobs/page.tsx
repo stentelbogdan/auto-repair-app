@@ -593,6 +593,21 @@ export default function MyJobsPage() {
                           Chat cu service-ul
                         </button>
 
+                        {activeTab === "scheduled" && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(
+                                `/customer/schedule-damage/${request.id}`,
+                              );
+                            }}
+                            className="ml-2 rounded-2xl border border-orange-500 px-4 py-3 text-sm font-bold text-orange-600"
+                          >
+                            📅 Schimbă data
+                          </button>
+                        )}
+
                         {activeTab === "needs_schedule" && (
                           <button
                             type="button"

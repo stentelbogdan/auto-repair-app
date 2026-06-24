@@ -661,11 +661,11 @@ export default function WorkshopWonJobsPage() {
           </div>
         </div>
 
-        <div className="mb-6 flex flex-wrap gap-3">
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
             onClick={() => setActiveTab("scheduled")}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === "scheduled"
                 ? "bg-white text-black"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
@@ -677,7 +677,7 @@ export default function WorkshopWonJobsPage() {
           <button
             type="button"
             onClick={() => setActiveTab("in_progress")}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === "in_progress"
                 ? "bg-white text-black"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
@@ -689,7 +689,7 @@ export default function WorkshopWonJobsPage() {
           <button
             type="button"
             onClick={() => setActiveTab("completed")}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === "completed"
                 ? "bg-white text-black"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
@@ -788,7 +788,10 @@ export default function WorkshopWonJobsPage() {
                           key={`${job.offerId}-${currentImageIndex}`}
                           src={currentImage.dataUrl}
                           alt={`${job.request.carBrand} ${job.request.carModel}`}
-                          onClick={() => openLightbox(job)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openLightbox(job);
+                          }}
                           className="h-full w-full cursor-zoom-in object-cover transition-all duration-500 ease-out group-hover:scale-[1.02]"
                         />
 
@@ -797,7 +800,7 @@ export default function WorkshopWonJobsPage() {
                         <div className="pointer-events-none absolute bottom-3 right-3 hidden rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur md:block"></div>
 
                         {job.request.status === "completed" && (
-                          <div className="absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
+                          <div className="pointer-events-none absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
                         )}
 
                         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
@@ -862,10 +865,7 @@ export default function WorkshopWonJobsPage() {
                     <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
                       <div>
                         <p className="text-xs uppercase tracking-[0.22em] text-white/50">
-                          Lucrare{" "}
-                          {formatJobStatus(
-                            job.latestProgressStatus || job.request.status,
-                          ).toLowerCase()}
+                          Status lucrare
                         </p>
 
                         <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
@@ -879,7 +879,7 @@ export default function WorkshopWonJobsPage() {
 
                       <div className="shrink-0 rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-right backdrop-blur">
                         <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                          Oferta ta
+                          Preț acceptat
                         </p>
 
                         <p className="mt-1 text-3xl font-extrabold tracking-tight text-white">
@@ -916,7 +916,7 @@ export default function WorkshopWonJobsPage() {
 
                     <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                        Mesajul tău
+                        Mesaj ofertă
                       </p>
 
                       <p className="mt-2 text-sm leading-6 text-white/80">
@@ -1202,43 +1202,6 @@ export default function WorkshopWonJobsPage() {
         )}
       </div>
 
-      {stickyJob && stickyJob.request.status !== "completed" && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/80 backdrop-blur md:hidden">
-          <div className="mx-auto max-w-7xl px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4">
-            {stickyJob.request.status === "matched" &&
-              stickyJob.appointment?.status === "confirmed" && (
-                <button
-                  onClick={() => {
-                    if (
-                      confirm("Ești sigur că vrei să începi această lucrare?")
-                    ) {
-                      startJob(stickyJob);
-                    }
-                  }}
-                  className="w-full rounded-2xl bg-blue-500 px-6 py-4 text-lg font-bold text-black shadow-[0_20px_60px_rgba(59,130,246,0.35)] transition active:scale-[0.99]"
-                >
-                  Începe lucrarea
-                </button>
-              )}
-
-            {stickyJob.request.status === "in_progress" && (
-              <button
-                onClick={() => {
-                  if (
-                    confirm("Ești sigur că vrei să finalizezi această lucrare?")
-                  ) {
-                    markAsCompleted(stickyJob);
-                  }
-                }}
-                className="w-full rounded-2xl bg-green-500 px-6 py-4 text-lg font-bold text-black shadow-[0_20px_60px_rgba(34,197,94,0.35)] transition active:scale-[0.99]"
-              >
-                Marchează ca finalizată
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       <Lightbox
         open={lightboxIndex !== null}
         close={() => setLightboxIndex(null)}
@@ -1355,7 +1318,7 @@ function formatJobStatus(value?: string | null) {
       return "Testare";
 
     case "matched":
-      return "Acceptată";
+      return "Programată";
 
     default:
       return "Deschisă";
