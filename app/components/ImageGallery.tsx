@@ -24,6 +24,7 @@ export default function ImageGallery({
 }) {
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const slides = (images || [])
     .map((img) => ({
@@ -41,21 +42,34 @@ export default function ImageGallery({
     );
   }
 
-  const goPrev = () => {
-    setIndex((current) =>
-      current === 0 ? slides.length - 1 : current - 1,
-    );
-  };
-
-  const goNext = () => {
-    setIndex((current) =>
-      current === slides.length - 1 ? 0 : current + 1,
-    );
-  };
-
   return (
     <>
-      <div className={`relative ${wrapperClassName}`}>
+      <div
+        className={`relative ${wrapperClassName}`}
+        onTouchStart={(event) => {
+          setTouchStartX(event.touches[0].clientX);
+        }}
+        onTouchEnd={(event) => {
+          if (touchStartX === null || slides.length <= 1) return;
+
+          const touchEndX = event.changedTouches[0].clientX;
+          const diff = touchStartX - touchEndX;
+
+          if (Math.abs(diff) > 40) {
+            if (diff > 0) {
+              setIndex((current) =>
+                current === slides.length - 1 ? 0 : current + 1,
+              );
+            } else {
+              setIndex((current) =>
+                current === 0 ? slides.length - 1 : current - 1,
+              );
+            }
+          }
+
+          setTouchStartX(null);
+        }}
+      >
         <button
           type="button"
           onClick={(event) => {
@@ -69,28 +83,6 @@ export default function ImageGallery({
 
         {imageCount > 1 && (
           <>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                goPrev();
-              }}
-              className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur"
-            >
-              ‹
-            </button>
-
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                goNext();
-              }}
-              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur"
-            >
-              ›
-            </button>
-
             <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 gap-1.5">
               {slides.map((_, dotIndex) => (
                 <button
