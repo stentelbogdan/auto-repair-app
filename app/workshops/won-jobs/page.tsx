@@ -70,6 +70,16 @@ export default function WorkshopWonJobsPage() {
   const [search, setSearch] = useState("");
   const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<JobFilter>("scheduled");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+
+    if (tab === "scheduled" || tab === "in_progress" || tab === "completed") {
+      setActiveTab(tab);
+    }
+  }, []);
+
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
@@ -488,7 +498,7 @@ export default function WorkshopWonJobsPage() {
         ),
       );
 
-      setActiveTab("completed");
+      changeTab("completed");
     } catch (err) {
       console.error(
         "Failed to mark as completed:",
@@ -618,6 +628,13 @@ export default function WorkshopWonJobsPage() {
     }
   };
 
+  const changeTab = (tab: JobFilter) => {
+    setActiveTab(tab);
+    router.replace(`/workshops/won-jobs?tab=${tab}`, {
+      scroll: false,
+    });
+  };
+
   if (checkingAccess) {
     return (
       <main className="min-h-screen bg-black px-6 pb-28 pt-4 text-white">
@@ -664,7 +681,7 @@ export default function WorkshopWonJobsPage() {
         <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
-            onClick={() => setActiveTab("scheduled")}
+            onClick={() => changeTab("scheduled")}
             className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === "scheduled"
                 ? "bg-white text-black"
@@ -676,7 +693,7 @@ export default function WorkshopWonJobsPage() {
 
           <button
             type="button"
-            onClick={() => setActiveTab("in_progress")}
+            onClick={() => changeTab("in_progress")}
             className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === "in_progress"
                 ? "bg-white text-black"
@@ -688,7 +705,7 @@ export default function WorkshopWonJobsPage() {
 
           <button
             type="button"
-            onClick={() => setActiveTab("completed")}
+            onClick={() => changeTab("completed")}
             className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
               activeTab === "completed"
                 ? "bg-white text-black"
@@ -750,7 +767,9 @@ export default function WorkshopWonJobsPage() {
                 <article
                   key={job.offerId}
                   onClick={() =>
-                    router.push(`/workshops/won-jobs/${job.requestId}`)
+                    router.push(
+                      `/workshops/won-jobs/${job.requestId}?tab=${activeTab}`,
+                    )
                   }
                   className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-lg transition hover:border-white/20"
                 >
@@ -1137,9 +1156,12 @@ export default function WorkshopWonJobsPage() {
 
                     <div className="mt-5 space-y-3">
                       <button
-                        onClick={() =>
-                          router.push(`/workshops/${job.requestId}`)
-                        }
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          router.push(
+                            `/workshops/${job.requestId}?tab=${activeTab}`,
+                          );
+                        }}
                         className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
                       >
                         Deschide lucrarea
@@ -1162,7 +1184,9 @@ export default function WorkshopWonJobsPage() {
                       {job.request.status === "matched" &&
                         job.appointment?.status === "confirmed" && (
                           <button
-                            onClick={() => {
+                            onClick={(event) => {
+                              event.stopPropagation();
+
                               if (
                                 confirm(
                                   "Ești sigur că vrei să începi această lucrare?",
@@ -1179,7 +1203,8 @@ export default function WorkshopWonJobsPage() {
 
                       {job.request.status === "in_progress" && (
                         <button
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation();
                             if (
                               confirm(
                                 "Ești sigur că vrei să finalizezi această lucrare?",

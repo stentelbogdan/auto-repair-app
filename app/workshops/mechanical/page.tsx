@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
   getWorkshopRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type WorkshopRequest = {
   id: string;
@@ -278,33 +278,13 @@ export default function WorkshopsPage() {
               return (
                 <div
                   key={request.id}
-                  className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                  onClick={() => router.push(`/workshops/${request.id}`)}
+                  className="cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20"
                 >
-                  {request.images.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/workshops/${request.id}`)}
-                      className="block w-full overflow-hidden"
-                    >
-                      <img
-                        src={
-                          request.images[0].url ||
-                          request.images[0].dataUrl ||
-                          ""
-                        }
-                        alt={`${request.carBrand} ${request.carModel}`}
-                        className="h-56 w-full object-cover"
-                      />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/workshops/${request.id}`)}
-                      className="flex h-56 w-full items-center justify-center bg-white/5 text-white/40"
-                    >
-                      Fără poză
-                    </button>
-                  )}
+                  <ImageGallery
+                    images={request.images}
+                    alt={`${request.carBrand} ${request.carModel}`}
+                  />
 
                   <div className="p-5">
                     <div className="mb-4 flex items-start justify-between gap-3">

@@ -34,6 +34,7 @@ export default function AppNavbar() {
   const isAdmin = userRoles.includes("admin");
   const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
   const [directRequestsUnreadCount, setDirectRequestsUnreadCount] = useState(0);
+  const [newRequestsUnreadCount, setNewRequestsUnreadCount] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -136,6 +137,7 @@ export default function AppNavbar() {
       setOfferUnreadCount(0);
       setWonJobsUnreadCount(0);
       setDirectRequestsUnreadCount(0);
+      setNewRequestsUnreadCount(0);
       return;
     }
 
@@ -315,6 +317,34 @@ export default function AppNavbar() {
       setDirectRequestsUnreadCount(count || 0);
     };
 
+    const loadUnreadOpenRequests = async () => {
+      if (!isWorkshopMode) {
+        setNewRequestsUnreadCount(0);
+        return;
+      }
+
+      const seenAt = localStorage.getItem(`open_requests_seen_at_${userId}`);
+
+      let query = supabase
+        .from("repair_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open");
+
+      if (seenAt) {
+        query = query.gt("created_at", seenAt);
+      }
+
+      const { count, error } = await query;
+
+      if (error) {
+        console.error("Failed to load new open requests:", error);
+        setNewRequestsUnreadCount(0);
+        return;
+      }
+
+      setNewRequestsUnreadCount(count || 0);
+    };
+
     loadUnreadMessages();
     loadUnreadProgress();
     loadUnreadOffers();
@@ -346,18 +376,7 @@ export default function AppNavbar() {
         },
         async () => {
           await loadUnreadDirectRequests();
-        },
-      )
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "repair_requests",
-        },
-        async () => {
-          await loadUnreadDirectRequests();
+          await loadUnreadOpenRequests();
         },
       )
 
@@ -416,6 +435,7 @@ export default function AppNavbar() {
           loadUnreadOffers();
           loadUnreadWonJobs();
           loadUnreadDirectRequests();
+          loadUnreadOpenRequests();
         }
       });
 
@@ -425,6 +445,7 @@ export default function AppNavbar() {
       loadUnreadOffers();
       loadUnreadWonJobs();
       loadUnreadDirectRequests();
+      loadUnreadOpenRequests();
     };
 
     window.addEventListener("focus", refreshBadges);
