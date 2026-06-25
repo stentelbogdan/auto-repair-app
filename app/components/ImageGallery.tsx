@@ -23,6 +23,7 @@ export default function ImageGallery({
   wrapperClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [index, setIndex] = useState(0);
 
   const slides = (images || [])
     .map((img) => ({
@@ -46,6 +47,7 @@ export default function ImageGallery({
         type="button"
         onClick={(event) => {
           event.stopPropagation();
+          setIndex(0);
           setOpen(true);
         }}
         className={`relative ${wrapperClassName}`}
@@ -63,7 +65,10 @@ export default function ImageGallery({
         open={open}
         close={() => setOpen(false)}
         slides={slides}
-        index={0}
+        index={index}
+        on={{
+          view: ({ index }) => setIndex(index),
+        }}
         plugins={[Zoom]}
         controller={{
           closeOnBackdropClick: true,
@@ -89,6 +94,12 @@ export default function ImageGallery({
           button: { display: "none" },
         }}
       />
+
+      {open && slides.length > 1 && (
+        <div className="fixed bottom-6 left-1/2 z-[9999] -translate-x-1/2 rounded-full bg-black/70 px-4 py-2 text-sm font-semibold text-white backdrop-blur-md">
+          {index + 1} / {slides.length}
+        </div>
+      )}
     </>
   );
 }
