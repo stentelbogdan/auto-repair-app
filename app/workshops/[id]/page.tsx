@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type RepairImage = {
   name?: string;
@@ -38,7 +35,6 @@ export default function WorkshopRequestDetailsPage() {
 
   const [request, setRequest] = useState<RepairRequestRow | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -104,11 +100,6 @@ export default function WorkshopRequestDetailsPage() {
     );
   }
 
-  const images =
-    request.images
-      ?.map((image) => image.url || image.dataUrl || "")
-      .filter(Boolean) || [];
-
   const isClosed = request.status === "completed";
 
   return (
@@ -135,42 +126,13 @@ export default function WorkshopRequestDetailsPage() {
           </p>
         </section>
 
-        <button
-          type="button"
-          onClick={() => setSelectedImages(images)}
-          className="mb-5 block w-full overflow-hidden rounded-[28px] bg-white/5"
-        >
-          {images.length > 0 ? (
-            <img
-              src={images[0]}
-              alt={`${request.car_brand} ${request.car_model}`}
-              className="h-[340px] w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-[260px] items-center justify-center text-white/40">
-              Fără poză
-            </div>
-          )}
-        </button>
-
-        {images.length > 1 && (
-          <div className="mb-6 grid grid-cols-3 gap-3">
-            {images.slice(1).map((src, index) => (
-              <button
-                key={index}
-                type="button"
-                onClick={() => setSelectedImages(images)}
-                className="overflow-hidden rounded-2xl bg-white/5"
-              >
-                <img
-                  src={src}
-                  alt={`Poză ${index + 2}`}
-                  className="h-24 w-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="mb-5 overflow-hidden rounded-[28px] bg-white/5">
+          <ImageGallery
+            images={request.images || []}
+            alt={`${request.car_brand} ${request.car_model}`}
+            className="h-[340px] w-full object-cover"
+          />
+        </div>
 
         <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-5">
           <p className="text-[11px] uppercase tracking-[0.24em] text-white/35">
@@ -204,21 +166,6 @@ export default function WorkshopRequestDetailsPage() {
           {isClosed ? "Oferta este închisă" : "Trimite ofertă"}
         </button>
       </div>
-
-      <Lightbox
-        open={selectedImages.length > 0}
-        close={() => setSelectedImages([])}
-        slides={selectedImages.map((src) => ({ src }))}
-        plugins={[Zoom]}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }
