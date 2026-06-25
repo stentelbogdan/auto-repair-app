@@ -41,25 +41,78 @@ export default function ImageGallery({
     );
   }
 
+  const goPrev = () => {
+    setIndex((current) =>
+      current === 0 ? slides.length - 1 : current - 1,
+    );
+  };
+
+  const goNext = () => {
+    setIndex((current) =>
+      current === slides.length - 1 ? 0 : current + 1,
+    );
+  };
+
   return (
     <>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setIndex(0);
-          setOpen(true);
-        }}
-        className={`relative ${wrapperClassName}`}
-      >
-        <img src={slides[0].src} alt={alt} className={className} />
+      <div className={`relative ${wrapperClassName}`}>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpen(true);
+          }}
+          className="block w-full"
+        >
+          <img src={slides[index].src} alt={alt} className={className} />
+        </button>
 
         {imageCount > 1 && (
-          <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
-            {imageCount} poze
-          </div>
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                goPrev();
+              }}
+              className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur"
+            >
+              ‹
+            </button>
+
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                goNext();
+              }}
+              className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur"
+            >
+              ›
+            </button>
+
+            <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 gap-1.5">
+              {slides.map((_, dotIndex) => (
+                <button
+                  key={dotIndex}
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setIndex(dotIndex);
+                  }}
+                  className={`h-2 w-2 rounded-full transition ${
+                    dotIndex === index ? "bg-white" : "bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
+              {imageCount} poze
+            </div>
+          </>
         )}
-      </button>
+      </div>
 
       <Lightbox
         open={open}
