@@ -30,6 +30,8 @@ export default function ImageGallery({
     }))
     .filter((img) => img.src);
 
+  const imageCount = slides.length;
+
   if (!slides.length) {
     return (
       <div className="flex h-56 w-full items-center justify-center bg-white/5 text-white/40">
@@ -46,9 +48,15 @@ export default function ImageGallery({
           event.stopPropagation();
           setOpen(true);
         }}
-        className={wrapperClassName}
+        className={`relative ${wrapperClassName}`}
       >
         <img src={slides[0].src} alt={alt} className={className} />
+
+        {imageCount > 1 && (
+          <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
+            {imageCount} poze
+          </div>
+        )}
       </button>
 
       <Lightbox
