@@ -8,6 +8,7 @@ import {
   getWorkshopRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type WorkshopRequest = {
   id: string;
@@ -300,21 +301,12 @@ export default function WorkshopsPage() {
                   className="overflow-hidden rounded-2xl border border-white/10 bg-white/5"
                 >
                   {request.images.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/workshops/${request.id}`)}
-                      className="block w-full overflow-hidden"
-                    >
-                      <img
-                        src={
-                          request.images[0].url ||
-                          request.images[0].dataUrl ||
-                          ""
-                        }
-                        alt={`${request.carBrand} ${request.carModel}`}
-                        className="h-56 w-full object-cover"
-                      />
-                    </button>
+                    <ImageGallery
+                      images={request.images}
+                      alt={`${request.carBrand} ${request.carModel}`}
+                      className="h-56 w-full object-cover"
+                      wrapperClassName="block w-full overflow-hidden"
+                    />
                   ) : (
                     <button
                       type="button"
@@ -361,6 +353,14 @@ export default function WorkshopsPage() {
                     <p className="min-h-[72px] text-sm leading-6 text-white/75">
                       {request.description}
                     </p>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/workshops/${request.id}`)}
+                      className="mt-5 w-full rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
+                    >
+                      Vezi detalii și trimite ofertă
+                    </button>
                   </div>
                 </div>
               );
