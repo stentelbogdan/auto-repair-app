@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import ImageGallery from "@/app/components/ImageGallery";
 
-type JobFilter = "scheduled" | "in_progress" | "completed";
+type JobFilter = "appointments" | "workshop" | "completed";
+
+type JobStage = "appointments" | "workshop" | "completed";
+type JobPriority = "needs_action" | "waiting" | "ok";
 
 type ProfileRow = {
   role: string[] | null;
@@ -68,22 +69,16 @@ export default function WorkshopWonJobsPage() {
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [jobs, setJobs] = useState<WonJob[]>([]);
   const [search, setSearch] = useState("");
-  const [imageIndexes, setImageIndexes] = useState<Record<string, number>>({});
-  const [activeTab, setActiveTab] = useState<JobFilter>("scheduled");
+  const [activeTab, setActiveTab] = useState<JobFilter>("appointments");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
 
-    if (tab === "scheduled" || tab === "in_progress" || tab === "completed") {
+    if (tab === "appointments" || tab === "workshop" || tab === "completed") {
       setActiveTab(tab);
     }
   }, []);
-
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
-
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const [lightboxImages, setLightboxImages] = useState<{ src: string }[]>([]);
 
   const [editingAppointmentId, setEditingAppointmentId] = useState<
     string | null
@@ -353,14 +348,9 @@ export default function WorkshopWonJobsPage() {
     const query = search.trim().toLowerCase();
 
     return jobs.filter((job) => {
-      const status = job.request.status || "matched";
+      const jobState = getJobState(job);
 
-      const matchesTab =
-        activeTab === "scheduled"
-          ? status === "matched"
-          : activeTab === "in_progress"
-            ? status === "in_progress"
-            : status === "completed";
+      const matchesTab = jobState.stage === activeTab;
 
       const haystack = [
         job.request.carBrand,
@@ -372,6 +362,8 @@ export default function WorkshopWonJobsPage() {
         job.workshopName,
         job.price,
         job.days,
+        jobState.label,
+        jobState.message,
       ]
         .join(" ")
         .toLowerCase();
@@ -382,70 +374,18 @@ export default function WorkshopWonJobsPage() {
     });
   }, [jobs, search, activeTab]);
 
-  const scheduledJobsCount = useMemo(() => {
-    return jobs.filter((job) => (job.request.status || "matched") === "matched")
+  const appointmentsJobsCount = useMemo(() => {
+    return jobs.filter((job) => getJobState(job).stage === "appointments")
       .length;
   }, [jobs]);
 
-  const inProgressJobsCount = useMemo(() => {
-    return jobs.filter((job) => job.request.status === "in_progress").length;
+  const workshopJobsCount = useMemo(() => {
+    return jobs.filter((job) => getJobState(job).stage === "workshop").length;
   }, [jobs]);
 
   const completedJobsCount = useMemo(() => {
-    return jobs.filter((job) => job.request.status === "completed").length;
+    return jobs.filter((job) => getJobState(job).stage === "completed").length;
   }, [jobs]);
-
-  const stickyJob = filteredJobs[0];
-
-  const getCurrentImageIndex = (jobId: string, imagesCount: number) => {
-    if (!imagesCount) return 0;
-    const current = imageIndexes[jobId] ?? 0;
-    return Math.min(current, imagesCount - 1);
-  };
-
-  const openLightbox = (job: WonJob) => {
-    const currentIndex = getCurrentImageIndex(
-      job.offerId,
-      job.request.images.length,
-    );
-
-    const slides = job.request.images
-      .map((image) => ({
-        src: image.dataUrl || image.url || "",
-      }))
-      .filter((image) => image.src);
-
-    if (!slides.length) return;
-
-    setLightboxImages(slides);
-    setLightboxIndex(currentIndex);
-  };
-
-  const goToPrevImage = (jobId: string, imagesCount: number) => {
-    if (imagesCount <= 1) return;
-
-    setImageIndexes((prev) => {
-      const current = prev[jobId] ?? 0;
-
-      return {
-        ...prev,
-        [jobId]: current === 0 ? imagesCount - 1 : current - 1,
-      };
-    });
-  };
-
-  const goToNextImage = (jobId: string, imagesCount: number) => {
-    if (imagesCount <= 1) return;
-
-    setImageIndexes((prev) => {
-      const current = prev[jobId] ?? 0;
-
-      return {
-        ...prev,
-        [jobId]: current === imagesCount - 1 ? 0 : current + 1,
-      };
-    });
-  };
 
   const startJob = async (job: WonJob) => {
     try {
@@ -681,26 +621,26 @@ export default function WorkshopWonJobsPage() {
         <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
           <button
             type="button"
-            onClick={() => changeTab("scheduled")}
+            onClick={() => changeTab("appointments")}
             className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "scheduled"
+              activeTab === "appointments"
                 ? "bg-white text-black"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            Programate ({scheduledJobsCount})
+            Programări ({appointmentsJobsCount})
           </button>
 
           <button
             type="button"
-            onClick={() => changeTab("in_progress")}
+            onClick={() => changeTab("workshop")}
             className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "in_progress"
+              activeTab === "workshop"
                 ? "bg-white text-black"
                 : "border border-white/15 bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
-            În lucru ({inProgressJobsCount})
+            În atelier ({workshopJobsCount})
           </button>
 
           <button
@@ -725,17 +665,17 @@ export default function WorkshopWonJobsPage() {
             <h2 className="text-2xl font-semibold">
               {activeTab === "completed"
                 ? "Nu ai lucrări finalizate"
-                : activeTab === "in_progress"
-                  ? "Nu ai lucrări în lucru"
-                  : "Nu ai lucrări programate"}
+                : activeTab === "workshop"
+                  ? "Nu ai mașini în atelier"
+                  : "Nu ai programări active"}
             </h2>
 
             <p className="mt-3 text-white/70">
               {activeTab === "completed"
                 ? "Lucrările finalizate vor apărea aici."
-                : activeTab === "in_progress"
-                  ? "Lucrările începute vor apărea aici."
-                  : "Când un client acceptă o ofertă, lucrarea apare aici pentru programare."}
+                : activeTab === "workshop"
+                  ? "Mașinile aflate în lucru vor apărea aici."
+                  : "Aici apar lucrările care trebuie programate sau confirmate."}
             </p>
 
             <div className="mt-6 flex flex-col gap-3 md:flex-row md:justify-center">
@@ -754,130 +694,123 @@ export default function WorkshopWonJobsPage() {
               </button>
             </div>
           </div>
+        ) : activeTab === "workshop" ? (
+          <div className="space-y-4">
+            {filteredJobs.map((job) => {
+              return (
+                <div
+                  key={job.offerId}
+                  className="flex w-full items-center gap-4 rounded-[28px] border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-white/20 hover:bg-white/[0.07]"
+                >
+                  <div className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-white/5">
+                    {job.request.images.length > 0 ? (
+                      <ImageGallery
+                        images={job.request.images}
+                        alt={`${job.request.carBrand} ${job.request.carModel}`}
+                        className="h-24 w-24 object-cover"
+                        wrapperClassName="block h-24 w-24 overflow-hidden rounded-3xl"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-3xl">
+                        🚗
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(`/workshops/in-workshop/${job.requestId}`)
+                    }
+                    className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="rounded-full bg-blue-500 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white">
+                          În lucru
+                        </span>
+
+                        {job.latestProgressStatus && (
+                          <span className="truncate rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
+                            {formatJobStatus(job.latestProgressStatus)}
+                          </span>
+                        )}
+                      </div>
+
+                      <h2 className="truncate text-xl font-black text-white">
+                        {job.request.carBrand} {job.request.carModel}
+                      </h2>
+
+                      <p className="mt-1 text-sm text-white/55">
+                        {job.request.carYear} • {job.request.city}
+                      </p>
+
+                      <p className="mt-2 line-clamp-1 text-sm text-white/45">
+                        {job.request.description}
+                      </p>
+                    </div>
+
+                    <div className="hidden shrink-0 text-right sm:block">
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">
+                        Preț
+                      </p>
+                      <p className="text-xl font-black text-white">
+                        €{job.price}
+                      </p>
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredJobs.map((job) => {
-              const currentImageIndex = getCurrentImageIndex(
-                job.offerId,
-                job.request.images.length,
-              );
-              const currentImage = job.request.images[currentImageIndex];
+              const jobState = getJobState(job);
 
               return (
                 <article
                   key={job.offerId}
-                  onClick={() =>
-                    router.push(
-                      `/workshops/won-jobs/${job.requestId}?tab=${activeTab}`,
-                    )
-                  }
                   className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-lg transition hover:border-white/20"
                 >
                   <div className="relative">
-                    {currentImage?.dataUrl ? (
-                      <div
-                        className="relative h-64 w-full overflow-hidden bg-white/5"
-                        onTouchStart={(e) => {
-                          setTouchStartX(e.touches[0].clientX);
-                        }}
-                        onTouchEnd={(e) => {
-                          if (touchStartX === null) return;
-
-                          const touchEndX = e.changedTouches[0].clientX;
-                          const diff = touchStartX - touchEndX;
-
-                          if (Math.abs(diff) < 40) return;
-
-                          if (diff > 0) {
-                            goToNextImage(
-                              job.offerId,
-                              job.request.images.length,
-                            );
-                          } else {
-                            goToPrevImage(
-                              job.offerId,
-                              job.request.images.length,
-                            );
-                          }
-
-                          setTouchStartX(null);
-                        }}
-                      >
-                        <img
-                          key={`${job.offerId}-${currentImageIndex}`}
-                          src={currentImage.dataUrl}
+                    <div
+                      onClick={(event) => event.stopPropagation()}
+                      className="h-64 w-full overflow-hidden bg-white/5"
+                    >
+                      {job.request.images.length > 0 ? (
+                        <ImageGallery
+                          images={job.request.images}
                           alt={`${job.request.carBrand} ${job.request.carModel}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openLightbox(job);
-                          }}
-                          className="h-full w-full cursor-zoom-in object-cover transition-all duration-500 ease-out group-hover:scale-[1.02]"
+                          className="h-64 w-full object-cover transition-all duration-500 ease-out group-hover:scale-[1.02]"
+                          wrapperClassName="block h-64 w-full overflow-hidden"
                         />
+                      ) : (
+                        <div className="flex h-64 items-center justify-center bg-white/5 text-white/40">
+                          Nu există fotografii
+                        </div>
+                      )}
+                    </div>
 
-                        <div className="pointer-events-none absolute inset-0 bg-black/0 transition duration-500 group-hover:bg-black/5" />
-
-                        <div className="pointer-events-none absolute bottom-3 right-3 hidden rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-xs font-semibold text-white/80 backdrop-blur md:block"></div>
-
-                        {job.request.status === "completed" && (
-                          <div className="pointer-events-none absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
-                        )}
-
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-
-                        {job.request.images.length > 1 && (
-                          <>
-                            <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2">
-                              {job.request.images.map((_, index) => {
-                                const isActive = index === currentImageIndex;
-
-                                return (
-                                  <button
-                                    key={index}
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setImageIndexes((prev) => ({
-                                        ...prev,
-                                        [job.offerId]: index,
-                                      }));
-                                    }}
-                                    className={`h-2.5 w-2.5 rounded-full transition ${
-                                      isActive ? "bg-white" : "bg-white/35"
-                                    }`}
-                                  />
-                                );
-                              })}
-                            </div>
-
-                            <div className="absolute right-3 top-3 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-xs text-white/80 backdrop-blur">
-                              {currentImageIndex + 1}/
-                              {job.request.images.length}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex h-64 items-center justify-center bg-white/5 text-white/40">
-                        Nu există fotografii
-                      </div>
+                    {job.request.status === "completed" && (
+                      <div className="pointer-events-none absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
                     )}
+
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
                     <div className="absolute left-4 top-4">
                       <span
                         className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] backdrop-blur ${
-                          (job.latestProgressStatus || job.request.status) ===
-                            "completed" ||
-                          (job.latestProgressStatus || job.request.status) ===
-                            "Ready" ||
-                          (job.latestProgressStatus || job.request.status) ===
-                            "Gata"
-                            ? "bg-green-500 text-black"
-                            : "bg-blue-500 text-black"
+                          jobState.priority === "needs_action"
+                            ? "bg-orange-500 text-black"
+                            : jobState.priority === "waiting"
+                              ? "bg-yellow-400 text-black"
+                              : jobState.stage === "completed"
+                                ? "bg-green-500 text-black"
+                                : "bg-blue-500 text-black"
                         }`}
                       >
-                        {formatJobStatus(
-                          job.latestProgressStatus || job.request.status,
-                        )}
+                        {jobState.label}
                       </span>
                     </div>
 
@@ -908,316 +841,345 @@ export default function WorkshopWonJobsPage() {
                     </div>
                   </div>
 
-                  <div className="p-5">
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
-                        {job.request.damageType}
-                      </span>
-
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                        {job.days}
-                      </span>
-
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                        {job.workshopName}
-                      </span>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                        Cererea clientului
-                      </p>
-
-                      <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/80">
-                        {job.request.description}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
-                      <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                        Mesaj ofertă
-                      </p>
-
-                      <p className="mt-2 text-sm leading-6 text-white/80">
-                        {job.message || "Nu ai adăugat niciun mesaj."}
-                      </p>
-                    </div>
-
-                    {job.appointment && (
-                      <div
-                        className={`mt-4 rounded-2xl border p-4 ${
-                          job.appointment.status === "declined"
-                            ? "border-red-500/25 bg-red-500/10"
-                            : "border-orange-500/25 bg-orange-500/10"
-                        }`}
-                      >
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-orange-300">
-                          {job.appointment.status === "confirmed"
-                            ? "Programare confirmată"
-                            : job.appointment.status === "declined"
-                              ? "Programare refuzată"
-                              : "Programare în așteptare"}
-                        </p>
-
-                        <div className="mt-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-orange-500/20 p-3">
-                          <p className="text-base font-black text-white">
-                            📅{" "}
-                            {formatAppointmentDate(
-                              job.appointment.proposed_date ||
-                                job.appointment.appointment_date,
-                            )}
-                          </p>
-
-                          <p className="mt-1 text-sm font-semibold text-white/70">
-                            🕐 Ora{" "}
-                            {job.appointment.proposed_time ||
-                              job.appointment.appointment_time}
-                          </p>
-                        </div>
-
-                        <p className="mt-1 text-sm text-white/70">
-                          {job.appointment.handover_method ===
-                          "customer_dropoff"
-                            ? "Clientul aduce mașina la service"
-                            : "Service-ul ridică mașina"}
-                        </p>
-
-                        {job.appointment.pickup_address && (
-                          <p className="mt-2 text-sm text-white/70">
-                            Adresă: {job.appointment.pickup_address}
-                          </p>
-                        )}
-
-                        {job.appointment.customer_note && (
-                          <p className="mt-2 text-sm text-white/70">
-                            Mesaj client: {job.appointment.customer_note}
-                          </p>
-                        )}
-
-                        <span className="mt-3 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
-                          {job.appointment.status === "confirmed"
-                            ? "Confirmată"
-                            : job.appointment.status === "declined"
-                              ? "Refuzată"
-                              : job.appointment.status === "cancelled"
-                                ? "Anulată"
-                                : "Așteaptă confirmare"}
+                  <div
+                    onClick={() =>
+                      router.push(`/workshops/in-workshop/${job.requestId}`)
+                    }
+                    className="block w-full cursor-pointer text-left"
+                  >
+                    <div className="p-5">
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
+                          {job.request.damageType}
                         </span>
 
-                        {job.appointment.status === "requested" && (
-                          <div className="mt-4 grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                updateAppointmentStatus(job, "confirmed");
-                              }}
-                              className="rounded-2xl bg-green-500 px-4 py-3 text-sm font-black text-black"
-                            >
-                              Confirmă
-                            </button>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                          {job.days}
+                        </span>
 
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                          {job.workshopName}
+                        </span>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                          Cererea clientului
+                        </p>
+
+                        <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/80">
+                          {job.request.description}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                          Mesaj ofertă
+                        </p>
+
+                        <p className="mt-2 text-sm leading-6 text-white/80">
+                          {job.message || "Nu ai adăugat niciun mesaj."}
+                        </p>
+                      </div>
+
+                      <div
+                        className={`mt-4 rounded-2xl border p-4 ${
+                          jobState.priority === "needs_action"
+                            ? "border-orange-500/30 bg-orange-500/10"
+                            : jobState.priority === "waiting"
+                              ? "border-yellow-400/30 bg-yellow-400/10"
+                              : "border-white/10 bg-black/25"
+                        }`}
+                      >
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                          Următorul pas
+                        </p>
+
+                        <p className="mt-2 text-sm font-semibold leading-6 text-white">
+                          {jobState.message}
+                        </p>
+                      </div>
+
+                      {job.appointment && (
+                        <div
+                          className={`mt-4 rounded-2xl border p-4 ${
+                            job.appointment.status === "declined"
+                              ? "border-red-500/25 bg-red-500/10"
+                              : "border-orange-500/25 bg-orange-500/10"
+                          }`}
+                        >
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-orange-300">
+                            {job.appointment.status === "confirmed"
+                              ? "Programare confirmată"
+                              : job.appointment.status === "declined"
+                                ? "Programare refuzată"
+                                : "Programare în așteptare"}
+                          </p>
+
+                          <div className="mt-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-orange-500/20 p-3">
+                            <p className="text-base font-black text-white">
+                              📅{" "}
+                              {formatAppointmentDate(
+                                job.appointment.proposed_date ||
+                                  job.appointment.appointment_date,
+                              )}
+                            </p>
+
+                            <p className="mt-1 text-sm font-semibold text-white/70">
+                              🕐 Ora{" "}
+                              {job.appointment.proposed_time ||
+                                job.appointment.appointment_time}
+                            </p>
+                          </div>
+
+                          <p className="mt-1 text-sm text-white/70">
+                            {job.appointment.handover_method ===
+                            "customer_dropoff"
+                              ? "Clientul aduce mașina la service"
+                              : "Service-ul ridică mașina"}
+                          </p>
+
+                          {job.appointment.pickup_address && (
+                            <p className="mt-2 text-sm text-white/70">
+                              Adresă: {job.appointment.pickup_address}
+                            </p>
+                          )}
+
+                          {job.appointment.customer_note && (
+                            <p className="mt-2 text-sm text-white/70">
+                              Mesaj client: {job.appointment.customer_note}
+                            </p>
+                          )}
+
+                          <span className="mt-3 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
+                            {job.appointment.status === "confirmed"
+                              ? "Confirmată"
+                              : job.appointment.status === "declined"
+                                ? "Refuzată"
+                                : job.appointment.status === "cancelled"
+                                  ? "Anulată"
+                                  : "Așteaptă confirmare"}
+                          </span>
+
+                          {job.appointment.status === "requested" && (
+                            <div className="mt-4 grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  updateAppointmentStatus(job, "confirmed");
+                                }}
+                                className="rounded-2xl bg-green-500 px-4 py-3 text-sm font-black text-black"
+                              >
+                                Confirmă
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+
+                                  if (
+                                    confirm(
+                                      "Sigur vrei să refuzi această programare?",
+                                    )
+                                  ) {
+                                    updateAppointmentStatus(job, "declined");
+                                  }
+                                }}
+                                className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-300"
+                              >
+                                Refuză
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {job.appointment &&
+                        ["requested", "declined"].includes(
+                          job.appointment.status,
+                        ) && (
+                          <div
+                            className="mt-3"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {editingAppointmentId === job.appointment.id ? (
+                              <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
+                                  Alege noua dată
+                                </p>
+
+                                <div className="mt-4 grid grid-cols-3 gap-2">
+                                  {getNextDays(10).map((day) => (
+                                    <button
+                                      key={day.value}
+                                      type="button"
+                                      onClick={() =>
+                                        setNewAppointmentDate(day.value)
+                                      }
+                                      className={`rounded-2xl border px-3 py-3 text-left text-sm font-bold ${
+                                        newAppointmentDate === day.value
+                                          ? "border-orange-500 bg-orange-500 text-black"
+                                          : "border-white/10 bg-black text-white"
+                                      }`}
+                                    >
+                                      <span className="block text-xs opacity-70">
+                                        {day.weekday}
+                                      </span>
+                                      <span>{day.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
+                                  Alege ora
+                                </p>
+
+                                <div className="mt-3 grid grid-cols-3 gap-2">
+                                  {[
+                                    "08:00",
+                                    "09:00",
+                                    "10:00",
+                                    "11:00",
+                                    "12:00",
+                                    "13:00",
+                                    "14:00",
+                                    "15:00",
+                                    "16:00",
+                                  ].map((time) => (
+                                    <button
+                                      key={time}
+                                      type="button"
+                                      onClick={() =>
+                                        setNewAppointmentTime(time)
+                                      }
+                                      className={`rounded-2xl border px-3 py-3 text-sm font-black ${
+                                        newAppointmentTime === time
+                                          ? "border-orange-500 bg-orange-500 text-black"
+                                          : "border-white/10 bg-black text-white"
+                                      }`}
+                                    >
+                                      {time}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      proposeAnotherAppointment(job)
+                                    }
+                                    className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-black"
+                                  >
+                                    Trimite
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingAppointmentId(null);
+                                      setNewAppointmentDate("");
+                                      setNewAppointmentTime("");
+                                    }}
+                                    className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white"
+                                  >
+                                    Anulează
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingAppointmentId(job.appointment!.id);
+
+                                  setNewAppointmentDate(
+                                    job.appointment?.proposed_date ||
+                                      job.appointment?.appointment_date ||
+                                      "",
+                                  );
+
+                                  setNewAppointmentTime(
+                                    job.appointment?.proposed_time ||
+                                      job.appointment?.appointment_time ||
+                                      "",
+                                  );
+                                }}
+                                className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-300"
+                              >
+                                Propune altă dată
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                      <div className="mt-5 space-y-3">
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            router.push(
+                              `/workshops/${job.requestId}?tab=${activeTab}`,
+                            );
+                          }}
+                          className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
+                        >
+                          Deschide lucrarea
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            localStorage.setItem("activeRole", "workshop");
+                            router.push(
+                              `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,
+                            );
+                          }}
+                          className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                        >
+                          Chat cu clientul
+                        </button>
+
+                        {job.request.status === "matched" &&
+                          job.appointment?.status === "confirmed" && (
                             <button
-                              type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
 
                                 if (
                                   confirm(
-                                    "Sigur vrei să refuzi această programare?",
+                                    "Ești sigur că vrei să începi această lucrare?",
                                   )
                                 ) {
-                                  updateAppointmentStatus(job, "declined");
+                                  startJob(job);
                                 }
                               }}
-                              className="rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm font-black text-red-300"
+                              className="hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 md:block sm:col-span-2"
                             >
-                              Refuză
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {job.appointment &&
-                      ["requested", "declined"].includes(
-                        job.appointment.status,
-                      ) && (
-                        <div
-                          className="mt-3"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {editingAppointmentId === job.appointment.id ? (
-                            <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-4">
-                              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
-                                Alege noua dată
-                              </p>
-
-                              <div className="mt-4 grid grid-cols-3 gap-2">
-                                {getNextDays(10).map((day) => (
-                                  <button
-                                    key={day.value}
-                                    type="button"
-                                    onClick={() =>
-                                      setNewAppointmentDate(day.value)
-                                    }
-                                    className={`rounded-2xl border px-3 py-3 text-left text-sm font-bold ${
-                                      newAppointmentDate === day.value
-                                        ? "border-orange-500 bg-orange-500 text-black"
-                                        : "border-white/10 bg-black text-white"
-                                    }`}
-                                  >
-                                    <span className="block text-xs opacity-70">
-                                      {day.weekday}
-                                    </span>
-                                    <span>{day.label}</span>
-                                  </button>
-                                ))}
-                              </div>
-
-                              <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.18em] text-orange-300">
-                                Alege ora
-                              </p>
-
-                              <div className="mt-3 grid grid-cols-3 gap-2">
-                                {[
-                                  "08:00",
-                                  "09:00",
-                                  "10:00",
-                                  "11:00",
-                                  "12:00",
-                                  "13:00",
-                                  "14:00",
-                                  "15:00",
-                                  "16:00",
-                                ].map((time) => (
-                                  <button
-                                    key={time}
-                                    type="button"
-                                    onClick={() => setNewAppointmentTime(time)}
-                                    className={`rounded-2xl border px-3 py-3 text-sm font-black ${
-                                      newAppointmentTime === time
-                                        ? "border-orange-500 bg-orange-500 text-black"
-                                        : "border-white/10 bg-black text-white"
-                                    }`}
-                                  >
-                                    {time}
-                                  </button>
-                                ))}
-                              </div>
-
-                              <div className="mt-4 grid grid-cols-2 gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => proposeAnotherAppointment(job)}
-                                  className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-black"
-                                >
-                                  Trimite
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingAppointmentId(null);
-                                    setNewAppointmentDate("");
-                                    setNewAppointmentTime("");
-                                  }}
-                                  className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm font-black text-white"
-                                >
-                                  Anulează
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingAppointmentId(job.appointment!.id);
-
-                                setNewAppointmentDate(
-                                  job.appointment?.proposed_date ||
-                                    job.appointment?.appointment_date ||
-                                    "",
-                                );
-
-                                setNewAppointmentTime(
-                                  job.appointment?.proposed_time ||
-                                    job.appointment?.appointment_time ||
-                                    "",
-                                );
-                              }}
-                              className="w-full rounded-2xl border border-orange-500/30 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-300"
-                            >
-                              Propune altă dată
+                              Începe lucrarea
                             </button>
                           )}
-                        </div>
-                      )}
 
-                    <div className="mt-5 space-y-3">
-                      <button
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          router.push(
-                            `/workshops/${job.requestId}?tab=${activeTab}`,
-                          );
-                        }}
-                        className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
-                      >
-                        Deschide lucrarea
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          localStorage.setItem("activeRole", "workshop");
-                          router.push(
-                            `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,
-                          );
-                        }}
-                        className="w-full rounded-2xl border border-white/15 bg-white/5 px-4 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
-                      >
-                        Chat cu clientul
-                      </button>
-
-                      {job.request.status === "matched" &&
-                        job.appointment?.status === "confirmed" && (
+                        {job.request.status === "in_progress" && (
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
-
                               if (
                                 confirm(
-                                  "Ești sigur că vrei să începi această lucrare?",
+                                  "Ești sigur că vrei să finalizezi această lucrare?",
                                 )
                               ) {
-                                startJob(job);
+                                markAsCompleted(job);
                               }
                             }}
-                            className="hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-300 transition hover:bg-blue-500/20 md:block sm:col-span-2"
+                            className="mt-2 hidden w-full rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-4 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
                           >
-                            Începe lucrarea
+                            Marchează ca finalizată
                           </button>
                         )}
-
-                      {job.request.status === "in_progress" && (
-                        <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (
-                              confirm(
-                                "Ești sigur că vrei să finalizezi această lucrare?",
-                              )
-                            ) {
-                              markAsCompleted(job);
-                            }
-                          }}
-                          className="mt-2 hidden w-full rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-4 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
-                        >
-                          Marchează ca finalizată
-                        </button>
-                      )}
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -1226,39 +1188,94 @@ export default function WorkshopWonJobsPage() {
           </div>
         )}
       </div>
-
-      <Lightbox
-        open={lightboxIndex !== null}
-        close={() => setLightboxIndex(null)}
-        slides={lightboxImages}
-        index={lightboxIndex ?? 0}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
+}
+
+function getJobState(job: WonJob): {
+  stage: JobStage;
+  priority: JobPriority;
+  label: string;
+  message: string;
+} {
+  const status = job.request.status;
+  const appointment = job.appointment;
+
+  if (status === "completed") {
+    return {
+      stage: "completed",
+      priority: "ok",
+      label: "Finalizată",
+      message: "Lucrarea este terminată.",
+    };
+  }
+
+  if (status === "in_progress") {
+    return {
+      stage: "workshop",
+      priority: "ok",
+      label: "În atelier",
+      message: "Mașina este în lucru.",
+    };
+  }
+
+  if (!appointment) {
+    return {
+      stage: "appointments",
+      priority: "waiting",
+      label: "Necesită programare",
+      message: "Clientul trebuie să aleagă o dată.",
+    };
+  }
+
+  if (
+    appointment.status === "requested" &&
+    appointment.proposed_date &&
+    appointment.proposed_time
+  ) {
+    return {
+      stage: "appointments",
+      priority: "waiting",
+      label: "Așteaptă clientul",
+      message: "Ai propus o altă dată. Clientul trebuie să răspundă.",
+    };
+  }
+
+  if (appointment.status === "requested") {
+    return {
+      stage: "appointments",
+      priority: "needs_action",
+      label: "Necesită acțiune",
+      message: "Clientul a cerut o programare. Confirmă sau propune altă dată.",
+    };
+  }
+
+  if (appointment.status === "confirmed") {
+    return {
+      stage: "appointments",
+      priority: "ok",
+      label: "Confirmată",
+      message: `Programată pe ${formatAppointmentDate(
+        appointment.appointment_date,
+      )} la ${appointment.appointment_time}.`,
+    };
+  }
+
+  if (appointment.status === "declined") {
+    return {
+      stage: "appointments",
+      priority: "needs_action",
+      label: "Refuzată",
+      message: "Programarea a fost refuzată. Propune altă dată.",
+    };
+  }
+
+  return {
+    stage: "appointments",
+    priority: "ok",
+    label: "Programare",
+    message: "Verifică detaliile programării.",
+  };
 }
 
 function formatDamageType(value: string) {

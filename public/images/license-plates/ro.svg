@@ -1,0 +1,26 @@
+<svg width="520" height="110" viewBox="0 0 520 110" xmlns="http://www.w3.org/2000/svg">
+  <rect x="2" y="2" width="516" height="106" rx="12" fill="#fff" stroke="#050505" stroke-width="3"/>
+  <rect x="9" y="9" width="502" height="92" rx="8" fill="#fff" stroke="#050505" stroke-width="4"/>
+  <rect x="11" y="10" width="70" height="89" rx="6" fill="#064ee4"/>
+
+  <defs>
+    <polygon id="star" points="0,-4 1.18,-1.62 3.8,-1.24 1.9,0.62 2.35,3.24 0,2 -2.35,3.24 -1.9,0.62 -3.8,-1.24 -1.18,-1.62"/>
+  </defs>
+
+  <g fill="#ffd700" transform="translate(45 36)">
+    <use href="#star" transform="rotate(0) translate(0 -19)"/>
+    <use href="#star" transform="rotate(30) translate(0 -19)"/>
+    <use href="#star" transform="rotate(60) translate(0 -19)"/>
+    <use href="#star" transform="rotate(90) translate(0 -19)"/>
+    <use href="#star" transform="rotate(120) translate(0 -19)"/>
+    <use href="#star" transform="rotate(150) translate(0 -19)"/>
+    <use href="#star" transform="rotate(180) translate(0 -19)"/>
+    <use href="#star" transform="rotate(210) translate(0 -19)"/>
+    <use href="#star" transform="rotate(240) translate(0 -19)"/>
+    <use href="#star" transform="rotate(270) translate(0 -19)"/>
+    <use href="#star" transform="rotate(300) translate(0 -19)"/>
+    <use href="#star" transform="rotate(330) translate(0 -19)"/>
+  </g>
+
+  <text x="45" y="92" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="32" font-weight="700" fill="#fff">RO</text>
+</svg>

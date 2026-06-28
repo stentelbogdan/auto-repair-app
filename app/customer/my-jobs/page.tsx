@@ -11,9 +11,7 @@ import {
   getOffersForCustomerRequests,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
-import Lightbox from "yet-another-react-lightbox";
-import "yet-another-react-lightbox/styles.css";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type RepairAppointment = {
   id: string;
@@ -50,10 +48,7 @@ export default function MyJobsPage() {
   const [workshopSlugs, setWorkshopSlugs] = useState<Record<string, string>>(
     {},
   );
-  const [selectedGallery, setSelectedGallery] = useState<{
-    images: RepairRequestRow["images"];
-    index: number;
-  } | null>(null);
+
   type JobsTab = "needs_schedule" | "scheduled" | "in_progress" | "completed";
 
   const isValidTab = (tab: string | null): tab is JobsTab =>
@@ -428,9 +423,6 @@ export default function MyJobsPage() {
               </div>
             )}
             {visibleJobs.map(({ request, acceptedOffer, appointment }) => {
-              const image =
-                request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
-
               return (
                 <div
                   key={request.id}
@@ -438,32 +430,23 @@ export default function MyJobsPage() {
                   className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-lg transition active:scale-[0.99]"
                 >
                   <div className="flex items-start gap-4">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-
-                        if (request.images?.length > 0) {
-                          setSelectedGallery({
-                            images: request.images,
-                            index: 0,
-                          });
-                        }
-                      }}
+                    <div
+                      onClick={(event) => event.stopPropagation()}
                       className="h-28 w-28 shrink-0 overflow-hidden rounded-3xl bg-black/10"
                     >
-                      {image ? (
-                        <img
-                          src={image}
+                      {request.images && request.images.length > 0 ? (
+                        <ImageGallery
+                          images={request.images}
                           alt={`${request.car_brand} ${request.car_model}`}
-                          className="h-full w-full object-cover"
+                          className="h-28 w-28 object-cover"
+                          wrapperClassName="block h-28 w-28 overflow-hidden rounded-3xl"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
                           No photo
                         </div>
                       )}
-                    </button>
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
@@ -677,43 +660,6 @@ export default function MyJobsPage() {
           </div>
         )}
       </div>
-
-      <Lightbox
-        open={!!selectedGallery}
-        close={() => setSelectedGallery(null)}
-        slides={
-          selectedGallery?.images
-            .map((img) => ({
-              src: img.url || img.dataUrl || "",
-            }))
-            .filter((img) => img.src) || []
-        }
-        index={selectedGallery?.index || 0}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }

@@ -1,14 +1,11 @@
 "use client";
 
-import { formatOfferStatus } from "@/lib/utils/status";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type RepairRequest = {
   id: string;
@@ -71,11 +68,6 @@ export default function OffersPage() {
   const [workshopRatings, setWorkshopRatings] = useState<
     Record<string, WorkshopRating>
   >({});
-
-  const [selectedGallery, setSelectedGallery] = useState<{
-    images: RepairRequest["images"];
-    index: number;
-  } | null>(null);
 
   useEffect(() => {
     const checkUserAndLoad = async () => {
@@ -405,8 +397,6 @@ export default function OffersPage() {
           <div className="space-y-4">
             {items.map(({ offer, request }) => {
               const status = offer.status || "pending";
-              const image =
-                request.images[0]?.url || request.images[0]?.dataUrl || "";
               const workshopRating = workshopRatings[offer.workshopUserId];
 
               return (
@@ -415,30 +405,20 @@ export default function OffersPage() {
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <div className="flex gap-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (request.images.length > 0) {
-                          setSelectedGallery({
-                            images: request.images,
-                            index: 0,
-                          });
-                        }
-                      }}
-                      className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100"
-                    >
-                      {image ? (
-                        <img
-                          src={image}
+                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
+                      {request.images.length > 0 ? (
+                        <ImageGallery
+                          images={request.images}
                           alt={`${request.carBrand} ${request.carModel}`}
-                          className="h-full w-full object-cover"
+                          className="h-24 w-24 object-cover"
+                          wrapperClassName="block h-24 w-24 overflow-hidden rounded-2xl"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-2xl">
                           🚗
                         </div>
                       )}
-                    </button>
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
@@ -621,41 +601,6 @@ export default function OffersPage() {
           </div>
         )}
       </div>
-
-      <Lightbox
-        open={!!selectedGallery}
-        close={() => setSelectedGallery(null)}
-        slides={
-          selectedGallery?.images.map((img) => ({
-            src: img.url || img.dataUrl || "",
-          })) || []
-        }
-        index={selectedGallery?.index || 0}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }

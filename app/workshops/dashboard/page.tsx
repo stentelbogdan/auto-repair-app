@@ -151,8 +151,6 @@ export default function WorkshopDashboardPage() {
           `request_type.eq.repair,and(request_type.eq.direct_request,target_workshop_id.eq.${userId})`,
         );
 
-      const mechanicalRequestsCount = mechanicalRequestsResult.count || 0;
-
       const directBodyworkUnreadResult = await supabase
         .from("repair_requests")
         .select("id", { count: "exact", head: true })
@@ -270,10 +268,10 @@ export default function WorkshopDashboardPage() {
           />
 
           <DashboardCard
-            href="/workshops/won-jobs"
-            icon="✓"
-            title="Lucrări câștigate"
-            description="Joburi acceptate"
+            href="/workshops/won-jobs?tab=appointments"
+            icon="📅"
+            title="Programări"
+            description="Lucrări acceptate"
             value={stats.wonJobs}
           />
         </section>

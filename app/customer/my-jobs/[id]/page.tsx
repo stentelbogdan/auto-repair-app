@@ -5,9 +5,7 @@ import { Home } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type WorkProgressUpdate = {
   id: string;
@@ -38,12 +36,6 @@ export default function CustomerJobDetailPage() {
     [],
   );
   const [loading, setLoading] = useState(true);
-
-  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(
-    null,
-  );
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState("");
   const [existingReview, setExistingReview] = useState(false);
@@ -423,39 +415,18 @@ export default function CustomerJobDetailPage() {
 
                         {Array.isArray(update.images) &&
                           update.images.length > 0 && (
-                            <div className="mt-4 grid grid-cols-2 gap-3">
-                              {update.images
-                                .slice(0, 2)
-                                .map((imageUrl, imageIndex) => (
-                                  <button
-                                    key={imageUrl}
-                                    type="button"
-                                    onClick={() => {
-                                      setLightboxImages(
-                                        update.images as string[],
-                                      );
-                                      setSelectedImageIndex(imageIndex);
-                                      setLightboxOpen(true);
-                                    }}
-                                    className="relative overflow-hidden rounded-2xl"
-                                  >
-                                    <img
-                                      src={imageUrl}
-                                      alt=""
-                                      className="h-40 w-full rounded-2xl object-cover"
-                                    />
-
-                                    {imageIndex === 1 &&
-                                      (update.images as string[]).length >
-                                        2 && (
-                                        <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-lg font-black text-white">
-                                          +
-                                          {(update.images as string[]).length -
-                                            2}
-                                        </div>
-                                      )}
-                                  </button>
-                                ))}
+                            <div className="mt-4 overflow-hidden rounded-2xl">
+                              <ImageGallery
+                                images={update.images.map(
+                                  (url, imageIndex) => ({
+                                    name: `progress-${update.id}-${imageIndex}`,
+                                    url,
+                                  }),
+                                )}
+                                alt="Poze progres lucrare"
+                                className="h-44 w-full object-cover"
+                                wrapperClassName="block w-full overflow-hidden rounded-2xl"
+                              />
                             </div>
                           )}
                       </div>
@@ -476,40 +447,6 @@ export default function CustomerJobDetailPage() {
         </div>
       </div>
 
-      <Lightbox
-        open={lightboxOpen}
-        close={() => {
-          setLightboxOpen(false);
-          setSelectedImageIndex(null);
-          setLightboxImages([]);
-        }}
-        slides={lightboxImages.map((src) => ({ src }))}
-        index={selectedImageIndex || 0}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
       {isCompleted && !existingReview && (
         <div className="mt-6 rounded-3xl border border-orange-500/20 bg-black/40 p-5">
           <h3 className="text-lg font-bold text-white">

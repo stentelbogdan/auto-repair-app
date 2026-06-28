@@ -7,18 +7,13 @@ import {
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
-
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import ImageGallery from "@/app/components/ImageGallery";
 
 export default function MyRequestsPage() {
   const router = useRouter();
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<
     "open" | "scheduled" | "completed" | "closed"
   >("open");
@@ -174,48 +169,20 @@ export default function MyRequestsPage() {
                 className="w-full overflow-hidden rounded-[22px] bg-white text-left text-black shadow-lg"
               >
                 <div className="flex gap-4 p-4">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-
-                      const images =
-                        request.images
-                          ?.map((img) => img.url || img.dataUrl || "")
-                          .filter(Boolean) || [];
-
-                      setSelectedImages(images);
-                      setLightboxIndex(0);
-                    }}
-                    className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10"
-                  >
-                    {request.images?.[0]?.thumbUrl ||
-                    request.images?.[0]?.url ||
-                    request.images?.[0]?.dataUrl ? (
-                      <>
-                        <img
-                          src={
-                            request.images[0].thumbUrl ||
-                            request.images[0].url ||
-                            request.images[0].dataUrl ||
-                            ""
-                          }
-                          alt={`${request.car_brand} ${request.car_model}`}
-                          className="h-full w-full object-cover"
-                        />
-
-                        {request.images.length > 1 && (
-                          <div className="absolute bottom-1 right-1 rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-bold text-white">
-                            +{request.images.length - 1}
-                          </div>
-                        )}
-                      </>
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10">
+                    {request.images && request.images.length > 0 ? (
+                      <ImageGallery
+                        images={request.images}
+                        alt={`${request.car_brand} ${request.car_model}`}
+                        className="h-20 w-20 object-cover"
+                        wrapperClassName="block h-20 w-20 overflow-hidden rounded-2xl"
+                      />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
                         Fără poză
                       </div>
                     )}
-                  </button>
+                  </div>
 
                   <div
                     onClick={() =>
@@ -283,37 +250,6 @@ export default function MyRequestsPage() {
           </div>
         )}
       </div>
-
-      <Lightbox
-        open={selectedImages.length > 0}
-        close={() => setSelectedImages([])}
-        slides={selectedImages.map((src) => ({ src }))}
-        index={lightboxIndex}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }

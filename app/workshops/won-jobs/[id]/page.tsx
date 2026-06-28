@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
+import ImageGallery from "@/app/components/ImageGallery";
 
 const bodyworkProgressSteps = [
   "Received",
@@ -324,15 +325,16 @@ export default function WonJobDetailPage() {
             </label>
 
             {uploadedPreviewUrls.length > 0 && (
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                {uploadedPreviewUrls.map((url) => (
-                  <img
-                    key={url}
-                    src={url}
-                    alt=""
-                    className="h-24 w-full rounded-2xl object-cover"
-                  />
-                ))}
+              <div className="mt-4 overflow-hidden rounded-2xl">
+                <ImageGallery
+                  images={uploadedPreviewUrls.map((url, index) => ({
+                    name: `progress-preview-${index}`,
+                    url,
+                  }))}
+                  alt="Poze progres"
+                  className="h-48 w-full object-cover"
+                  wrapperClassName="block w-full overflow-hidden rounded-2xl"
+                />
               </div>
             )}
 

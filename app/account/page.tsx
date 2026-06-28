@@ -16,9 +16,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type ProfileRow = {
   email: string | null;
@@ -71,9 +69,6 @@ export default function AccountPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [workshopGalleryUrls, setWorkshopGalleryUrls] = useState<string[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
-  const [activeGalleryIndex, setActiveGalleryIndex] = useState<number | null>(
-    null,
-  );
   const [sundayOpen, setSundayOpen] = useState(false);
   const [sunOpen, setSunOpen] = useState("09:00");
   const [sunClose, setSunClose] = useState("13:00");
@@ -687,33 +682,39 @@ export default function AccountPage() {
               </div>
 
               {workshopGalleryUrls.length > 0 && (
-                <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-                  {workshopGalleryUrls.map((url, index) => (
-                    <div
-                      key={url}
-                      className="group relative aspect-square overflow-hidden rounded-2xl border border-white/10 bg-white/5"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setActiveGalleryIndex(index)}
-                        className="h-full w-full"
+                <div className="mt-5 space-y-3">
+                  <ImageGallery
+                    images={workshopGalleryUrls.map((url, index) => ({
+                      name: `workshop-gallery-${index}`,
+                      url,
+                    }))}
+                    alt="Workshop gallery"
+                    className="h-56 w-full object-cover"
+                    wrapperClassName="block w-full overflow-hidden rounded-2xl"
+                  />
+
+                  <div className="grid grid-cols-4 gap-2">
+                    {workshopGalleryUrls.map((url) => (
+                      <div
+                        key={url}
+                        className="group relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-white/5"
                       >
                         <img
                           src={url}
                           alt="Workshop gallery"
                           className="h-full w-full object-cover"
                         />
-                      </button>
 
-                      <button
-                        type="button"
-                        onClick={() => removeGalleryImage(url)}
-                        className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-1 text-xs font-bold text-white opacity-100 transition md:opacity-0 md:group-hover:opacity-100"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          type="button"
+                          onClick={() => removeGalleryImage(url)}
+                          className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs font-bold text-white"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -746,37 +747,6 @@ export default function AccountPage() {
           </section>
         </div>
       </div>
-
-      <Lightbox
-        open={activeGalleryIndex !== null}
-        close={() => setActiveGalleryIndex(null)}
-        slides={workshopGalleryUrls.map((src) => ({ src }))}
-        index={activeGalleryIndex ?? 0}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }

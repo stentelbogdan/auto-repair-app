@@ -278,12 +278,13 @@ export default function WorkshopsPage() {
               return (
                 <div
                   key={request.id}
-                  onClick={() => router.push(`/workshops/${request.id}`)}
-                  className="cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20"
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20"
                 >
                   <ImageGallery
                     images={request.images}
                     alt={`${request.carBrand} ${request.carModel}`}
+                    className="h-56 w-full object-cover"
+                    wrapperClassName="block w-full overflow-hidden"
                   />
 
                   <div className="p-5">
@@ -322,6 +323,14 @@ export default function WorkshopsPage() {
                     <p className="min-h-[72px] text-sm leading-6 text-white/75">
                       {request.description}
                     </p>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/workshops/${request.id}`)}
+                      className="mt-5 w-full rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
+                    >
+                      Vezi detalii
+                    </button>
                   </div>
                 </div>
               );

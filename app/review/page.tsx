@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type RequestRow = {
   id: string;
@@ -281,27 +282,41 @@ function ReviewContent() {
             </label>
 
             {reviewImages.length > 0 && (
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                {reviewImages.map((image, index) => (
-                  <div
-                    key={image.previewUrl}
-                    className="relative aspect-square overflow-hidden rounded-2xl bg-gray-100"
-                  >
-                    <img
-                      src={image.previewUrl}
-                      alt={`Poză review ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
+              <div className="mt-4 space-y-3">
+                <div className="overflow-hidden rounded-2xl">
+                  <ImageGallery
+                    images={reviewImages.map((image, index) => ({
+                      name: `review-preview-${index}`,
+                      url: image.previewUrl,
+                    }))}
+                    alt="Poze review"
+                    className="h-48 w-full object-cover"
+                    wrapperClassName="block w-full overflow-hidden rounded-2xl"
+                  />
+                </div>
 
-                    <button
-                      type="button"
-                      onClick={() => removeReviewImage(index)}
-                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/75 text-white"
+                <div className="grid grid-cols-5 gap-2">
+                  {reviewImages.map((image, index) => (
+                    <div
+                      key={image.previewUrl}
+                      className="relative aspect-square overflow-hidden rounded-xl bg-gray-100"
                     >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
+                      <img
+                        src={image.previewUrl}
+                        alt={`Poză review ${index + 1}`}
+                        className="h-full w-full object-cover"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => removeReviewImage(index)}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/75 text-white"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

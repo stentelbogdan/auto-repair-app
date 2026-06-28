@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Clock, MapPin, Phone, Store, Star } from "lucide-react";
-import LightboxGallery from "./LightboxGallery";
+import ImageGallery from "@/app/components/ImageGallery";
 import ReviewImagesGallery from "./ReviewImagesGallery";
 import { createClient } from "@supabase/supabase-js";
 import WorkshopProfileActions from "./WorkshopProfileActions";
@@ -285,7 +285,15 @@ export default async function WorkshopProfilePage({ params }: Props) {
                   </p>
                 </div>
 
-                <LightboxGallery images={gallery} />
+                <ImageGallery
+  images={gallery.map((url, index) => ({
+    name: `gallery-${index}`,
+    url,
+  }))}
+  alt="Workshop gallery"
+  className="aspect-square w-full object-cover"
+  wrapperClassName="block w-full overflow-hidden rounded-[1.5rem]"
+/>
               </div>
             )}
           </div>

@@ -8,11 +8,18 @@ import {
   useMemo,
   useState,
 } from "react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
 import { romaniaCities } from "@/lib/data/romania-cities";
+import {
+  formatLicensePlateInput,
+  formatLicensePlateForDb,
+  isValidLicensePlate,
+  getLicensePlateError,
+} from "@/lib/utils/licensePlate";
 
 type DamageType =
   | "scratch"
@@ -84,6 +91,8 @@ function PostJobContent() {
   const [carModel, setCarModel] = useState("");
   const [carYear, setCarYear] = useState("");
   const [city, setCity] = useState("");
+  const [licensePlate, setLicensePlate] = useState("");
+
   const [damageType, setDamageType] = useState<DamageType>("scratch");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -120,7 +129,6 @@ function PostJobContent() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -130,6 +138,13 @@ function PostJobContent() {
         router.push("/login");
         return;
       }
+
+      if (!isValidLicensePlate(licensePlate)) {
+        alert("Introdu un număr de înmatriculare valid.");
+        return;
+      }
+
+      setIsSubmitting(true);
 
       const storedImages: StoredImage[] = await Promise.all(
         files.map((file) => uploadRepairImage(file, authData.user.id)),
@@ -141,6 +156,7 @@ function PostJobContent() {
         carModel,
         carYear,
         city,
+        licensePlate,
         damageType,
         description,
         images: storedImages,
@@ -160,6 +176,11 @@ function PostJobContent() {
       setIsSubmitting(false);
     }
   };
+
+  const licensePlateHasError =
+    licensePlate.length > 0 && !isValidLicensePlate(licensePlate);
+
+  const licensePlateErrorMessage = getLicensePlateError(licensePlate);
 
   return (
     <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
@@ -271,6 +292,51 @@ function PostJobContent() {
               </select>
             </div>
 
+            <div>
+              <label className="mb-2 block text-sm font-medium text-black/70">
+                Număr înmatriculare
+              </label>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={licensePlate}
+                  onChange={(e) =>
+                    setLicensePlate(formatLicensePlateInput(e.target.value))
+                  }
+                  placeholder="Ex: NT 51 FLY"
+                  className={`w-full rounded-2xl border bg-black/[0.03] px-4 py-3 pr-12 outline-none transition ${
+                    licensePlateHasError
+                      ? "border-red-500 text-red-600 focus:border-red-500"
+                      : licensePlate.length > 0
+                        ? "border-emerald-500 focus:border-emerald-500"
+                        : "border-black/10 focus:border-orange-400"
+                  }`}
+                  maxLength={11}
+                  required
+                />
+
+                {licensePlate.length > 0 &&
+                  (licensePlateHasError ? (
+                    <XCircle
+                      size={24}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500"
+                    />
+                  ) : (
+                    <CheckCircle2
+                      size={24}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500"
+                    />
+                  ))}
+              </div>
+
+              {licensePlateHasError && (
+                <p className="mt-2 text-sm text-red-600">
+                  {licensePlateErrorMessage}
+                </p>
+              )}
+            </div>
+
             <div className="md:col-span-2">
               <label className="mb-3 block text-sm font-medium text-black/70">
                 Ce serviciu dorești?
@@ -355,10 +421,10 @@ function PostJobContent() {
                     key={service.value}
                     type="button"
                     onClick={() => setDamageType(service.value as DamageType)}
-                    className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
-                      damageType === service.value
-                        ? "border-orange-400 bg-orange-50 shadow-sm"
-                        : "border-black/10 bg-black/[0.03] hover:border-orange-300"
+                    className={`w-full rounded-2xl border bg-black/[0.03] px-4 py-3 outline-none ${
+                      licensePlateHasError
+                        ? "border-red-500 text-red-600 focus:border-red-500"
+                        : "border-black/10 focus:border-orange-400"
                     }`}
                   >
                     <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">

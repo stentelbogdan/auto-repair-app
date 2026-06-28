@@ -45,6 +45,8 @@ export default function ScheduleDamagePage() {
     useState<HandoverMethod>("customer_dropoff");
   const [pickupAddress, setPickupAddress] = useState("");
   const [customerNote, setCustomerNote] = useState("");
+  const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
 
   const minDate = useMemo(() => {
     const date = new Date();
@@ -112,6 +114,48 @@ export default function ScheduleDamagePage() {
     loadData();
   }, []);
 
+  const loadBookedSlots = async (date: string, workshopId: string) => {
+    if (!date || !workshopId) {
+      setBookedSlots([]);
+      return;
+    }
+
+    try {
+      setLoadingSlots(true);
+
+      const { data, error } = await supabase
+        .from("repair_appointments")
+        .select("appointment_time")
+        .eq("workshop_id", workshopId)
+        .eq("appointment_date", date)
+        .in("status", ["requested", "confirmed"]);
+
+      if (error) {
+        console.error("Failed to load booked slots:", error);
+        setBookedSlots([]);
+        return;
+      }
+
+      setBookedSlots(
+        (data || [])
+          .map((appointment) => appointment.appointment_time)
+          .filter(Boolean),
+      );
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!appointmentDate || !offer?.workshop_user_id) {
+      setBookedSlots([]);
+      return;
+    }
+
+    setAppointmentTime("");
+    loadBookedSlots(appointmentDate, offer.workshop_user_id);
+  }, [appointmentDate, offer?.workshop_user_id]);
+
   const submitAppointment = async () => {
     if (!request || !offer) return;
 
@@ -122,6 +166,37 @@ export default function ScheduleDamagePage() {
 
     if (!appointmentTime) {
       alert("Alege ora programării.");
+      return;
+    }
+
+    if (bookedSlots.includes(appointmentTime)) {
+      alert("Acest interval a fost ocupat. Alege altă oră.");
+      return;
+    }
+
+    const { data: existingAppointments, error: existingAppointmentsError } =
+      await supabase
+        .from("repair_appointments")
+        .select("id")
+        .eq("workshop_id", offer.workshop_user_id)
+        .eq("appointment_date", appointmentDate)
+        .eq("appointment_time", appointmentTime)
+        .in("status", ["requested", "confirmed"])
+        .limit(1);
+
+    if (existingAppointmentsError) {
+      console.error(
+        "Failed to verify appointment slot:",
+        existingAppointmentsError,
+      );
+      alert("Nu am putut verifica disponibilitatea intervalului.");
+      return;
+    }
+
+    if ((existingAppointments || []).length > 0) {
+      alert("Acest interval tocmai a fost ocupat. Alege altă oră.");
+      await loadBookedSlots(appointmentDate, offer.workshop_user_id);
+      setAppointmentTime("");
       return;
     }
 
@@ -234,20 +309,32 @@ export default function ScheduleDamagePage() {
               </label>
 
               <div className="mt-3 grid grid-cols-3 gap-2">
-                {timeSlots.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setAppointmentTime(slot)}
-                    className={`rounded-2xl px-4 py-3 text-sm font-black ${
-                      appointmentTime === slot
-                        ? "bg-orange-500 text-black"
-                        : "bg-black/[0.05] text-black"
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
+                {timeSlots.map((slot) => {
+                  const isBooked = bookedSlots.includes(slot);
+
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      disabled={!appointmentDate || isBooked || loadingSlots}
+                      onClick={() => setAppointmentTime(slot)}
+                      className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                        appointmentTime === slot
+                          ? "bg-orange-500 text-black"
+                          : isBooked
+                            ? "cursor-not-allowed bg-black/10 text-black/30 line-through"
+                            : !appointmentDate || loadingSlots
+                              ? "cursor-not-allowed bg-black/[0.04] text-black/30"
+                              : "bg-black/[0.05] text-black"
+                      }`}
+                    >
+                      {slot}
+                      {isBooked && (
+                        <span className="block text-[10px]">Ocupat</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

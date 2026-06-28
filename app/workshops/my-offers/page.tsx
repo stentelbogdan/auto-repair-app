@@ -3,10 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-
-import Lightbox from "yet-another-react-lightbox";
-import Zoom from "yet-another-react-lightbox/plugins/zoom";
-import "yet-another-react-lightbox/styles.css";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type ProfileRow = {
   role: string[] | null;
@@ -55,9 +52,6 @@ export default function WorkshopMyOffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
   const [loading, setLoading] = useState(true);
-
-  const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -183,18 +177,6 @@ export default function WorkshopMyOffersPage() {
       );
   }, [offers]);
 
-  const openGallery = (images: RepairImage[] | undefined, index = 0) => {
-    const slides =
-      images
-        ?.map((image) => image.url || image.dataUrl || "")
-        .filter(Boolean) || [];
-
-    if (!slides.length) return;
-
-    setSelectedImages(slides);
-    setLightboxIndex(index);
-  };
-
   if (checkingAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -240,10 +222,6 @@ export default function WorkshopMyOffersPage() {
           <div className="space-y-6">
             {normalizedOffers.map((offer) => {
               const request = offer.repair_requests;
-              const image =
-                request?.images?.[0]?.url ||
-                request?.images?.[0]?.dataUrl ||
-                "";
 
               return (
                 <article
@@ -251,28 +229,20 @@ export default function WorkshopMyOffersPage() {
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <div className="flex gap-4">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (request?.images?.length) {
-                          openGallery(request.images, 0);
-                        }
-                      }}
-                      className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100"
-                    >
-                      {image ? (
-                        <img
-                          src={image}
+                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
+                      {request?.images && request.images.length > 0 ? (
+                        <ImageGallery
+                          images={request.images}
                           alt={`${request?.car_brand || ""} ${request?.car_model || ""}`}
-                          className="h-full w-full object-cover"
+                          className="h-24 w-24 object-cover"
+                          wrapperClassName="block h-24 w-24 overflow-hidden rounded-2xl"
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center text-2xl">
                           🚗
                         </div>
                       )}
-                    </button>
+                    </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
@@ -319,37 +289,6 @@ export default function WorkshopMyOffersPage() {
           </div>
         )}
       </div>
-
-      <Lightbox
-        open={selectedImages.length > 0}
-        close={() => setSelectedImages([])}
-        slides={selectedImages.map((src) => ({ src }))}
-        index={lightboxIndex}
-        plugins={[Zoom]}
-        controller={{
-          closeOnBackdropClick: true,
-          closeOnPullDown: true,
-        }}
-        animation={{
-          fade: 220,
-          swipe: 260,
-          zoom: 260,
-        }}
-        zoom={{
-          maxZoomPixelRatio: 4,
-          scrollToZoom: true,
-          doubleTapDelay: 250,
-          doubleClickDelay: 250,
-        }}
-        carousel={{
-          finite: true,
-          padding: "16px",
-          spacing: "16px",
-        }}
-        styles={{
-          button: { display: "none" },
-        }}
-      />
     </main>
   );
 }
