@@ -421,10 +421,10 @@ function PostJobContent() {
                     key={service.value}
                     type="button"
                     onClick={() => setDamageType(service.value as DamageType)}
-                    className={`w-full rounded-2xl border bg-black/[0.03] px-4 py-3 outline-none ${
-                      licensePlateHasError
-                        ? "border-red-500 text-red-600 focus:border-red-500"
-                        : "border-black/10 focus:border-orange-400"
+                    className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
+                      damageType === service.value
+                        ? "border-orange-400 bg-orange-50 shadow-sm"
+                        : "border-black/10 bg-black/[0.03] hover:border-orange-300"
                     }`}
                   >
                     <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
