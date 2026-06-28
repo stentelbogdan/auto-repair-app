@@ -320,12 +320,12 @@ function PostJobContent() {
                   (licensePlateHasError ? (
                     <XCircle
                       size={24}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500"
+                      className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-red-500"
                     />
                   ) : (
                     <CheckCircle2
                       size={24}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500"
+                      className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500"
                     />
                   ))}
               </div>
