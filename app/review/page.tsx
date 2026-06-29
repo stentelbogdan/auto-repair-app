@@ -81,7 +81,7 @@ function ReviewContent() {
 
       if (requestData.status !== "completed") {
         alert("Poți lăsa review doar după finalizarea lucrării.");
-        router.push("/customer/my-jobs");
+        router.replace("/customer/dashboard");
         return;
       }
 

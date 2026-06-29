@@ -10,6 +10,7 @@ type ProfileRow = {
 
 export default function CustomerDashboardPage() {
   const router = useRouter();
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
 
   const [myPostsCount, setMyPostsCount] = useState(0);
@@ -84,6 +85,19 @@ export default function CustomerDashboardPage() {
     return () => subscription.unsubscribe();
   }, [router]);
 
+  useEffect(() => {
+  if (sessionStorage.getItem("job-posted-success") !== "true") return;
+
+  sessionStorage.removeItem("job-posted-success");
+  setShowSuccessToast(true);
+
+  const timer = setTimeout(() => {
+    setShowSuccessToast(false);
+  }, 3000);
+
+  return () => clearTimeout(timer);
+}, []);
+
   if (isWorkshop === null) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -94,6 +108,18 @@ export default function CustomerDashboardPage() {
 
   return (
     <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-[#101010] px-4 pb-4 pt-4 text-white">
+      {showSuccessToast && (
+        <div className="mx-auto mb-4 max-w-md rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 shadow-lg md:max-w-5xl">
+          <p className="text-sm font-bold text-green-300">
+            ✅ Cererea a fost publicată!
+          </p>
+
+          <p className="mt-1 text-xs text-green-100/80">
+            Service-urile pot începe să trimită oferte în câteva momente.
+          </p>
+        </div>
+      )}
+
       <div className="mx-auto max-w-md md:max-w-5xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">

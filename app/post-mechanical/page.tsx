@@ -230,7 +230,10 @@ function PostJobContent() {
         targetWorkshopId: targetWorkshopId || null,
       });
 
-      router.push(`/review?id=${createdRequest.id}`);
+      sessionStorage.setItem("job-posted-success", "true");
+      router.replace("/customer/dashboard");
+
+      router.replace("/customer/dashboard?success=posted");
     } catch (error) {
       console.error("Submit failed:", error);
       alert(
