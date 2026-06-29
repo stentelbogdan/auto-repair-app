@@ -169,7 +169,7 @@ export default function InWorkshopCarPage() {
                 <span
                   className="
     absolute
-    left-[30px]
+    left-[26px]
     top-1/2
     -translate-y-1/2
     text-[20px]

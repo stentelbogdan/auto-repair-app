@@ -1120,7 +1120,7 @@ export default function WorkshopWonJobsPage() {
                           onClick={(event) => {
                             event.stopPropagation();
                             router.push(
-                              `/workshops/${job.requestId}?tab=${activeTab}`,
+                              `/workshops/in-workshop/${job.requestId}`,
                             );
                           }}
                           className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
