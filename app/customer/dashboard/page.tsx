@@ -12,6 +12,10 @@ export default function CustomerDashboardPage() {
   const router = useRouter();
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
 
+  const [myPostsCount, setMyPostsCount] = useState(0);
+  const [receivedOffersCount, setReceivedOffersCount] = useState(0);
+  const [appointmentsCount, setAppointmentsCount] = useState(0);
+
   useEffect(() => {
     const loadRole = async () => {
       const {
@@ -35,6 +39,32 @@ export default function CustomerDashboardPage() {
         router.replace("/workshops/dashboard");
         return;
       }
+
+      const userId = session.user.id;
+
+      const { count: postsCount } = await supabase
+        .from("repair_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("customer_user_id", userId);
+
+      const { count: offersCount } = await supabase
+        .from("repair_offers")
+        .select("*, repair_requests!inner(customer_user_id)", {
+          count: "exact",
+          head: true,
+        })
+        .eq("repair_requests.customer_user_id", userId)
+        .eq("status", "pending");
+
+      const { count: jobsCount } = await supabase
+        .from("repair_requests")
+        .select("*", { count: "exact", head: true })
+        .eq("customer_user_id", userId)
+        .in("status", ["matched", "in_progress"]);
+
+      setMyPostsCount(postsCount || 0);
+      setReceivedOffersCount(offersCount || 0);
+      setAppointmentsCount(jobsCount || 0);
 
       setIsWorkshop(savedRole === "workshop" && roles.includes("workshop"));
     };
@@ -91,6 +121,7 @@ export default function CustomerDashboardPage() {
                 title="Postările tale"
                 desc="Toate daunele tale"
                 icon="📄"
+                value={myPostsCount}
                 onClick={() => router.push("/customer/my-requests")}
               />
 
@@ -98,6 +129,7 @@ export default function CustomerDashboardPage() {
                 title="Oferte primite"
                 desc="Compară ofertele"
                 icon="€"
+                value={receivedOffersCount}
                 onClick={() => router.push("/offers")}
               />
 
@@ -105,6 +137,7 @@ export default function CustomerDashboardPage() {
                 title="Programări"
                 desc="Lucrări programate"
                 icon="✓"
+                value={appointmentsCount}
                 onClick={() => router.push("/customer/my-jobs")}
               />
             </>
@@ -144,18 +177,26 @@ function Card({
   title,
   desc,
   icon,
+  value,
   onClick,
 }: {
   title: string;
   desc: string;
   icon: string;
+  value?: string | number;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className="rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6"
+      className="relative rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6"
     >
+      {typeof value !== "undefined" && (
+        <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
+          {value}
+        </div>
+      )}
+
       <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold md:h-14 md:w-14 md:text-3xl">
         {icon}
       </div>
