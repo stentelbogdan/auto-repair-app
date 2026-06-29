@@ -26,6 +26,7 @@ type RequestData = {
   car_model: string | null;
   car_year: string | null;
   city: string | null;
+  license_plate: string | null;
   damage_type: string | null;
   description: string | null;
   images: JobImage[];
@@ -70,7 +71,7 @@ export default function InWorkshopCarPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, car_brand, car_model, car_year, city, damage_type, description, images, status",
+            "id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status",
           )
           .eq("id", requestId)
           .maybeSingle();
@@ -88,6 +89,7 @@ export default function InWorkshopCarPage() {
           car_model: data.car_model,
           car_year: data.car_year,
           city: data.city,
+          license_plate: data.license_plate,
           damage_type: data.damage_type,
           description: data.description,
           images: Array.isArray(data.images) ? data.images : [],
@@ -178,7 +180,7 @@ export default function InWorkshopCarPage() {
     whitespace-nowrap
   "
                 >
-                  NT 51 FLY
+                  {request.license_plate || "FĂRĂ NR."}
                 </span>
               </div>
             </div>
