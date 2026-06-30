@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import LicensePlate from "@/app/components/LicensePlate";
+import {
+  formatLicensePlateInput,
+  formatLicensePlateForDb,
+} from "@/lib/utils/licensePlate";
 
 type RepairImage = {
   name?: string;
@@ -18,6 +23,7 @@ type RepairRequest = {
   car_model: string;
   car_year: string;
   city: string;
+  license_plate: string | null;
   damage_type: string;
   description: string | null;
   images: RepairImage[] | null;
@@ -32,6 +38,7 @@ export default function EditMyRequestPage() {
 
   const [request, setRequest] = useState<RepairRequest | null>(null);
   const [description, setDescription] = useState("");
+  const [licensePlate, setLicensePlate] = useState("");
   const [images, setImages] = useState<RepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,7 +63,7 @@ export default function EditMyRequestPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, user_id, car_brand, car_model, car_year, city, damage_type, description, images, status, accepted_offer_id",
+            "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status, accepted_offer_id",
           )
           .eq("id", requestId)
           .eq("user_id", authData.user.id)
@@ -72,6 +79,7 @@ export default function EditMyRequestPage() {
 
         setRequest(data);
         setDescription(data.description || "");
+        setLicensePlate(data.license_plate || "");
         setImages(Array.isArray(data.images) ? data.images : []);
 
         const { count, error: offersCountError } = await supabase
@@ -138,6 +146,7 @@ export default function EditMyRequestPage() {
       const { error } = await supabase
         .from("repair_requests")
         .update({
+          license_plate: formatLicensePlateForDb(licensePlate),
           description,
           images: nextImages,
         })
@@ -236,7 +245,9 @@ export default function EditMyRequestPage() {
           Editare daună
         </p>
 
-        <h1 className="mt-2 text-3xl font-black">
+        <LicensePlate plate={licensePlate} className="mt-4" />
+
+        <h1 className="mt-3 text-3xl font-black">
           {request.car_brand} {request.car_model}
         </h1>
 
@@ -252,6 +263,23 @@ export default function EditMyRequestPage() {
         )}
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
+          <div className="mb-6">
+            <label className="text-sm font-semibold text-black/60">
+              Număr de înmatriculare
+            </label>
+
+            <input
+              type="text"
+              value={licensePlate}
+              onChange={(e) =>
+                setLicensePlate(formatLicensePlateInput(e.target.value))
+              }
+              disabled={!canEdit}
+              className="mt-3 w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-base font-bold uppercase outline-none disabled:opacity-60"
+              placeholder="Ex: BH 73 JDJ"
+            />
+          </div>
+
           <label className="text-sm font-semibold text-black/60">
             Descriere problemă
           </label>

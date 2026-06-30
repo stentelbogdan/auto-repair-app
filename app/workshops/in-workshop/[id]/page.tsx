@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
-import Image from "next/image";
+import LicensePlate from "@/app/components/LicensePlate";
 
 type JobImage = {
   name?: string;
@@ -157,32 +157,11 @@ export default function InWorkshopCarPage() {
                 )}
               </div>
 
-              <div className="relative -ml-1 mt-2.5 h-[28px] w-[138px]">
-                <Image
-                  src="/images/license-plates/ro.svg"
-                  alt="Număr înmatriculare"
-                  fill
-                  className="object-contain"
-                  priority
-                />
-
-                <span
-                  className="
-    absolute
-    left-[26px]
-    top-1/2
-    -translate-y-1/2
-    text-[20px]
-    font-black
-    uppercase
-    tracking-[0.0em]
-    text-black
-    whitespace-nowrap
-  "
-                >
-                  {request.license_plate || "FĂRĂ NR."}
-                </span>
-              </div>
+              <LicensePlate
+                plate={request.license_plate}
+                className="-ml-1 mt-2.5"
+                priority
+              />
             </div>
 
             <div className="min-w-0 flex-1">

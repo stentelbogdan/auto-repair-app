@@ -8,6 +8,7 @@ import {
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
 import ImageGallery from "@/app/components/ImageGallery";
+import LicensePlate from "@/app/components/LicensePlate";
 
 export default function MyRequestsPage() {
   const router = useRouter();
@@ -191,10 +192,16 @@ export default function MyRequestsPage() {
                     className="min-w-0 flex-1 cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h2 className="font-bold leading-tight">
+                      <div className="flex-1">
+                        <LicensePlate
+                          plate={request.license_plate}
+                          className="-ml-2 mt-2"
+                        />
+
+                        <h2 className="mt-2 text-xl font-extrabold leading-tight text-black">
                           {request.car_brand} {request.car_model}
                         </h2>
+
                         <p className="mt-1 text-xs text-black/55">
                           {request.car_year} • {request.city}
                         </p>
