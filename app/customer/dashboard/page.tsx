@@ -46,21 +46,21 @@ export default function CustomerDashboardPage() {
       const { count: postsCount } = await supabase
         .from("repair_requests")
         .select("*", { count: "exact", head: true })
-        .eq("customer_user_id", userId);
+        .eq("user_id", userId);
 
       const { count: offersCount } = await supabase
         .from("repair_offers")
-        .select("*, repair_requests!inner(customer_user_id)", {
+        .select("*, repair_requests!inner(user_id)", {
           count: "exact",
           head: true,
         })
-        .eq("repair_requests.customer_user_id", userId)
+        .eq("repair_requests.user_id", userId)
         .eq("status", "pending");
 
       const { count: jobsCount } = await supabase
         .from("repair_requests")
         .select("*", { count: "exact", head: true })
-        .eq("customer_user_id", userId)
+        .eq("user_id", userId)
         .in("status", ["matched", "in_progress"]);
 
       setMyPostsCount(postsCount || 0);
@@ -86,17 +86,17 @@ export default function CustomerDashboardPage() {
   }, [router]);
 
   useEffect(() => {
-  if (sessionStorage.getItem("job-posted-success") !== "true") return;
+    if (sessionStorage.getItem("job-posted-success") !== "true") return;
 
-  sessionStorage.removeItem("job-posted-success");
-  setShowSuccessToast(true);
+    sessionStorage.removeItem("job-posted-success");
+    setShowSuccessToast(true);
 
-  const timer = setTimeout(() => {
-    setShowSuccessToast(false);
-  }, 3000);
+    const timer = setTimeout(() => {
+      setShowSuccessToast(false);
+    }, 3000);
 
-  return () => clearTimeout(timer);
-}, []);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (isWorkshop === null) {
     return (

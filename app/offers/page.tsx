@@ -254,8 +254,6 @@ export default function OffersPage() {
         });
       }
 
-      setWorkshopRatings(ratingsMap);
-
       let workshopProfileMap = new Map<
         string,
         {
@@ -331,6 +329,7 @@ export default function OffersPage() {
         });
       });
 
+      setWorkshopRatings(ratingsMap);
       setItems(merged);
     } catch (error) {
       console.error("Failed to load customer offers:", error);
