@@ -41,25 +41,25 @@ export default function ImageGallery({
   }
 
   return (
-  <>
-    <div className={`relative ${wrapperClassName}`}>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          setOpen(true);
-        }}
-        className="block w-full"
-      >
-        <img src={slides[0].src} alt={alt} className={className} />
-      </button>
+    <>
+      <div className={`relative ${wrapperClassName}`}>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpen(true);
+          }}
+          className="block w-full"
+        >
+          <img src={slides[0].src} alt={alt} className={className} />
+        </button>
 
-      {imageCount > 1 && (
-        <div className="absolute bottom-3 right-3 rounded-full bg-black/70 px-3 py-1 text-xs font-semibold text-white backdrop-blur-md">
-          {imageCount} poze
-        </div>
-      )}
-    </div>
+        {imageCount > 1 && (
+          <div className="absolute bottom-2 right-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-black/75 px-2 text-xs font-black text-white backdrop-blur">
+            +{imageCount - 1}
+          </div>
+        )}
+      </div>
 
       <Lightbox
         open={open}

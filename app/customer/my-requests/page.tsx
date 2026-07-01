@@ -7,8 +7,7 @@ import {
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
-import ImageGallery from "@/app/components/ImageGallery";
-import LicensePlate from "@/app/components/LicensePlate";
+import CarHeader from "@/app/components/CarHeader";
 
 export default function MyRequestsPage() {
   const router = useRouter();
@@ -170,21 +169,6 @@ export default function MyRequestsPage() {
                 className="w-full overflow-hidden rounded-[22px] bg-white text-left text-black shadow-lg"
               >
                 <div className="flex gap-4 p-4">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-black/10">
-                    {request.images && request.images.length > 0 ? (
-                      <ImageGallery
-                        images={request.images}
-                        alt={`${request.car_brand} ${request.car_model}`}
-                        className="h-20 w-20 object-cover"
-                        wrapperClassName="block h-20 w-20 overflow-hidden rounded-2xl"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
-                        Fără poză
-                      </div>
-                    )}
-                  </div>
-
                   <div
                     onClick={() =>
                       router.push(`/customer/my-requests/${request.id}`)
@@ -192,20 +176,15 @@ export default function MyRequestsPage() {
                     className="min-w-0 flex-1 cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <LicensePlate
-                          plate={request.license_plate}
-                          className="-ml-2 mt-2"
-                        />
-
-                        <h2 className="mt-2 text-xl font-extrabold leading-tight text-black">
-                          {request.car_brand} {request.car_model}
-                        </h2>
-
-                        <p className="mt-1 text-xs text-black/55">
-                          {request.car_year} • {request.city}
-                        </p>
-                      </div>
+                      <CarHeader
+                        images={request.images}
+                        plate={request.license_plate}
+                        brand={request.car_brand}
+                        model={request.car_model}
+                        year={request.car_year}
+                        city={request.city}
+                        variant="listLarge"
+                      />
 
                       <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
                         {formatStatus(
@@ -215,9 +194,15 @@ export default function MyRequestsPage() {
                       </span>
                     </div>
 
-                    <p className="mt-3 line-clamp-2 text-sm text-black/65">
-                      {request.description || "Nu ai adăugat descriere."}
-                    </p>
+                    <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                      <p className="mb-2 text-xs font-semibold text-black/45">
+                        📝 Descriere
+                      </p>
+
+                      <p className="text-sm leading-6 text-black/70">
+                        {request.description || "Nu ai adăugat descriere."}
+                      </p>
+                    </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       {request.status === "open" &&
