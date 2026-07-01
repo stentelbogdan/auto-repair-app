@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import LicensePlate from "@/app/components/LicensePlate";
 import {
@@ -34,6 +34,9 @@ type RepairRequest = {
 export default function EditMyRequestPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
+
+  const from = searchParams.get("from") || "open";
   const requestId = params.id as string;
 
   const [request, setRequest] = useState<RepairRequest | null>(null);
@@ -235,7 +238,7 @@ export default function EditMyRequestPage() {
     <main className="min-h-screen bg-black px-4 pb-40 pt-6 text-white">
       <div className="mx-auto max-w-md">
         <button
-          onClick={() => router.push("/customer/my-requests")}
+          onClick={() => router.push(`/customer/my-requests?tab=${from}`)}
           className="mb-6 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80"
         >
           ← Înapoi la daunele mele

@@ -7,7 +7,7 @@ import {
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
-import CarHeader from "@/app/components/CarHeader";
+import RepairRequestCard from "@/app/components/RepairRequestCard";
 
 export default function MyRequestsPage() {
   const router = useRouter();
@@ -17,6 +17,19 @@ export default function MyRequestsPage() {
   const [activeTab, setActiveTab] = useState<
     "open" | "scheduled" | "completed" | "closed"
   >("open");
+
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem("my-requests-active-tab");
+
+    if (
+      savedTab === "open" ||
+      savedTab === "scheduled" ||
+      savedTab === "completed" ||
+      savedTab === "closed"
+    ) {
+      setActiveTab(savedTab);
+    }
+  }, []);
 
   useEffect(() => {
     const loadRequests = async () => {
@@ -80,6 +93,11 @@ export default function MyRequestsPage() {
           ? completedRequests
           : closedRequests;
 
+  const changeTab = (tab: "open" | "scheduled" | "completed" | "closed") => {
+    setActiveTab(tab);
+    sessionStorage.setItem("my-requests-active-tab", tab);
+  };
+
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
@@ -101,7 +119,7 @@ export default function MyRequestsPage() {
 
         <div className="mb-5 flex gap-2 overflow-x-auto">
           <button
-            onClick={() => setActiveTab("open")}
+            onClick={() => changeTab("open")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "open"
                 ? "bg-orange-500 text-black"
@@ -112,7 +130,7 @@ export default function MyRequestsPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab("scheduled")}
+            onClick={() => changeTab("scheduled")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "scheduled"
                 ? "bg-orange-500 text-black"
@@ -123,7 +141,7 @@ export default function MyRequestsPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab("completed")}
+            onClick={() => changeTab("completed")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "completed"
                 ? "bg-orange-500 text-black"
@@ -134,7 +152,7 @@ export default function MyRequestsPage() {
           </button>
 
           <button
-            onClick={() => setActiveTab("closed")}
+            onClick={() => changeTab("closed")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "closed"
                 ? "bg-orange-500 text-black"
@@ -164,113 +182,22 @@ export default function MyRequestsPage() {
         ) : (
           <div className="space-y-3">
             {visibleRequests.map((request) => (
-              <div
+              <RepairRequestCard
                 key={request.id}
-                className="w-full overflow-hidden rounded-[22px] bg-white text-left text-black shadow-lg"
-              >
-                <div className="flex gap-4 p-4">
-                  <div
-                    onClick={() =>
-                      router.push(`/customer/my-requests/${request.id}`)
-                    }
-                    className="min-w-0 flex-1 cursor-pointer"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <CarHeader
-                        images={request.images}
-                        plate={request.license_plate}
-                        brand={request.car_brand}
-                        model={request.car_model}
-                        year={request.car_year}
-                        city={request.city}
-                        variant="listLarge"
-                      />
-
-                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                        {formatStatus(
-                          request.status,
-                          request.accepted_offer_id,
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
-                      <p className="mb-2 text-xs font-semibold text-black/45">
-                        📝 Descriere
-                      </p>
-
-                      <p className="text-sm leading-6 text-black/70">
-                        {request.description || "Nu ai adăugat descriere."}
-                      </p>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {request.status === "open" &&
-                        !request.accepted_offer_id &&
-                        (request.offers_count ?? 0) > 0 && (
-                          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                            📨 {request.offers_count} oferte primite
-                          </span>
-                        )}
-
-                      {request.status === "matched" && (
-                        <span>📅 Programată</span>
-                      )}
-
-                      {request.status === "in_progress" && (
-                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                          🔧 În lucru
-                        </span>
-                      )}
-
-                      {request.status === "completed" && (
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                          ✅ Finalizată
-                        </span>
-                      )}
-
-                      {request.status === "closed" && (
-                        <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-                          🚫 Închisă
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+                request={request}
+                onEdit={() =>
+                  router.push(`/customer/my-requests/${request.id}`)
+                }
+                onView={() =>
+                  router.push(
+                    `/customer/my-jobs/${request.id}?from=my-requests&tab=${activeTab}`,
+                  )
+                }
+              />
             ))}
           </div>
         )}
       </div>
     </main>
   );
-}
-
-function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
-  if (acceptedOfferId) return "Service selectat";
-
-  switch (status) {
-    case "open":
-      return "Deschisă";
-    case "matched":
-      return "Service selectat";
-    case "in_progress":
-      return "În lucru";
-    case "completed":
-      return "Finalizată";
-    case "Received":
-      return "Primită";
-    case "Diagnosis":
-      return "Diagnoză";
-    case "Parts ordered":
-      return "Piese comandate";
-    case "In repair":
-      return "În reparație";
-    case "Testing":
-      return "Testare";
-    case "Ready":
-      return "Gata";
-    default:
-      return status || "-";
-  }
 }
