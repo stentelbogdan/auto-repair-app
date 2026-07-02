@@ -11,7 +11,7 @@ import {
   getOffersForCustomerRequests,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
-import ImageGallery from "@/app/components/ImageGallery";
+import CarHeader from "@/app/components/CarHeader";
 
 type RepairAppointment = {
   id: string;
@@ -429,66 +429,47 @@ export default function MyJobsPage() {
                   onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
                   className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-lg transition active:scale-[0.99]"
                 >
-                  <div className="flex items-start gap-4">
-                    <div
-                      onClick={(event) => event.stopPropagation()}
-                      className="h-28 w-28 shrink-0 overflow-hidden rounded-3xl bg-black/10"
-                    >
-                      {request.images && request.images.length > 0 ? (
-                        <ImageGallery
-                          images={request.images}
-                          alt={`${request.car_brand} ${request.car_model}`}
-                          className="h-28 w-28 object-cover"
-                          wrapperClassName="block h-28 w-28 overflow-hidden rounded-3xl"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
-                          No photo
-                        </div>
-                      )}
-                    </div>
-
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h2 className="text-2xl font-black leading-tight">
-                            {request.car_brand} {request.car_model}
-                          </h2>
-
-                          <p className="mt-1 text-sm text-black/50">
-                            {request.car_year} • {request.city}
-                          </p>
-                        </div>
-
-                        <span
-                          className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
-                            appointment
-                              ? getAppointmentBadgeClass(
-                                  appointment.status,
-                                  appointment.proposed_date,
-                                  appointment.proposed_time,
-                                )
-                              : getStatusClass(
-                                  progressByRequestId[request.id]
-                                    ?.latestStatus || request.status,
-                                )
-                          }`}
-                        >
-                          {appointment
-                            ? appointment.status === "confirmed"
-                              ? "Programată"
-                              : appointment.proposed_date &&
-                                  appointment.proposed_time &&
-                                  appointment.status === "requested"
-                                ? "Dată propusă"
-                                : "Așteaptă confirmare"
-                            : formatJobStatus(
-                                progressByRequestId[request.id]?.latestStatus ||
-                                  request.status,
-                              )}
-                        </span>
-                      </div>
+                      <CarHeader
+                        images={request.images}
+                        plate={request.license_plate}
+                        platePosition="bottom"
+                        brand={request.car_brand}
+                        model={request.car_model}
+                        year={request.car_year}
+                        city={request.city}
+                        variant="listLarge"
+                      />
                     </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold  ${
+                        appointment
+                          ? getAppointmentBadgeClass(
+                              appointment.status,
+                              appointment.proposed_date,
+                              appointment.proposed_time,
+                            )
+                          : getStatusClass(
+                              progressByRequestId[request.id]?.latestStatus ||
+                                request.status,
+                            )
+                      }`}
+                    >
+                      {appointment
+                        ? appointment.status === "confirmed"
+                          ? "Programată"
+                          : appointment.proposed_date &&
+                              appointment.proposed_time &&
+                              appointment.status === "requested"
+                            ? "Dată propusă"
+                            : "Așteaptă confirmare"
+                        : formatJobStatus(
+                            progressByRequestId[request.id]?.latestStatus ||
+                              request.status,
+                          )}
+                    </span>
                   </div>
 
                   {acceptedOffer && (

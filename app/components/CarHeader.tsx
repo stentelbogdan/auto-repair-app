@@ -15,6 +15,7 @@ type CarHeaderProps = {
   year?: string | null;
   city?: string | null;
   variant?: "compact" | "listLarge";
+  platePosition?: "top" | "bottom";
 };
 
 export default function CarHeader({
@@ -25,6 +26,7 @@ export default function CarHeader({
   year,
   city,
   variant = "compact",
+  platePosition = "top",
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
@@ -55,7 +57,9 @@ export default function CarHeader({
       </div>
 
       <div className="min-w-0 flex-1">
-        <LicensePlate plate={plate} className="-ml-1 mb-2" />
+        {platePosition === "top" && (
+          <LicensePlate plate={plate} className="-ml-1 mb-2" />
+        )}
 
         <h2 className="text-xl font-extrabold leading-tight text-black">
           {title}
@@ -70,6 +74,12 @@ export default function CarHeader({
         >
           {year || "-"} • {city || "-"}
         </p>
+
+        {platePosition === "bottom" && (
+          <div className="mt-2 origin-left scale-90">
+            <LicensePlate plate={plate} />
+          </div>
+        )}
       </div>
     </div>
   );
