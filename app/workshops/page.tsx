@@ -8,8 +8,7 @@ import {
   getWorkshopRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
-import ImageGallery from "@/app/components/ImageGallery";
-import LicensePlate from "@/app/components/LicensePlate";
+import CarHeader from "@/app/components/CarHeader";
 
 type WorkshopRequest = {
   id: string;
@@ -293,7 +292,7 @@ export default function WorkshopsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2">
             {filteredRequests.map((request) => {
               const isAcceptata = request.status === "matched";
               const service = getServiceMeta(request.damageType);
@@ -301,77 +300,24 @@ export default function WorkshopsPage() {
               return (
                 <div
                   key={request.id}
-                  className="w-full max-w-[520px] rounded-2xl border border-white/10 bg-white/5 p-5"
+                  className="w-full overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
-                  <div className="flex gap-4">
-                    <div className="h-[155px] w-[145px] shrink-0 overflow-hidden rounded-2xl bg-white/5">
-                      {request.images.length > 0 ? (
-                        <ImageGallery
-                          images={request.images}
-                          alt={`${request.carBrand} ${request.carModel}`}
-                          className="h-[155px] w-[145px] object-cover"
-                          wrapperClassName="block h-[155px] w-[145px] overflow-hidden rounded-2xl"
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            router.push(`/workshops/${request.id}`)
-                          }
-                          className="flex h-full w-full items-center justify-center text-xs text-white/40"
-                        >
-                          Fără poză
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-2 flex items-start justify-between gap-2">
-                        <LicensePlate
-                          plate={request.licensePlate}
-                          className="-ml-1"
-                        />
-
-                        <div className="flex shrink-0 flex-col items-center">
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                              isAcceptata
-                                ? "bg-green-500/15 text-green-300"
-                                : "bg-yellow-500/15 text-yellow-300"
-                            }`}
-                          >
-                            {isAcceptata ? "Acceptată" : "Deschisă"}
-                          </span>
-
-                          <span className="mt-1 text-[10px] font-semibold text-white/45">
-                            {request.postedAt}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="-mt-2">
-                        <h2 className="text-xl font-black leading-tight text-white">
-                          {request.carBrand} {request.carModel}
-                        </h2>
-
-                        <p className="mt-0.5 text-xs text-white/50">
-                          {request.carYear} • {request.city}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-orange-500/10 px-3 py-1 text-xs font-bold text-orange-400">
-                        <span>{service.icon}</span>
-                        <span>{service.label}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="mb-2 text-xs font-semibold text-white/45">
+                  <CarHeader
+                    images={request.images}
+                    plate={request.licensePlate}
+                    platePosition="bottom"
+                    brand={request.carBrand}
+                    model={request.carModel}
+                    year={request.carYear}
+                    city={request.city}
+                    variant="listLarge"
+                  />
+                  <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                    <p className="mb-2 text-xs font-semibold text-black/45">
                       📝 Descriere
                     </p>
 
-                    <p className="text-sm leading-6 text-white/75">
+                    <p className="text-sm leading-6 text-black/70">
                       {request.description || "Nu există descriere."}
                     </p>
                   </div>

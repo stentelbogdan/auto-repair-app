@@ -39,19 +39,29 @@ export default function CarHeader({
 
   return (
     <div className="flex gap-4">
-      <div
-        className={`${imageClassName} shrink-0 overflow-hidden ${isLarge ? "rounded-[22px]" : "rounded-2xl"} bg-black/10`}
-      >
-        {images && images.length > 0 ? (
-          <ImageGallery
-            images={images}
-            alt={title}
-            className={`${imageClassName} object-cover`}
-            wrapperClassName={wrapperClassName}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
-            Fără poză
+      <div className="shrink-0">
+        <div
+          className={`${imageClassName} overflow-hidden ${
+            isLarge ? "rounded-[22px]" : "rounded-2xl"
+          } bg-black/10`}
+        >
+          {images && images.length > 0 ? (
+            <ImageGallery
+              images={images}
+              alt={title}
+              className={`${imageClassName} object-cover`}
+              wrapperClassName={wrapperClassName}
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
+              Fără poză
+            </div>
+          )}
+        </div>
+
+        {platePosition === "bottom" && (
+          <div className="mt-2 flex justify-center pr-0">
+            <LicensePlate plate={plate} className="scale-90" />
           </div>
         )}
       </div>
@@ -74,12 +84,6 @@ export default function CarHeader({
         >
           {year || "-"} • {city || "-"}
         </p>
-
-        {platePosition === "bottom" && (
-          <div className="mt-18 ml-10 origin-left scale-90">
-            <LicensePlate plate={plate} />
-          </div>
-        )}
       </div>
     </div>
   );
