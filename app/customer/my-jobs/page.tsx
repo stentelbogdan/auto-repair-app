@@ -426,10 +426,18 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
-                  onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
-                  className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-lg transition active:scale-[0.99]"
+                  onClick={() => {
+                    if (activeTab === "needs_schedule") return;
+
+                    router.push(`/customer/my-jobs/${request.id}`);
+                  }}
+                  className={`overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition ${
+                    activeTab === "needs_schedule"
+                      ? "cursor-default"
+                      : "cursor-pointer active:scale-[0.99]"
+                  }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
                       <CarHeader
                         images={request.images}
@@ -441,35 +449,37 @@ export default function MyJobsPage() {
                         city={request.city}
                         variant="listLarge"
                       />
-                    </div>
 
-                    <span
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold  ${
-                        appointment
-                          ? getAppointmentBadgeClass(
-                              appointment.status,
-                              appointment.proposed_date,
-                              appointment.proposed_time,
-                            )
-                          : getStatusClass(
-                              progressByRequestId[request.id]?.latestStatus ||
-                                request.status,
-                            )
-                      }`}
-                    >
-                      {appointment
-                        ? appointment.status === "confirmed"
-                          ? "Programată"
-                          : appointment.proposed_date &&
-                              appointment.proposed_time &&
-                              appointment.status === "requested"
-                            ? "Dată propusă"
-                            : "Așteaptă confirmare"
-                        : formatJobStatus(
-                            progressByRequestId[request.id]?.latestStatus ||
-                              request.status,
-                          )}
-                    </span>
+                      <div className="mt-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-bold ${
+                            appointment
+                              ? getAppointmentBadgeClass(
+                                  appointment.status,
+                                  appointment.proposed_date,
+                                  appointment.proposed_time,
+                                )
+                              : getStatusClass(
+                                  progressByRequestId[request.id]
+                                    ?.latestStatus || request.status,
+                                )
+                          }`}
+                        >
+                          {appointment
+                            ? appointment.status === "confirmed"
+                              ? "Programată"
+                              : appointment.proposed_date &&
+                                  appointment.proposed_time &&
+                                  appointment.status === "requested"
+                                ? "Dată propusă"
+                                : "Necesită programare"
+                            : formatJobStatus(
+                                progressByRequestId[request.id]?.latestStatus ||
+                                  request.status,
+                              )}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {acceptedOffer && (
@@ -500,8 +510,7 @@ export default function MyJobsPage() {
 
                       <div className="mt-3 flex items-center justify-between text-sm">
                         <span className="text-black/55">
-                          {acceptedOffer.days}{" "}
-                          {String(acceptedOffer.days) === "1" ? "zi" : "zile"}
+                          {acceptedOffer.days}
                         </span>
 
                         <span className="text-xl font-black">

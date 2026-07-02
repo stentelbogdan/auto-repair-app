@@ -76,7 +76,7 @@ export default function CarHeader({
         </p>
 
         {platePosition === "bottom" && (
-          <div className="mt-2 origin-left scale-90">
+          <div className="mt-18 ml-10 origin-left scale-90">
             <LicensePlate plate={plate} />
           </div>
         )}
