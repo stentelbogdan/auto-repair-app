@@ -12,8 +12,6 @@ export default function CustomerDashboardPage() {
   const router = useRouter();
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
-
-  const [myPostsCount, setMyPostsCount] = useState(0);
   const [receivedOffersCount, setReceivedOffersCount] = useState(0);
   const [appointmentsCount, setAppointmentsCount] = useState(0);
 
@@ -43,11 +41,6 @@ export default function CustomerDashboardPage() {
 
       const userId = session.user.id;
 
-      const { count: postsCount } = await supabase
-        .from("repair_requests")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", userId);
-
       const { count: offersCount } = await supabase
         .from("repair_offers")
         .select("*, repair_requests!inner(user_id)", {
@@ -63,7 +56,6 @@ export default function CustomerDashboardPage() {
         .eq("user_id", userId)
         .in("status", ["matched", "in_progress"]);
 
-      setMyPostsCount(postsCount || 0);
       setReceivedOffersCount(offersCount || 0);
       setAppointmentsCount(jobsCount || 0);
 
@@ -144,14 +136,6 @@ export default function CustomerDashboardPage() {
               />
 
               <Card
-                title="Postările tale"
-                desc="Toate daunele tale"
-                icon="📄"
-                value={myPostsCount}
-                onClick={() => router.push("/customer/my-requests")}
-              />
-
-              <Card
                 title="Oferte primite"
                 desc="Compară ofertele"
                 icon="€"
@@ -161,7 +145,7 @@ export default function CustomerDashboardPage() {
 
               <Card
                 title="Programări"
-                desc="Lucrări programate"
+                desc="Lucrări active"
                 icon="✓"
                 value={appointmentsCount}
                 onClick={() => router.push("/customer/my-jobs")}
