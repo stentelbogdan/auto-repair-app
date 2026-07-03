@@ -7,6 +7,11 @@ type CarImage = {
   url?: string;
 };
 
+type CarHeaderDetail = {
+  text: string;
+  color?: "yellow" | "orange" | "gray" | "green" | "blue" | "red";
+};
+
 type CarHeaderProps = {
   images?: CarImage[];
   plate?: string | null;
@@ -16,6 +21,7 @@ type CarHeaderProps = {
   city?: string | null;
   variant?: "compact" | "listLarge";
   platePosition?: "top" | "bottom";
+  details?: CarHeaderDetail[];
 };
 
 export default function CarHeader({
@@ -27,6 +33,7 @@ export default function CarHeader({
   city,
   variant = "compact",
   platePosition = "top",
+  details = [],
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
@@ -84,7 +91,65 @@ export default function CarHeader({
         >
           {year || "-"} • {city || "-"}
         </p>
+
+        {details.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {details.map((detail) => (
+              <div key={detail.text} className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${getDotColor(
+                    detail.color,
+                  )}`}
+                />
+                <span
+                  className={`text-sm font-semibold ${getTextColor(
+                    detail.color,
+                  )}`}
+                >
+                  {detail.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+function getDotColor(color?: CarHeaderDetail["color"]) {
+  switch (color) {
+    case "yellow":
+      return "bg-yellow-500";
+    case "orange":
+      return "bg-orange-500";
+    case "green":
+      return "bg-emerald-500";
+    case "blue":
+      return "bg-blue-500";
+    case "red":
+      return "bg-red-500";
+    case "gray":
+    default:
+      return "bg-slate-400";
+  }
+}
+
+function getTextColor(color?: CarHeaderDetail["color"]) {
+  switch (color) {
+    case "orange":
+      return "text-orange-600";
+    case "green":
+      return "text-emerald-700";
+    case "blue":
+      return "text-blue-700";
+    case "red":
+      return "text-red-700";
+    case "yellow":
+      return "text-black/75";
+    case "gray":
+    default:
+      return "text-black/55";
+  }
+}
+    

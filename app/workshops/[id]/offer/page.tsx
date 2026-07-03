@@ -71,6 +71,15 @@ export default function MakeOfferPage() {
 
         setRequest(data);
 
+        const savedAvailability = sessionStorage.getItem(`availability-${id}`);
+
+        if (savedAvailability) {
+          const parsed = JSON.parse(savedAvailability);
+
+          setAvailableDate(parsed.date || "");
+          setAvailableTime(parsed.time || "");
+        }
+
         const { data: existingOffer } = await supabase
           .from("repair_offers")
           .select("id")
@@ -269,7 +278,7 @@ export default function MakeOfferPage() {
           </div>
 
           <label className="mt-5 block text-sm font-bold text-black">
-            Prima dată disponibilă pentru programare
+            Data aleasă din calendar
           </label>
 
           <input
@@ -281,7 +290,7 @@ export default function MakeOfferPage() {
           />
 
           <label className="mt-5 block text-sm font-bold text-black">
-            Ora la care clientul poate aduce mașina
+            Ora aleasă din calendar
           </label>
 
           <input

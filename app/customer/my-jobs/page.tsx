@@ -12,6 +12,7 @@ import {
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
+import { formatPostedTime } from "@/lib/formatters";
 
 type RepairAppointment = {
   id: string;
@@ -448,37 +449,23 @@ export default function MyJobsPage() {
                         year={request.car_year}
                         city={request.city}
                         variant="listLarge"
+                        details={[
+                          {
+                            text:
+                              activeTab === "needs_schedule"
+                                ? "Necesită programare"
+                                : appointment?.status === "confirmed"
+                                  ? "Programată"
+                                  : "În lucru",
+                            color:
+                              activeTab === "needs_schedule"
+                                ? "yellow"
+                                : appointment?.status === "confirmed"
+                                  ? "blue"
+                                  : "orange",
+                          },
+                        ]}
                       />
-
-                      <div className="mt-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            appointment
-                              ? getAppointmentBadgeClass(
-                                  appointment.status,
-                                  appointment.proposed_date,
-                                  appointment.proposed_time,
-                                )
-                              : getStatusClass(
-                                  progressByRequestId[request.id]
-                                    ?.latestStatus || request.status,
-                                )
-                          }`}
-                        >
-                          {appointment
-                            ? appointment.status === "confirmed"
-                              ? "Programată"
-                              : appointment.proposed_date &&
-                                  appointment.proposed_time &&
-                                  appointment.status === "requested"
-                                ? "Dată propusă"
-                                : "Necesită programare"
-                            : formatJobStatus(
-                                progressByRequestId[request.id]?.latestStatus ||
-                                  request.status,
-                              )}
-                        </span>
-                      </div>
                     </div>
                   </div>
 
@@ -510,7 +497,7 @@ export default function MyJobsPage() {
 
                       <div className="mt-3 flex items-center justify-between text-sm">
                         <span className="text-black/55">
-                          {acceptedOffer.days}
+                          {formatPostedTime(acceptedOffer.days)}
                         </span>
 
                         <span className="text-xl font-black">

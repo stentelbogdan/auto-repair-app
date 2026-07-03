@@ -9,6 +9,7 @@ import {
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
+import { formatPostedTime } from "@/lib/formatters";
 
 type WorkshopRequest = {
   id: string;
@@ -311,7 +312,22 @@ export default function WorkshopsPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    details={[
+                      {
+                        text: isAcceptata ? "Acceptată" : "Deschisă",
+                        color: isAcceptata ? "green" : "yellow",
+                      },
+                      {
+                        text: service.label,
+                        color: "orange",
+                      },
+                      {
+                        text: formatPostedTime(request.postedAt),
+                        color: "gray",
+                      },
+                    ]}
                   />
+
                   <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
                     <p className="mb-2 text-xs font-semibold text-black/45">
                       📝 Descriere
