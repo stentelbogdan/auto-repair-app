@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
-import ImageGallery from "@/app/components/ImageGallery";
+import CarHeader from "@/app/components/CarHeader";
 
 type RepairRequest = {
   id: string;
+  licensePlate?: string | null;
   carBrand: string;
   carModel: string;
   carYear: string;
@@ -286,6 +287,7 @@ export default function OffersPage() {
       activeRequests.forEach((request) => {
         requestMap.set(request.id, {
           id: request.id,
+          licensePlate: request.license_plate,
           carBrand: request.car_brand,
           carModel: request.car_model,
           carYear: request.car_year,
@@ -368,6 +370,19 @@ export default function OffersPage() {
     return labels[value] || value;
   };
 
+  const formatDamageType = (value?: string) => {
+    if (!value) return "Daună";
+
+    const labels: Record<string, string> = {
+      cosmetic: "Daună estetică",
+      mechanical: "Daună mecanică",
+      detailing: "Detailing",
+      body: "Caroserie",
+    };
+
+    return labels[value] || value;
+  };
+
   if (checkingAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -403,75 +418,62 @@ export default function OffersPage() {
                   key={offer.id}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
-                  <div className="flex gap-4">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
-                      {request.images.length > 0 ? (
-                        <ImageGallery
-                          images={request.images}
-                          alt={`${request.carBrand} ${request.carModel}`}
-                          className="h-24 w-24 object-cover"
-                          wrapperClassName="block h-24 w-24 overflow-hidden rounded-2xl"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-2xl">
-                          🚗
-                        </div>
-                      )}
-                    </div>
+                  <CarHeader
+                    images={request.images}
+                    plate={request.licensePlate}
+                    platePosition="bottom"
+                    brand={request.carBrand}
+                    model={request.carModel}
+                    year={request.carYear}
+                    city={request.city}
+                    variant="listLarge"
+                    details={[
+                      {
+                        text: "În așteptare",
+                        color: "orange",
+                      },
+                      {
+                        text: formatDamageType(request.damageType),
+                        color: "yellow",
+                      },
+                    ]}
+                  />
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="truncate text-xl font-black leading-tight">
-                            {request.carBrand} {request.carModel}
-                          </h2>
-
-                          <p className="mt-1 text-sm text-black/50">
-                            {request.carYear} • {request.city}
-                          </p>
-                        </div>
-
-                        <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                          În așteptare
-                        </span>
+                  <div className="mt-4 rounded-2xl bg-gray-100 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm text-black/40">Oferta primită</p>
+                        <p className="mt-2 text-base text-black/60">
+                          {offer.days}
+                        </p>
                       </div>
 
-                      <div className="mt-4 rounded-2xl bg-gray-100 p-4">
-                        <p className="text-xs text-black/40">Oferta primită</p>
+                      <p className="text-3xl font-black text-black">
+                        €{offer.price}
+                      </p>
+                    </div>
 
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-sm text-black/60">
-                            {offer.days}
-                          </span>
+                    {(offer.availableDate || offer.availableTime) && (
+                      <div className="mt-4 rounded-2xl bg-white p-4">
+                        {offer.availableDate && (
+                          <p className="text-base text-black/70">
+                            <span className="font-black text-black">
+                              Prima dată disponibilă:
+                            </span>{" "}
+                            {offer.availableDate.split("-").reverse().join("-")}
+                          </p>
+                        )}
 
-                          <span className="text-xl font-black">
-                            €{offer.price}
-                          </span>
-                        </div>
-
-                        {(offer.availableDate || offer.availableTime) && (
-                          <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm text-black/70">
-                            {offer.availableDate && (
-                              <div>
-                                <span className="font-semibold text-black">
-                                  Prima dată disponibilă:
-                                </span>{" "}
-                                {offer.availableDate}
-                              </div>
-                            )}
-
-                            {offer.availableTime && (
-                              <div className="mt-1">
-                                <span className="font-semibold text-black">
-                                  Ora predării:
-                                </span>{" "}
-                                {offer.availableTime.slice(0, 5)}
-                              </div>
-                            )}
-                          </div>
+                        {offer.availableTime && (
+                          <p className="mt-2 text-base text-black/70">
+                            <span className="font-black text-black">
+                              Ora predării:
+                            </span>{" "}
+                            {offer.availableTime.slice(0, 5)}
+                          </p>
                         )}
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <div
@@ -479,21 +481,7 @@ export default function OffersPage() {
                       offer.workshopSlug &&
                       router.push(`/workshops/profile/${offer.workshopSlug}`)
                     }
-                    role={offer.workshopSlug ? "button" : undefined}
-                    tabIndex={offer.workshopSlug ? 0 : undefined}
-                    onKeyDown={(event) => {
-                      if (
-                        offer.workshopSlug &&
-                        (event.key === "Enter" || event.key === " ")
-                      ) {
-                        router.push(`/workshops/profile/${offer.workshopSlug}`);
-                      }
-                    }}
-                    className={`mt-4 w-full rounded-2xl bg-gray-100 p-4 text-left transition ${
-                      offer.workshopSlug
-                        ? "cursor-pointer hover:bg-gray-200 active:scale-[0.99]"
-                        : ""
-                    }`}
+                    className="mt-4 rounded-2xl bg-gray-100 p-4"
                   >
                     <p className="text-xs text-black/40">Service</p>
 
@@ -513,19 +501,9 @@ export default function OffersPage() {
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center">
-                          <p className="max-w-full truncate text-left text-lg font-black text-black underline decoration-orange-300 underline-offset-4">
-                            {offer.workshopName}
-                          </p>
-
-                          {workshopRating &&
-                            workshopRating.average >= 4.8 &&
-                            workshopRating.count >= 2 && (
-                              <span className="ml-auto bg-orange-100 px-1.5 py-0.5 text-[9px] font-bold text-orange-700">
-                                ⭐ {workshopRating.average.toFixed(1)} Rating
-                              </span>
-                            )}
-                        </div>
+                        <p className="max-w-full truncate text-left text-lg font-black text-black underline decoration-orange-300 underline-offset-4">
+                          {offer.workshopName}
+                        </p>
 
                         {workshopRating && workshopRating.count > 0 && (
                           <div className="mt-1 flex items-center gap-1 text-xs font-bold">
@@ -546,7 +524,6 @@ export default function OffersPage() {
                         {(workshopRating?.specialties?.length || 0) > 0 && (
                           <div className="mt-1 text-xs font-medium text-black/80">
                             <div>Experiență verificată:</div>
-
                             <div className="mt-0.5">
                               {workshopRating.specialties
                                 ?.slice(0, 3)
@@ -557,7 +534,7 @@ export default function OffersPage() {
                         )}
 
                         {workshopRating?.lastReview && (
-                          <div className="mt-2 rounded-lg bg-white/60 border border-black/5 p-2">
+                          <div className="mt-2 rounded-lg border border-black/5 bg-white/60 p-2">
                             <div className="text-[11px] font-semibold text-black/60">
                               💬 Ultimul client
                             </div>
@@ -580,11 +557,15 @@ export default function OffersPage() {
                   </div>
 
                   {offer.message && (
-                    <p className="mt-3 line-clamp-2 text-sm text-black/60">
-                      {offer.message}
-                    </p>
+                    <div className="mt-3 rounded-2xl bg-gray-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-black/40">
+                        Mesaj service
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-black/70">
+                        {offer.message}
+                      </p>
+                    </div>
                   )}
-
                   <button
                     onClick={() => handleAcceptOffer(offer.id, request.id)}
                     disabled={acceptingOfferId === offer.id}
