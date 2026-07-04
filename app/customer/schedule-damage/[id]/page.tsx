@@ -293,15 +293,27 @@ export default function ScheduleDamagePage() {
               </div>
             </div>
 
-            <div className="rounded-[26px] bg-white p-5 text-black">
+            <div className="overflow-hidden rounded-[26px] bg-white p-5 text-black">
               <label className="text-sm font-bold text-black/70">Data</label>
 
               <input
-                type="date"
-                min={minDate}
-                value={appointmentDate}
-                onChange={(e) => setAppointmentDate(e.target.value)}
-                className="mt-2 h-14 w-full max-w-full rounded-2xl border border-black/10 bg-gray-50 px-4 outline-none"
+                type="text"
+                inputMode="numeric"
+                placeholder="zz.ll.aaaa"
+                value={appointmentDate.split("-").reverse().join(".")}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const parts = value.split(".");
+
+                  if (parts.length === 3) {
+                    const [day, month, year] = parts;
+                    setAppointmentDate(`${year}-${month}-${day}`);
+                    return;
+                  }
+
+                  setAppointmentDate(value);
+                }}
+                className="mt-2 h-14 w-full rounded-2xl border border-black/10 px-4 text-base outline-none"
               />
 
               <label className="mt-5 block text-sm font-bold text-black/70">
