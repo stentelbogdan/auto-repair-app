@@ -293,7 +293,7 @@ export default function ScheduleDamagePage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[26px] bg-white p-5 text-black">
+            <div className="rounded-[26px] bg-white p-5 text-black">
               <label className="text-sm font-bold text-black/70">Data</label>
 
               <input
