@@ -40,6 +40,8 @@ export default function ScheduleDamagePage() {
   const [saving, setSaving] = useState(false);
 
   const [appointmentDate, setAppointmentDate] = useState("");
+  const [dateInput, setDateInput] = useState("");
+  const [dateError, setDateError] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [handoverMethod, setHandoverMethod] =
     useState<HandoverMethod>("customer_dropoff");
@@ -266,7 +268,7 @@ export default function ScheduleDamagePage() {
 
           <button
             onClick={() => router.push("/customer/my-jobs")}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-full border border-white/15 px-4 py-2 text-sm text-xs font-medium text-white"
           >
             Înapoi
           </button>
@@ -296,25 +298,120 @@ export default function ScheduleDamagePage() {
             <div className="overflow-hidden rounded-[26px] bg-white p-5 text-black">
               <label className="text-sm font-bold text-black/70">Data</label>
 
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="zz.ll.aaaa"
-                value={appointmentDate.split("-").reverse().join(".")}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const parts = value.split(".");
+              <div className="relative mt-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="zz.ll.aaaa"
+                  value={dateInput}
+                  onChange={(e) => {
+                    let value = e.target.value.replace(/\D/g, "");
 
-                  if (parts.length === 3) {
-                    const [day, month, year] = parts;
-                    setAppointmentDate(`${year}-${month}-${day}`);
-                    return;
-                  }
+                    if (value.length > 8) value = value.slice(0, 8);
 
-                  setAppointmentDate(value);
-                }}
-                className="mt-2 h-14 w-full rounded-2xl border border-black/10 px-4 text-base outline-none"
-              />
+                    let formatted = value;
+
+                    if (value.length >= 3) {
+                      formatted = `${value.slice(0, 2)}.${value.slice(2)}`;
+                    }
+
+                    if (value.length >= 5) {
+                      formatted = `${value.slice(0, 2)}.${value.slice(2, 4)}.${value.slice(4)}`;
+                    }
+
+                    setDateInput(formatted);
+                    setDateError("");
+
+                    const dayText = value.slice(0, 2);
+                    const monthText = value.slice(2, 4);
+
+                    if (dayText.length === 2) {
+                      const day = Number(dayText);
+
+                      if (day < 1 || day > 31) {
+                        setDateError("Introdu o dată validă.");
+                        setAppointmentDate("");
+                        return;
+                      }
+                    }
+
+                    if (monthText.length === 2) {
+                      const month = Number(monthText);
+
+                      if (month < 1 || month > 12) {
+                        setDateError("Introdu o dată validă.");
+                        setAppointmentDate("");
+                        return;
+                      }
+                    }
+
+                    if (value.length === 8) {
+                      const day = Number(value.slice(0, 2));
+                      const month = Number(value.slice(2, 4));
+                      const year = Number(value.slice(4, 8));
+
+                      const selectedDate = new Date(year, month - 1, day);
+                      const isRealDate =
+                        selectedDate.getFullYear() === year &&
+                        selectedDate.getMonth() === month - 1 &&
+                        selectedDate.getDate() === day;
+
+                      if (
+                        day < 1 ||
+                        day > 31 ||
+                        month < 1 ||
+                        month > 12 ||
+                        year < new Date().getFullYear() ||
+                        year > 2100 ||
+                        !isRealDate
+                      ) {
+                        setDateError("Introdu o dată validă.");
+                        setAppointmentDate("");
+                        return;
+                      }
+
+                      setAppointmentDate(
+                        `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+                      );
+                    }
+                  }}
+                  className={`h-14 w-full rounded-2xl border px-4 pr-14 text-base outline-none transition-colors ${
+                    dateError
+                      ? "border-red-500 ring-2 ring-red-100 bg-red-50"
+                      : "border-black/10 bg-white"
+                  }`}
+                />
+
+                <div className="absolute right-4 top-1/2 h-8 w-8 -translate-y-1/2">
+                  <div
+                    className={`pointer-events-none absolute inset-0 flex items-center justify-center text-xl ${
+                      dateError ? "text-red-500" : "text-black/60"
+                    }`}
+                  >
+                    📅
+                  </div>
+
+                  <input
+                    type="date"
+                    min={minDate}
+                    value={appointmentDate}
+                    onChange={(e) => {
+                      setDateError("");
+                      const isoDate = e.target.value;
+
+                      setAppointmentDate(isoDate);
+                      setDateInput(isoDate.split("-").reverse().join("."));
+                    }}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                </div>
+              </div>
+
+              {dateError && (
+                <p className="mt-2 text-xs font-semibold text-red-500">
+                  {dateError}
+                </p>
+              )}
 
               <label className="mt-5 block text-sm font-bold text-black/70">
                 Ora
