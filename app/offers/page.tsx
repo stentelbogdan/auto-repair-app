@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
-import { CalendarDays, Clock3 } from "lucide-react";
+import { CalendarDays, Check, Clock3 } from "lucide-react";
 
 type RepairRequest = {
   id: string;
@@ -572,23 +572,48 @@ export default function OffersPage() {
 
                   {offer.message && (
                     <div className="mt-3 rounded-2xl bg-gray-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-black/40">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-black/60">
                         Mesaj service
                       </p>
-                      <p className="mt-2 text-sm leading-relaxed text-black/70">
+                      <p className="mt-2 text-sm leading-relaxed text-black/90">
                         {offer.message}
                       </p>
                     </div>
                   )}
-                  <button
-                    onClick={() => handleAcceptOffer(offer.id, request.id)}
-                    disabled={acceptingOfferId === offer.id}
-                    className="mt-4 w-full rounded-2xl bg-black px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {acceptingOfferId === offer.id
-                      ? "Se confirmă..."
-                      : "Acceptă oferta"}
-                  </button>
+                  <p className="mt-5 text-center text-[13px] font-medium text-black/60">
+                    Confirmă programarea sau modifică data propusă
+                  </p>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleAcceptOffer(offer.id, request.id)}
+                      disabled={acceptingOfferId === offer.id}
+                      className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {acceptingOfferId === offer.id ? (
+                        "Se confirmă..."
+                      ) : (
+                        <span className="flex items-center justify-center gap-1.5">
+                          <Check size={18} strokeWidth={2.5} />
+                          <span>Acceptă oferta</span>
+                        </span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/customer/schedule-damage/${request.id}?offer=${offer.id}`,
+                        )
+                      }
+                      className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98]"
+                    >
+                      <span className="flex items-center justify-center gap-1.5">
+                        <CalendarDays size={18} strokeWidth={2.3} />
+                        <span>Modifică data</span>
+                      </span>
+                    </button>
+                  </div>
                 </div>
               );
             })}

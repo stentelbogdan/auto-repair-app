@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
   getOwnRepairRequests,
@@ -33,6 +33,8 @@ export default function ScheduleDamagePage() {
   const router = useRouter();
   const params = useParams();
   const requestId = String(params.id);
+  const searchParams = useSearchParams();
+  const offerIdFromUrl = searchParams.get("offerId");
 
   const [request, setRequest] = useState<RepairRequest | null>(null);
   const [offer, setOffer] = useState<RepairOffer | null>(null);
@@ -84,20 +86,15 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      if (!foundRequest.accepted_offer_id) {
-        alert("Această lucrare nu are încă o ofertă acceptată.");
-        router.push("/customer/my-jobs");
-        return;
-      }
-
       const foundOffer = offerRows.find(
         (offer) =>
+          offer.id === offerIdFromUrl ||
           offer.id === foundRequest.accepted_offer_id ||
           (offer.request_id === foundRequest.id && offer.status === "accepted"),
       );
 
       if (!foundOffer) {
-        alert("Oferta acceptată nu a fost găsită.");
+        alert("Oferta nu a fost găsită.");
         router.push("/customer/my-jobs");
         return;
       }
@@ -217,6 +214,31 @@ export default function ScheduleDamagePage() {
 
       if (!authData.user) {
         router.push("/login");
+        return;
+      }
+
+      const { error: offerUpdateError } = await supabase
+        .from("repair_offers")
+        .update({ status: "accepted" })
+        .eq("id", offer.id);
+
+      if (offerUpdateError) {
+        console.error("Failed to accept offer:", offerUpdateError);
+        alert("Nu am putut accepta oferta.");
+        return;
+      }
+
+      const { error: requestUpdateError } = await supabase
+        .from("repair_requests")
+        .update({
+          status: "matched",
+          accepted_offer_id: offer.id,
+        })
+        .eq("id", request.id);
+
+      if (requestUpdateError) {
+        console.error("Failed to update request:", requestUpdateError);
+        alert("Oferta a fost acceptată, dar nu am putut actualiza lucrarea.");
         return;
       }
 
