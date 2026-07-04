@@ -13,6 +13,8 @@ import {
 } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
+import { CalendarDays, Clock3 } from "lucide-react";
+import WorkshopOfferCard from "@/app/components/WorkshopOfferCard";
 
 type RepairAppointment = {
   id: string;
@@ -424,7 +426,7 @@ export default function MyJobsPage() {
                               activeTab === "scheduled"
                                 ? appointment?.status === "confirmed"
                                   ? "Programată"
-                                  : "Așteaptă programarea"
+                                  : "Necesită programare"
                                 : activeTab === "in_progress"
                                   ? "În lucru"
                                   : "Finalizată",
@@ -437,47 +439,55 @@ export default function MyJobsPage() {
                                   ? "orange"
                                   : "green",
                           },
+
+                          ...(activeTab === "scheduled" &&
+                          acceptedOffer?.available_date
+                            ? [
+                                {
+                                  text: acceptedOffer.available_date
+                                    .split("-")
+                                    .reverse()
+                                    .join("."),
+                                  color: "gray" as const,
+                                  showDot: false,
+                                  icon: CalendarDays,
+                                },
+                                {
+                                  text:
+                                    acceptedOffer.available_time?.slice(0, 5) ||
+                                    "-",
+                                  color: "gray" as const,
+                                  showDot: false,
+                                  icon: Clock3,
+                                },
+                              ]
+                            : []),
                         ]}
                       />
                     </div>
                   </div>
 
                   {acceptedOffer && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
+                    <div className="mt-5">
+                      <WorkshopOfferCard
+                        workshopName={acceptedOffer.workshop_name}
+                        price={acceptedOffer.price}
+                        days={acceptedOffer.days}
+                        onClick={(event) => {
+                          event.stopPropagation();
 
-                        const slug =
-                          workshopSlugs[acceptedOffer.workshop_user_id];
+                          const slug =
+                            workshopSlugs[acceptedOffer.workshop_user_id];
 
-                        if (!slug) {
-                          alert("Profilul service-ului nu este disponibil.");
-                          return;
-                        }
+                          if (!slug) {
+                            alert("Profilul service-ului nu este disponibil.");
+                            return;
+                          }
 
-                        router.push(`/workshops/profile/${slug}`);
-                      }}
-                      className="mt-5 w-full rounded-3xl bg-black/[0.04] p-4 text-left transition hover:bg-black/[0.07] active:scale-[0.99] md:mx-auto"
-                    >
-                      <p className="text-xs text-black/45">
-                        Detaliile service-ului
-                      </p>
-
-                      <p className="mt-1 text-lg font-black">
-                        {acceptedOffer.workshop_name}
-                      </p>
-
-                      <div className="mt-3 flex items-center justify-between text-sm">
-                        <span className="text-black/55">
-                          {formatPostedTime(acceptedOffer.days)}
-                        </span>
-
-                        <span className="text-xl font-black">
-                          €{acceptedOffer.price}
-                        </span>
-                      </div>
-                    </button>
+                          router.push(`/workshops/profile/${slug}`);
+                        }}
+                      />
+                    </div>
                   )}
 
                   {appointment && (
@@ -527,11 +537,17 @@ export default function MyJobsPage() {
                     </div>
                   )}
 
-                  <p className="mt-5 text-sm leading-6 text-black/65">
-                    {request.description || "Fără descriere."}
-                  </p>
+                  <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                    <p className="mb-2 text-xs font-semibold text-black/45">
+                      📝 Descriere
+                    </p>
 
-                  <div className="mt-6 flex flex-col gap-4">
+                    <p className="text-sm leading-6 text-black/70">
+                      {request.description || "Fără descriere."}
+                    </p>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-3">
                     <button
                       type="button"
                       disabled={!acceptedOffer}
@@ -547,9 +563,9 @@ export default function MyJobsPage() {
                           `/chat/${request.id}?offerId=${acceptedOffer.id}`,
                         );
                       }}
-                      className="rounded-2xl bg-black px-4 py-4 text-base font-bold text-white disabled:opacity-40"
+                      className="rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white disabled:opacity-40"
                     >
-                      Chat cu service-ul
+                      💬 Chat
                     </button>
 
                     {activeTab === "scheduled" && (
@@ -563,13 +579,11 @@ export default function MyJobsPage() {
                         }}
                         className={
                           appointment
-                            ? "rounded-2xl border border-orange-500 px-4 py-4 text-base font-bold text-orange-600"
-                            : "rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
+                            ? "rounded-[20px] border border-orange-500 px-4 py-5 text-center text-sm font-bold text-orange-600"
+                            : "rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-bold text-white"
                         }
                       >
-                        {appointment
-                          ? "📅 Schimbă data"
-                          : "📅 Programează acum"}
+                        {appointment ? "📅 Modifică" : "📅 Programează"}
                       </button>
                     )}
 

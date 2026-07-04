@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
+import { CalendarDays, Clock3 } from "lucide-react";
 
 type RepairRequest = {
   id: string;
@@ -455,22 +456,37 @@ export default function OffersPage() {
 
                     {(offer.availableDate || offer.availableTime) && (
                       <div className="mt-4 rounded-2xl bg-white p-4">
+                        <p className="text-sm font-bold text-black/45">
+                          Programare propusă
+                        </p>
+
                         {offer.availableDate && (
-                          <p className="text-base text-black/70">
-                            <span className="font-black text-black">
-                              Prima dată disponibilă:
-                            </span>{" "}
-                            {offer.availableDate.split("-").reverse().join("-")}
-                          </p>
+                          <div className="mt-3 flex items-center gap-2 text-black/70">
+                            <CalendarDays
+                              size={16}
+                              strokeWidth={2.4}
+                              className="text-slate-400"
+                            />
+                            <span className="text-base font-semibold">
+                              {offer.availableDate
+                                .split("-")
+                                .reverse()
+                                .join(".")}
+                            </span>
+                          </div>
                         )}
 
                         {offer.availableTime && (
-                          <p className="mt-2 text-base text-black/70">
-                            <span className="font-black text-black">
-                              Ora predării:
-                            </span>{" "}
-                            {offer.availableTime.slice(0, 5)}
-                          </p>
+                          <div className="mt-2 flex items-center gap-2 text-black/70">
+                            <Clock3
+                              size={16}
+                              strokeWidth={2.4}
+                              className="text-slate-400"
+                            />
+                            <span className="text-base font-semibold">
+                              {offer.availableTime.slice(0, 5)}
+                            </span>
+                          </div>
                         )}
                       </div>
                     )}

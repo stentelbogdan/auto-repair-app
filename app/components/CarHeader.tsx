@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import ImageGallery from "@/app/components/ImageGallery";
 import LicensePlate from "@/app/components/LicensePlate";
 
@@ -10,6 +11,8 @@ type CarImage = {
 type CarHeaderDetail = {
   text: string;
   color?: "yellow" | "orange" | "gray" | "green" | "blue" | "red";
+  showDot?: boolean;
+  icon?: LucideIcon;
 };
 
 type CarHeaderProps = {
@@ -94,22 +97,37 @@ export default function CarHeader({
 
         {details.length > 0 && (
           <div className="mt-4 space-y-2">
-            {details.map((detail) => (
-              <div key={detail.text} className="flex items-center gap-2">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${getDotColor(
-                    detail.color,
-                  )}`}
-                />
-                <span
-                  className={`text-sm font-semibold ${getTextColor(
-                    detail.color,
-                  )}`}
-                >
-                  {detail.text}
-                </span>
-              </div>
-            ))}
+            {details.map((detail) => {
+              const Icon = detail.icon;
+
+              return (
+                <div key={detail.text} className="flex items-center gap-2">
+                  {detail.showDot !== false && !Icon && (
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${getDotColor(
+                        detail.color,
+                      )}`}
+                    />
+                  )}
+
+                  {Icon && (
+                    <Icon
+                      size={15}
+                      strokeWidth={2.4}
+                      className={getIconColor(detail.color)}
+                    />
+                  )}
+
+                  <span
+                    className={`text-sm font-semibold ${getTextColor(
+                      detail.color,
+                    )}`}
+                  >
+                    {detail.text}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -150,5 +168,23 @@ function getTextColor(color?: CarHeaderDetail["color"]) {
     case "gray":
     default:
       return "text-black/55";
+  }
+}
+
+function getIconColor(color?: CarHeaderDetail["color"]) {
+  switch (color) {
+    case "orange":
+      return "text-orange-500";
+    case "green":
+      return "text-emerald-500";
+    case "blue":
+      return "text-blue-500";
+    case "red":
+      return "text-red-500";
+    case "yellow":
+      return "text-yellow-500";
+    case "gray":
+    default:
+      return "text-slate-400";
   }
 }
