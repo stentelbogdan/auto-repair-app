@@ -50,15 +50,12 @@ export default function MyJobsPage() {
     {},
   );
 
-  type JobsTab = "needs_schedule" | "scheduled" | "in_progress" | "completed";
+  type JobsTab = "scheduled" | "in_progress" | "completed";
 
   const isValidTab = (tab: string | null): tab is JobsTab =>
-    tab === "needs_schedule" ||
-    tab === "scheduled" ||
-    tab === "in_progress" ||
-    tab === "completed";
+    tab === "scheduled" || tab === "in_progress" || tab === "completed";
 
-  const [activeTab, setActiveTab] = useState<JobsTab>("needs_schedule");
+  const [activeTab, setActiveTab] = useState<JobsTab>("scheduled");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -276,17 +273,8 @@ export default function MyJobsPage() {
     };
   });
 
-  const needsScheduleJobs = jobsWithAppointments.filter(
-    ({ request, appointment }) =>
-      request.status === "matched" &&
-      (!appointment || ["declined", "cancelled"].includes(appointment.status)),
-  );
-
   const scheduledJobs = jobsWithAppointments.filter(
-    ({ request, appointment }) =>
-      request.status === "matched" &&
-      appointment &&
-      ["requested", "confirmed"].includes(appointment.status),
+    ({ request }) => request.status === "matched",
   );
 
   const inProgressJobs = jobsWithAppointments.filter(
@@ -298,13 +286,11 @@ export default function MyJobsPage() {
   );
 
   const visibleJobs =
-    activeTab === "needs_schedule"
-      ? needsScheduleJobs
-      : activeTab === "scheduled"
-        ? scheduledJobs
-        : activeTab === "in_progress"
-          ? inProgressJobs
-          : completedJobs;
+    activeTab === "scheduled"
+      ? scheduledJobs
+      : activeTab === "in_progress"
+        ? inProgressJobs
+        : completedJobs;
 
   const acceptAppointmentProposal = async (appointmentId: string) => {
     const appointment = appointments.find((a) => a.id === appointmentId);
@@ -339,9 +325,7 @@ export default function MyJobsPage() {
     }
   };
 
-  const changeTab = (
-    tab: "needs_schedule" | "scheduled" | "in_progress" | "completed",
-  ) => {
+  const changeTab = (tab: JobsTab) => {
     setActiveTab(tab);
     router.replace(`/customer/my-jobs?tab=${tab}`, {
       scroll: false,
@@ -368,13 +352,6 @@ export default function MyJobsPage() {
         </div>
 
         <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-          <TabButton
-            label="Necesită programare"
-            count={needsScheduleJobs.length}
-            active={activeTab === "needs_schedule"}
-            onClick={() => changeTab("needs_schedule")}
-          />
-
           <TabButton
             label="Programate"
             count={scheduledJobs.length}
@@ -427,16 +404,8 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
-                  onClick={() => {
-                    if (activeTab === "needs_schedule") return;
-
-                    router.push(`/customer/my-jobs/${request.id}`);
-                  }}
-                  className={`overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition ${
-                    activeTab === "needs_schedule"
-                      ? "cursor-default"
-                      : "cursor-pointer active:scale-[0.99]"
-                  }`}
+                  onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
+                  className="cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition active:scale-[0.99]"
                 >
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
@@ -452,17 +421,21 @@ export default function MyJobsPage() {
                         details={[
                           {
                             text:
-                              activeTab === "needs_schedule"
-                                ? "Necesită programare"
-                                : appointment?.status === "confirmed"
+                              activeTab === "scheduled"
+                                ? appointment?.status === "confirmed"
                                   ? "Programată"
-                                  : "În lucru",
+                                  : "Așteaptă programarea"
+                                : activeTab === "in_progress"
+                                  ? "În lucru"
+                                  : "Finalizată",
                             color:
-                              activeTab === "needs_schedule"
-                                ? "yellow"
-                                : appointment?.status === "confirmed"
+                              activeTab === "scheduled"
+                                ? appointment?.status === "confirmed"
                                   ? "blue"
-                                  : "orange",
+                                  : "yellow"
+                                : activeTab === "in_progress"
+                                  ? "orange"
+                                  : "green",
                           },
                         ]}
                       />
@@ -588,24 +561,15 @@ export default function MyJobsPage() {
                             `/customer/schedule-damage/${request.id}`,
                           );
                         }}
-                        className="rounded-2xl border border-orange-500 px-4 py-4 text-base font-bold text-orange-600"
+                        className={
+                          appointment
+                            ? "rounded-2xl border border-orange-500 px-4 py-4 text-base font-bold text-orange-600"
+                            : "rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
+                        }
                       >
-                        📅 Schimbă data
-                      </button>
-                    )}
-
-                    {activeTab === "needs_schedule" && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          router.push(
-                            `/customer/schedule-damage/${request.id}`,
-                          );
-                        }}
-                        className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
-                      >
-                        📅 Programează acum
+                        {appointment
+                          ? "📅 Schimbă data"
+                          : "📅 Programează acum"}
                       </button>
                     )}
 

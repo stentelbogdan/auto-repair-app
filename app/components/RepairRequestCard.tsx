@@ -52,7 +52,7 @@ export default function RepairRequestCard({
   return (
     <div className={cardClassName}>
       <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
+        <div>
           <CarHeader
             images={request.images}
             plate={request.license_plate}
@@ -61,45 +61,46 @@ export default function RepairRequestCard({
             year={request.car_year}
             city={request.city}
             variant="listLarge"
+            platePosition="bottom"
+            details={[
+              {
+                text: formatStatus(request.status, request.accepted_offer_id),
+                color:
+                  request.status === "completed"
+                    ? "green"
+                    : request.status === "closed"
+                      ? "red"
+                      : request.status === "in_progress"
+                        ? "orange"
+                        : request.accepted_offer_id ||
+                            request.status === "matched"
+                          ? "blue"
+                          : "orange",
+              },
+
+              ...(isOpen && (request.offers_count ?? 0) > 0
+                ? [
+                    {
+                      text: `${request.offers_count} ${
+                        request.offers_count === 1
+                          ? "ofertă primită"
+                          : "oferte primite"
+                      }`,
+                      color: "blue" as const,
+                    },
+                  ]
+                : []),
+
+              ...(showScheduledBadge
+                ? [{ text: "Programată", color: "blue" as const }]
+                : []),
+            ]}
           />
 
-          {isWorkshop ? (
-            <div className="flex shrink-0 flex-col items-center">
-              <span className="rounded-full bg-yellow-500/15 px-3 py-1 text-xs font-semibold text-yellow-300">
-                Deschisă
-              </span>
-
-              {postedAt && (
-                <span className="mt-1 text-[10px] font-semibold text-white/45">
-                  {postedAt}
-                </span>
-              )}
-            </div>
-          ) : request.accepted_offer_id || request.status === "matched" ? (
-            <div className="shrink-0 mr-4 flex flex-col items-end gap-1">
-              <div className="-translate-x-1 flex h-11 w-[78px] flex-col items-center justify-center rounded-xl bg-orange-100 text-center text-orange-700 ring-1 ring-orange-200">
-                <span className="text-[9px] font-extrabold uppercase leading-none tracking-[0.08em]">
-                  Service
-                </span>
-
-                <span className="mt-0.5 text-[10px] font-semibold leading-none">
-                  selectat
-                </span>
-              </div>
-
-              {showScheduledBadge && (
-                <span className="-ml-4 flex w-[90px] items-center justify-center rounded-full bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-700">
-                  <span className="flex items-center gap-1">
-                    <span>📅</span>
-                    <span>Programată</span>
-                  </span>
-                </span>
-              )}
-            </div>
-          ) : (
-            <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-              {formatStatus(request.status, request.accepted_offer_id)}
-            </span>
+          {isWorkshop && postedAt && (
+            <p className="mt-2 text-xs font-semibold text-white/45">
+              {postedAt}
+            </p>
           )}
         </div>
 
@@ -125,34 +126,6 @@ export default function RepairRequestCard({
         >
           {actionLabel || (isOpen ? "✏️ Editează detalii" : "Vezi lucrarea")}
         </button>
-
-        {!isWorkshop && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {isOpen && (request.offers_count ?? 0) > 0 && (
-              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                📨 {request.offers_count} oferte primite
-              </span>
-            )}
-
-            {request.status === "in_progress" && (
-              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                🔧 În lucru
-              </span>
-            )}
-
-            {request.status === "completed" && (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                ✅ Finalizată
-              </span>
-            )}
-
-            {request.status === "closed" && (
-              <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700">
-                🚫 Închisă
-              </span>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

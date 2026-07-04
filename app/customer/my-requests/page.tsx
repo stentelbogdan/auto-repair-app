@@ -9,23 +9,23 @@ import {
 } from "@/lib/supabase/repair-requests";
 import RepairRequestCard from "@/app/components/RepairRequestCard";
 
+type MyRequestsTab = "waiting" | "with_offer" | "archive";
+
 export default function MyRequestsPage() {
   const router = useRouter();
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
+  const [offerCounts, setOfferCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<
-    "open" | "scheduled" | "completed" | "closed"
-  >("open");
+  const [activeTab, setActiveTab] = useState<MyRequestsTab>("waiting");
 
   useEffect(() => {
     const savedTab = sessionStorage.getItem("my-requests-active-tab");
 
     if (
-      savedTab === "open" ||
-      savedTab === "scheduled" ||
-      savedTab === "completed" ||
-      savedTab === "closed"
+      savedTab === "waiting" ||
+      savedTab === "with_offer" ||
+      savedTab === "archive"
     ) {
       setActiveTab(savedTab);
     }
@@ -42,8 +42,24 @@ export default function MyRequestsPage() {
         }
 
         const data = await getOwnRepairRequests(authData.user.id);
-
         setRequests(data);
+
+        const requestIds = data.map((request) => request.id);
+
+        if (requestIds.length > 0) {
+          const { data: offersData } = await supabase
+            .from("repair_offers")
+            .select("request_id")
+            .in("request_id", requestIds);
+
+          const counts: Record<string, number> = {};
+
+          offersData?.forEach((offer) => {
+            counts[offer.request_id] = (counts[offer.request_id] || 0) + 1;
+          });
+
+          setOfferCounts(counts);
+        }
       } catch (error) {
         console.error("Failed to load requests:", error);
         alert("Nu am putut încărca daunele tale.");
@@ -55,45 +71,38 @@ export default function MyRequestsPage() {
     loadRequests();
   }, [router]);
 
-  const openRequests = requests.filter(
-    (request) => request.status === "open" && !request.accepted_offer_id,
-  );
+  const waitingRequests = requests.filter((request) => {
+    const count = offerCounts[request.id] || 0;
 
-  const completedRequests = requests.filter(
-    (request) => request.status === "completed",
-  );
+    return (
+      request.status === "open" &&
+      !request.accepted_offer_id &&
+      count === 0
+    );
+  });
 
-  const closedRequests = requests.filter(
-    (request) => request.status === "closed",
-  );
+  const withOfferRequests = requests.filter((request) => {
+    const count = offerCounts[request.id] || 0;
 
-  const scheduledRequests = requests.filter(
-    (request) =>
-      request.status !== "completed" &&
-      request.status !== "closed" &&
-      (request.accepted_offer_id ||
-        [
-          "matched",
-          "in_progress",
-          "Received",
-          "Diagnosis",
-          "Parts ordered",
-          "In repair",
-          "Testing",
-          "Ready",
-        ].includes(request.status)),
+    return (
+      request.status === "open" &&
+      !request.accepted_offer_id &&
+      count > 0
+    );
+  });
+
+  const archiveRequests = requests.filter((request) =>
+    ["completed", "closed", "cancelled", "rejected"].includes(request.status),
   );
 
   const visibleRequests =
-    activeTab === "open"
-      ? openRequests
-      : activeTab === "scheduled"
-        ? scheduledRequests
-        : activeTab === "completed"
-          ? completedRequests
-          : closedRequests;
+    activeTab === "waiting"
+      ? waitingRequests
+      : activeTab === "with_offer"
+        ? withOfferRequests
+        : archiveRequests;
 
-  const changeTab = (tab: "open" | "scheduled" | "completed" | "closed") => {
+  const changeTab = (tab: MyRequestsTab) => {
     setActiveTab(tab);
     sessionStorage.setItem("my-requests-active-tab", tab);
   };
@@ -106,7 +115,7 @@ export default function MyRequestsPage() {
             <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
               Client
             </p>
-            <h1 className="mt-1 text-2xl font-bold">Daunele mele</h1>
+            <h1 className="mt-1 text-2xl font-bold">Cererile mele</h1>
           </div>
 
           <button
@@ -119,57 +128,53 @@ export default function MyRequestsPage() {
 
         <div className="mb-5 flex gap-2 overflow-x-auto">
           <button
-            onClick={() => changeTab("open")}
+            onClick={() => changeTab("waiting")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
-              activeTab === "open"
+              activeTab === "waiting"
                 ? "bg-orange-500 text-black"
                 : "bg-white/10 text-white"
             }`}
           >
-            Deschise ({openRequests.length})
+            În așteptare ({waitingRequests.length})
           </button>
 
           <button
-            onClick={() => changeTab("scheduled")}
+            onClick={() => changeTab("with_offer")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
-              activeTab === "scheduled"
+              activeTab === "with_offer"
                 ? "bg-orange-500 text-black"
                 : "bg-white/10 text-white"
             }`}
           >
-            Programate ({scheduledRequests.length})
+            Cu ofertă ({withOfferRequests.length})
           </button>
 
           <button
-            onClick={() => changeTab("completed")}
+            onClick={() => changeTab("archive")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
-              activeTab === "completed"
+              activeTab === "archive"
                 ? "bg-orange-500 text-black"
                 : "bg-white/10 text-white"
             }`}
           >
-            Finalizate ({completedRequests.length})
-          </button>
-
-          <button
-            onClick={() => changeTab("closed")}
-            className={`rounded-full px-4 py-2 text-sm font-bold ${
-              activeTab === "closed"
-                ? "bg-orange-500 text-black"
-                : "bg-white/10 text-white"
-            }`}
-          >
-            Închise ({closedRequests.length})
+            Istoric ({archiveRequests.length})
           </button>
         </div>
 
         {loading ? (
-          <p className="text-white/60">Se încarcă daunele...</p>
+          <p className="text-white/60">Se încarcă cererile...</p>
         ) : visibleRequests.length === 0 ? (
           <div className="rounded-[22px] bg-white p-6 text-center text-black">
-            <h2 className="text-xl font-bold">Nu ai daune postate</h2>
+            <h2 className="text-xl font-bold">
+              {activeTab === "waiting"
+                ? "Nu ai cereri în așteptare"
+                : activeTab === "with_offer"
+                  ? "Nu ai cereri cu ofertă"
+                  : "Nu ai cereri în istoric"}
+            </h2>
+
             <p className="mt-2 text-sm text-black/60">
-              Postează prima daună ca să primești oferte de la service-uri.
+              Postează o daună ca să primești oferte de la service-uri.
             </p>
 
             <button
@@ -188,11 +193,14 @@ export default function MyRequestsPage() {
                 onEdit={() =>
                   router.push(`/customer/my-requests/${request.id}`)
                 }
-                onView={() =>
-                  router.push(
-                    `/customer/my-jobs/${request.id}?from=my-requests&tab=${activeTab}`,
-                  )
-                }
+                onView={() => {
+                  if (activeTab === "with_offer") {
+                    router.push("/offers");
+                    return;
+                  }
+
+                  router.push(`/customer/my-requests/${request.id}`);
+                }}
               />
             ))}
           </div>

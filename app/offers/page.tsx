@@ -545,13 +545,11 @@ export default function OffersPage() {
                           </div>
                         )}
 
-                        {offer.workshopSlug &&
-                          workshopRating &&
-                          workshopRating.count > 0 && (
-                            <span className="mt-2 block text-sm font-bold text-black underline underline-offset-4">
-                              Vezi profilul și review-urile →
-                            </span>
-                          )}
+                        {offer.workshopSlug && (
+                          <span className="mt-3 block text-sm font-bold text-black underline underline-offset-4">
+                            Vezi profilul și review-urile →
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

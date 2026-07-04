@@ -39,9 +39,9 @@ export default function CarHeader({
 
   const isLarge = variant === "listLarge";
 
-  const imageClassName = isLarge ? "h-[155px] w-[145px]" : "h-20 w-20";
+  const imageClassName = isLarge ? "h-[150px] w-[150px]" : "h-20 w-20";
   const wrapperClassName = isLarge
-    ? "block h-[155px] w-[145px] overflow-hidden rounded-2xl"
+    ? "block h-[150px] w-[150px] overflow-hidden rounded-2xl"
     : "block h-20 w-20 overflow-hidden rounded-2xl";
 
   return (
@@ -152,4 +152,3 @@ function getTextColor(color?: CarHeaderDetail["color"]) {
       return "text-black/55";
   }
 }
-    
