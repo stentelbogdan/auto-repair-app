@@ -262,8 +262,7 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      alert("Programarea a fost trimisă către service pentru confirmare.");
-      router.push("/customer/my-jobs");
+      router.replace("/customer/dashboard?appointmentSent=1");
     } finally {
       setSaving(false);
     }

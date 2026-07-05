@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type ProfileRow = {
@@ -9,11 +9,31 @@ type ProfileRow = {
 };
 
 export default function CustomerDashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <CustomerDashboardContent />
+    </Suspense>
+  );
+}
+
+function CustomerDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const showAppointmentToast = searchParams.get("appointmentSent") === "1";
   const [showSuccessToast, setShowSuccessToast] = useState(false);
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
   const [receivedOffersCount, setReceivedOffersCount] = useState(0);
   const [appointmentsCount, setAppointmentsCount] = useState(0);
+
+  useEffect(() => {
+    if (!showAppointmentToast) return;
+
+    const timer = setTimeout(() => {
+      router.replace("/customer/dashboard");
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [showAppointmentToast, router]);
 
   useEffect(() => {
     const loadRole = async () => {
@@ -100,6 +120,18 @@ export default function CustomerDashboardPage() {
 
   return (
     <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-[#101010] px-4 pb-4 pt-4 text-white">
+      {showAppointmentToast && (
+        <div className="mx-auto mb-4 max-w-md rounded-2xl border border-green-500/30 bg-green-500/10 p-4">
+          <p className="text-sm font-bold text-green-300">
+            ✅ Programarea a fost trimisă.
+          </p>
+
+          <p className="mt-1 text-xs text-green-100/80">
+            Service-ul va confirma în cel mai scurt timp.
+          </p>
+        </div>
+      )}
+
       {showSuccessToast && (
         <div className="mx-auto mb-4 max-w-md rounded-2xl border border-green-500/30 bg-green-500/10 px-4 py-3 shadow-lg md:max-w-5xl">
           <p className="text-sm font-bold text-green-300">
