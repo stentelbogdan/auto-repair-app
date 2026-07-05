@@ -372,17 +372,37 @@ export default function OffersPage() {
   };
 
   const formatDamageType = (value?: string) => {
-    if (!value) return "Daună";
+  if (!value) return "Daună";
 
-    const labels: Record<string, string> = {
-      cosmetic: "Daună estetică",
-      mechanical: "Daună mecanică",
-      detailing: "Detailing",
-      body: "Caroserie",
-    };
+  const labels: Record<string, string> = {
+    cosmetic: "Daună estetică",
+    mechanical: "Daună mecanică",
+    detailing: "Detailing",
+    body: "Caroserie",
+    bodywork: "Caroserie",
 
-    return labels[value] || value;
+    scratch: "Zgârietură",
+    dent: "Îndoitură",
+    crack: "Fisură",
+    paint: "Vopsire",
+    bumper: "Bară",
+    hood: "Capotă",
+
+    detailing_interior: "Detailing interior",
+    detailing_exterior: "Detailing exterior",
+    polish: "Polish profesional",
+    ceramic: "Protecție ceramică",
+    ppf: "Folie PPF",
+    wrapping: "Colantare",
+    window_tint: "Folii geamuri",
+    dechroming: "Dechroming",
+    wheel_refurbishment: "Recondiționare jante",
+    smart_repair: "Smart Repair",
+    pdr: "Îndreptare fără vopsire",
   };
+
+  return labels[value] || value;
+};
 
   if (checkingAccess) {
     return (
