@@ -603,7 +603,7 @@ export default function OffersPage() {
                       type="button"
                       onClick={() =>
                         router.push(
-                          `/customer/schedule-damage/${request.id}?offer=${offer.id}`,
+                          `/customer/schedule-damage/${request.id}?offerId=${offer.id}`,
                         )
                       }
                       className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98]"

@@ -93,6 +93,9 @@ export default function WorkshopRequestDetailsPage() {
 
           setAvailableDate(parsed.date || "");
           setAvailableTime(parsed.time || "");
+          setPrice(parsed.price || "");
+          setDays(parsed.days || "");
+          setMessage(parsed.message || "");
         }
       } catch {
         setRequest(null);
@@ -148,7 +151,7 @@ export default function WorkshopRequestDetailsPage() {
         availableTime,
       });
 
-      router.push("/workshops/my-offers");
+      router.replace("/workshops/dashboard?offerSent=1");
     } catch (error: any) {
       alert(error?.message || "Nu am putut trimite oferta.");
     } finally {
@@ -287,7 +290,20 @@ export default function WorkshopRequestDetailsPage() {
 
             <button
               type="button"
-              onClick={() => router.push(`/workshops/${request.id}/calendar`)}
+              onClick={() => {
+                sessionStorage.setItem(
+                  `availability-${request.id}`,
+                  JSON.stringify({
+                    date: availableDate,
+                    time: availableTime,
+                    price,
+                    days,
+                    message,
+                  }),
+                );
+
+                router.push(`/workshops/${request.id}/calendar`);
+              }}
               className="mt-3 flex w-full items-center justify-between rounded-2xl bg-white px-4 py-4 text-left shadow-sm transition hover:bg-orange-50"
             >
               <div>

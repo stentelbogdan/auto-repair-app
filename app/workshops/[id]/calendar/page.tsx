@@ -44,13 +44,17 @@ export default function WorkshopRequestCalendarPage() {
       return;
     }
 
-    sessionStorage.setItem(
-      `availability-${requestId}`,
-      JSON.stringify({
-        date: selectedDate,
-        time: selectedTime,
-      }),
-    );
+    const existingDraft = sessionStorage.getItem(`availability-${requestId}`);
+const parsedDraft = existingDraft ? JSON.parse(existingDraft) : {};
+
+sessionStorage.setItem(
+  `availability-${requestId}`,
+  JSON.stringify({
+    ...parsedDraft,
+    date: selectedDate,
+    time: selectedTime,
+  }),
+);
 
     router.push(`/workshops/${requestId}`);
   };

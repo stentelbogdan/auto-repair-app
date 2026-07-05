@@ -78,6 +78,9 @@ export default function MakeOfferPage() {
 
           setAvailableDate(parsed.date || "");
           setAvailableTime(parsed.time || "");
+          setPrice(parsed.price || "");
+          setDays(parsed.days || "");
+          setMessage(parsed.message || "");
         }
 
         const { data: existingOffer } = await supabase

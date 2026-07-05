@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getWorkshopRepairRequests } from "@/lib/supabase/repair-requests";
 
@@ -20,7 +20,27 @@ type DashboardStats = {
 };
 
 export default function WorkshopDashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <WorkshopDashboardContent />
+    </Suspense>
+  );
+}
+
+function WorkshopDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const showSuccessToast = searchParams.get("offerSent") === "1";
+
+  useEffect(() => {
+    if (!showSuccessToast) return;
+
+    const timer = setTimeout(() => {
+      router.replace("/workshops/dashboard");
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [showSuccessToast, router]);
 
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -233,6 +253,17 @@ export default function WorkshopDashboardPage() {
 
   return (
     <main className="min-h-[calc(100svh-236px)] overflow-y-auto bg-black px-4 pb-4 pt-4 text-white landscape:overflow-y-auto">
+      {showSuccessToast && (
+        <div className="mx-auto mb-4 max-w-md rounded-2xl border border-green-500/30 bg-green-500/10 p-4">
+          <p className="text-sm font-bold text-green-300">
+            ✅ Oferta a fost trimisă!
+          </p>
+
+          <p className="mt-1 text-xs text-green-100/80">
+            Clientul a fost notificat și îți va putea răspunde în scurt timp.
+          </p>
+        </div>
+      )}
       <div className="mx-auto max-w-md md:max-w-5xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
