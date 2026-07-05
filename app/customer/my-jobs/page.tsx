@@ -14,7 +14,8 @@ import {
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
 import { CalendarDays, Clock3 } from "lucide-react";
-import WorkshopOfferCard from "@/app/components/WorkshopOfferCard";
+import OfferSummaryCard from "@/app/components/OfferSummaryCard";
+import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 
 type RepairAppointment = {
   id: string;
@@ -439,101 +440,87 @@ export default function MyJobsPage() {
                                   ? "orange"
                                   : "green",
                           },
-
-                          ...(activeTab === "scheduled" &&
-                          acceptedOffer?.available_date
-                            ? [
-                                {
-                                  text: acceptedOffer.available_date
-                                    .split("-")
-                                    .reverse()
-                                    .join("."),
-                                  color: "gray" as const,
-                                  showDot: false,
-                                  icon: CalendarDays,
-                                },
-                                {
-                                  text:
-                                    acceptedOffer.available_time?.slice(0, 5) ||
-                                    "-",
-                                  color: "gray" as const,
-                                  showDot: false,
-                                  icon: Clock3,
-                                },
-                              ]
-                            : []),
                         ]}
                       />
                     </div>
                   </div>
 
                   {acceptedOffer && (
-                    <div className="mt-5">
-                      <WorkshopOfferCard
-                        workshopName={acceptedOffer.workshop_name}
-                        price={acceptedOffer.price}
-                        days={acceptedOffer.days}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                    <WorkshopSummaryCard
+                      workshopUserId={acceptedOffer.workshop_user_id}
+                      workshopName={acceptedOffer.workshop_name}
+                      workshopLogoUrl={null}
+                      workshopSlug={
+                        workshopSlugs[acceptedOffer.workshop_user_id]
+                      }
+                      onClick={() => {
+                        const slug =
+                          workshopSlugs[acceptedOffer.workshop_user_id];
 
-                          const slug =
-                            workshopSlugs[acceptedOffer.workshop_user_id];
+                        if (!slug) {
+                          alert("Profilul service-ului nu este disponibil.");
+                          return;
+                        }
 
-                          if (!slug) {
-                            alert("Profilul service-ului nu este disponibil.");
-                            return;
-                          }
-
-                          router.push(`/workshops/profile/${slug}`);
-                        }}
-                      />
-                    </div>
+                        router.push(`/workshops/profile/${slug}`);
+                      }}
+                    />
                   )}
 
-                  {appointment && (
+                  {acceptedOffer && (
                     <div
-                      className={`mt-5 rounded-[26px] p-5 ${
-                        appointment.status === "declined"
-                          ? "bg-red-50"
-                          : "bg-orange-50"
-                      }`}
+                      className="mt-5"
+                      onClick={(event) => {
+                        event.stopPropagation();
+
+                        const slug =
+                          workshopSlugs[acceptedOffer.workshop_user_id];
+
+                        if (!slug) {
+                          alert("Profilul service-ului nu este disponibil.");
+                          return;
+                        }
+
+                        router.push(`/workshops/profile/${slug}`);
+                      }}
                     >
-                      <p
-                        className={`text-xs font-black uppercase tracking-[0.22em] ${
-                          appointment.status === "declined"
-                            ? "text-red-600"
-                            : "text-orange-600"
-                        }`}
-                      >
-                        Detalii programare
-                      </p>
-
-                      {appointment.status !== "declined" && (
-                        <>
-                          <div className="mt-4 rounded-3xl border border-orange-200 bg-gradient-to-r from-orange-50 to-orange-100 p-4">
-                            <p className="text-lg font-black text-black">
-                              📅{" "}
-                              {formatAppointmentDate(
-                                appointment.appointment_date,
-                              )}
-                            </p>
-
-                            <p className="mt-2 text-base font-bold text-black/65">
-                              🕐 Ora {appointment.appointment_time}
-                            </p>
-                          </div>
-
-                          <p className="mt-3 text-sm text-black/55">
-                            {appointment.handover_method === "customer_dropoff"
-                              ? "Aduci mașina la service"
-                              : "Service-ul ridică mașina"}
-                          </p>
-                        </>
-                      )}
-
-                      <span className="mt-3 inline-flex rounded-full bg-black px-3 py-1 text-[11px] font-bold text-white">
-                        {formatAppointmentStatus(appointment.status)}
-                      </span>
+                      <OfferSummaryCard
+                        title={
+                          activeTab === "scheduled"
+                            ? appointment?.status === "confirmed"
+                              ? "Programare confirmată"
+                              : "Programare în așteptare"
+                            : activeTab === "in_progress"
+                              ? "Lucrare în lucru"
+                              : "Lucrare finalizată"
+                        }
+                        price={acceptedOffer.price}
+                        days={acceptedOffer.days}
+                        appointmentDate={
+                          appointment?.appointment_date ||
+                          acceptedOffer.available_date ||
+                          null
+                        }
+                        appointmentTime={
+                          appointment?.appointment_time ||
+                          acceptedOffer.available_time ||
+                          null
+                        }
+                        handoverText={
+                          appointment?.handover_method === "workshop_pickup"
+                            ? "Predare: Service-ul ridică mașina"
+                            : "Predare: Clientul aduce mașina"
+                        }
+                        statusText={
+                          activeTab === "scheduled"
+                            ? appointment?.status === "confirmed"
+                              ? "Confirmată"
+                              : "Așteaptă confirmare"
+                            : activeTab === "in_progress"
+                              ? "În lucru"
+                              : "Finalizată"
+                        }
+                      />
                     </div>
                   )}
 

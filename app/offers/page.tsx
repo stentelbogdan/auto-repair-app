@@ -6,7 +6,9 @@ import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
-import { CalendarDays, Check, Clock3 } from "lucide-react";
+import { CalendarDays, Check } from "lucide-react";
+import OfferSummaryCard from "@/app/components/OfferSummaryCard";
+import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 
 type RepairRequest = {
   id: string;
@@ -372,37 +374,37 @@ export default function OffersPage() {
   };
 
   const formatDamageType = (value?: string) => {
-  if (!value) return "Daună";
+    if (!value) return "Daună";
 
-  const labels: Record<string, string> = {
-    cosmetic: "Daună estetică",
-    mechanical: "Daună mecanică",
-    detailing: "Detailing",
-    body: "Caroserie",
-    bodywork: "Caroserie",
+    const labels: Record<string, string> = {
+      cosmetic: "Daună estetică",
+      mechanical: "Daună mecanică",
+      detailing: "Detailing",
+      body: "Caroserie",
+      bodywork: "Caroserie",
 
-    scratch: "Zgârietură",
-    dent: "Îndoitură",
-    crack: "Fisură",
-    paint: "Vopsire",
-    bumper: "Bară",
-    hood: "Capotă",
+      scratch: "Zgârietură",
+      dent: "Îndoitură",
+      crack: "Fisură",
+      paint: "Vopsire",
+      bumper: "Bară",
+      hood: "Capotă",
 
-    detailing_interior: "Detailing interior",
-    detailing_exterior: "Detailing exterior",
-    polish: "Polish profesional",
-    ceramic: "Protecție ceramică",
-    ppf: "Folie PPF",
-    wrapping: "Colantare",
-    window_tint: "Folii geamuri",
-    dechroming: "Dechroming",
-    wheel_refurbishment: "Recondiționare jante",
-    smart_repair: "Smart Repair",
-    pdr: "Îndreptare fără vopsire",
+      detailing_interior: "Detailing interior",
+      detailing_exterior: "Detailing exterior",
+      polish: "Polish profesional",
+      ceramic: "Protecție ceramică",
+      ppf: "Folie PPF",
+      wrapping: "Colantare",
+      window_tint: "Folii geamuri",
+      dechroming: "Dechroming",
+      wheel_refurbishment: "Recondiționare jante",
+      smart_repair: "Smart Repair",
+      pdr: "Îndreptare fără vopsire",
+    };
+
+    return labels[value] || value;
   };
-
-  return labels[value] || value;
-};
 
   if (checkingAccess) {
     return (
@@ -450,7 +452,7 @@ export default function OffersPage() {
                     variant="listLarge"
                     details={[
                       {
-                        text: "În așteptare",
+                        text: "Necesită programare",
                         color: "orange",
                       },
                       {
@@ -460,135 +462,30 @@ export default function OffersPage() {
                     ]}
                   />
 
-                  <div className="mt-4 rounded-2xl bg-gray-100 p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="text-sm text-black/40">Oferta primită</p>
-                        <p className="mt-2 text-base text-black/60">
-                          {offer.days}
-                        </p>
-                      </div>
+                  <WorkshopSummaryCard
+                    workshopUserId={offer.workshopUserId}
+                    workshopName={offer.workshopName}
+                    workshopLogoUrl={offer.workshopLogoUrl}
+                    workshopSlug={offer.workshopSlug}
+                    onClick={() => {
+                      if (!offer.workshopSlug) {
+                        alert("Profilul service-ului nu este disponibil.");
+                        return;
+                      }
 
-                      <p className="text-3xl font-black text-black">
-                        €{offer.price}
-                      </p>
-                    </div>
+                      router.push(`/workshops/profile/${offer.workshopSlug}`);
+                    }}
+                  />
 
-                    {(offer.availableDate || offer.availableTime) && (
-                      <div className="mt-4 rounded-2xl bg-white p-4">
-                        <p className="text-sm font-bold text-black/45">
-                          Programare propusă
-                        </p>
-
-                        {offer.availableDate && (
-                          <div className="mt-3 flex items-center gap-2 text-black/70">
-                            <CalendarDays
-                              size={16}
-                              strokeWidth={2.4}
-                              className="text-slate-400"
-                            />
-                            <span className="text-base font-semibold">
-                              {offer.availableDate
-                                .split("-")
-                                .reverse()
-                                .join(".")}
-                            </span>
-                          </div>
-                        )}
-
-                        {offer.availableTime && (
-                          <div className="mt-2 flex items-center gap-2 text-black/70">
-                            <Clock3
-                              size={16}
-                              strokeWidth={2.4}
-                              className="text-slate-400"
-                            />
-                            <span className="text-base font-semibold">
-                              {offer.availableTime.slice(0, 5)}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div
-                    onClick={() =>
-                      offer.workshopSlug &&
-                      router.push(`/workshops/profile/${offer.workshopSlug}`)
-                    }
-                    className="mt-4 rounded-2xl bg-gray-100 p-4"
-                  >
-                    <p className="text-xs text-black/40">Service</p>
-
-                    <div className="mt-3 flex items-start gap-4">
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-white shadow-sm sm:h-16 sm:w-16">
-                        {offer.workshopLogoUrl ? (
-                          <img
-                            src={offer.workshopLogoUrl}
-                            alt={offer.workshopName}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-sm font-black">
-                            AR
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <p className="max-w-full truncate text-left text-lg font-black text-black underline decoration-orange-300 underline-offset-4">
-                          {offer.workshopName}
-                        </p>
-
-                        {workshopRating && workshopRating.count > 0 && (
-                          <div className="mt-1 flex items-center gap-1 text-xs font-bold">
-                            <span className="text-orange-500">★★★★★</span>
-                            <span className="text-black/60">
-                              {workshopRating.average.toFixed(1)} (
-                              {workshopRating.count} review-uri)
-                            </span>
-                          </div>
-                        )}
-
-                        {(workshopRating?.completedJobs || 0) > 0 && (
-                          <div className="mt-1 text-xs font-medium text-green-700">
-                            ✓ {workshopRating.completedJobs} lucrări finalizate
-                          </div>
-                        )}
-
-                        {(workshopRating?.specialties?.length || 0) > 0 && (
-                          <div className="mt-1 text-xs font-medium text-black/80">
-                            <div>Experiență verificată:</div>
-                            <div className="mt-0.5">
-                              {workshopRating.specialties
-                                ?.slice(0, 3)
-                                .map(formatSpecialty)
-                                .join(" • ")}
-                            </div>
-                          </div>
-                        )}
-
-                        {workshopRating?.lastReview && (
-                          <div className="mt-2 rounded-lg border border-black/5 bg-white/60 p-2">
-                            <div className="text-[11px] font-semibold text-black/60">
-                              💬 Ultimul client
-                            </div>
-
-                            <p className="mt-1 text-sm italic text-black/80">
-                              “{workshopRating.lastReview}”
-                            </p>
-                          </div>
-                        )}
-
-                        {offer.workshopSlug && (
-                          <span className="mt-3 block text-sm font-bold text-black underline underline-offset-4">
-                            Vezi profilul și review-urile →
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <OfferSummaryCard
+                    title="Oferta service-ului"
+                    price={offer.price}
+                    days={offer.days}
+                    appointmentDate={offer.availableDate}
+                    appointmentTime={offer.availableTime}
+                    handoverText="Predare la service"
+                    statusText="Așteaptă confirmare"
+                  />
 
                   {offer.message && (
                     <div className="mt-3 rounded-2xl bg-gray-50 p-4">
@@ -614,7 +511,7 @@ export default function OffersPage() {
                       ) : (
                         <span className="flex items-center justify-center gap-1.5">
                           <Check size={18} strokeWidth={2.5} />
-                          <span>Acceptă oferta</span>
+                          <span>Confirmă programarea</span>
                         </span>
                       )}
                     </button>

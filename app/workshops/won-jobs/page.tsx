@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
+import CarHeader from "@/app/components/CarHeader";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -52,6 +53,7 @@ type WonJob = {
     carModel: string;
     carYear: string;
     city: string;
+    licensePlate: string | null;
     damageType: string;
     description: string;
     images: JobImage[];
@@ -279,6 +281,7 @@ export default function WorkshopWonJobsPage() {
             car_model,
             car_year,
             city,
+            license_plate,
             damage_type,
             description,
             images,
@@ -316,6 +319,7 @@ export default function WorkshopWonJobsPage() {
             carModel: request?.car_model || "",
             carYear: request?.car_year || "-",
             city: request?.city || "-",
+            licensePlate: request?.license_plate || null,
             damageType: formatDamageType(request?.damage_type || "other"),
             description:
               request?.description ||
@@ -771,75 +775,35 @@ export default function WorkshopWonJobsPage() {
               return (
                 <article
                   key={job.offerId}
-                  className="group cursor-pointer overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow-lg transition hover:border-white/20"
+                  className="group cursor-pointer overflow-hidden rounded-[28px] bg-white p-5 text-black shadow-lg transition"
                 >
-                  <div className="relative">
-                    <div
-                      onClick={(event) => event.stopPropagation()}
-                      className="h-64 w-full overflow-hidden bg-white/5"
-                    >
-                      {job.request.images.length > 0 ? (
-                        <ImageGallery
-                          images={job.request.images}
-                          alt={`${job.request.carBrand} ${job.request.carModel}`}
-                          className="h-64 w-full object-cover transition-all duration-500 ease-out group-hover:scale-[1.02]"
-                          wrapperClassName="block h-64 w-full overflow-hidden"
-                        />
-                      ) : (
-                        <div className="flex h-64 items-center justify-center bg-white/5 text-white/40">
-                          Nu există fotografii
-                        </div>
-                      )}
-                    </div>
-
-                    {job.request.status === "completed" && (
-                      <div className="pointer-events-none absolute inset-0 bg-green-500/10 backdrop-blur-[2px]" />
-                    )}
-
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-
-                    <div className="absolute left-4 top-4">
-                      <span
-                        className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-[0.2em] backdrop-blur ${
+                  <CarHeader
+                    images={job.request.images}
+                    plate={job.request.licensePlate}
+                    brand={job.request.carBrand}
+                    model={job.request.carModel}
+                    year={job.request.carYear}
+                    city={job.request.city}
+                    variant="listLarge"
+                    platePosition="bottom"
+                    details={[
+                      {
+                        text: jobState.label,
+                        color:
                           jobState.priority === "needs_action"
-                            ? "bg-orange-500 text-black"
+                            ? "orange"
                             : jobState.priority === "waiting"
-                              ? "bg-yellow-400 text-black"
+                              ? "yellow"
                               : jobState.stage === "completed"
-                                ? "bg-green-500 text-black"
-                                : "bg-blue-500 text-black"
-                        }`}
-                      >
-                        {jobState.label}
-                      </span>
-                    </div>
-
-                    <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.22em] text-white/50">
-                          Status lucrare
-                        </p>
-
-                        <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
-                          {job.request.carBrand} {job.request.carModel}
-                        </h2>
-
-                        <p className="mt-1 text-sm text-white/70">
-                          {job.request.carYear} • {job.request.city}
-                        </p>
-                      </div>
-
-                      <div className="shrink-0 rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-right backdrop-blur">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
-                          Preț acceptat
-                        </p>
-
-                        <p className="mt-1 text-3xl font-extrabold tracking-tight text-white">
-                          €{job.price}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                                ? "green"
+                                : "blue",
+                      },
+                      {
+                        text: `€${job.price}`,
+                        color: "gray",
+                      },
+                    ]}
+                  />
 
                   <div
                     onClick={() =>
@@ -847,7 +811,7 @@ export default function WorkshopWonJobsPage() {
                     }
                     className="block w-full cursor-pointer text-left"
                   >
-                    <div className="p-5">
+                    <div className="pt-5">
                       <div className="mb-4 flex flex-wrap gap-2">
                         <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
                           {job.request.damageType}
@@ -862,53 +826,61 @@ export default function WorkshopWonJobsPage() {
                         </span>
                       </div>
 
-                      <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                      <div className="rounded-[24px] bg-neutral-100 p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-black/35">
                           Cererea clientului
                         </p>
 
-                        <p className="mt-2 min-h-[72px] text-sm leading-6 text-white/80">
+                        <p className="mt-4 text-sm leading-6 text-black/75">
                           {job.request.description}
                         </p>
                       </div>
 
-                      <div className="mt-4 rounded-2xl border border-white/10 bg-black/25 p-4">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                      <div className="mt-4 rounded-[24px] bg-neutral-100 p-5">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-black/35">
                           Mesaj ofertă
                         </p>
 
-                        <p className="mt-2 text-sm leading-6 text-white/80">
+                        <p className="mt-4 text-sm leading-6 text-black/75">
                           {job.message || "Nu ai adăugat niciun mesaj."}
                         </p>
                       </div>
 
                       <div
-                        className={`mt-4 rounded-2xl border p-4 ${
+                        className={`mt-4 rounded-[24px] p-5 ${
                           jobState.priority === "needs_action"
-                            ? "border-orange-500/30 bg-orange-500/10"
+                            ? "bg-orange-50"
                             : jobState.priority === "waiting"
-                              ? "border-yellow-400/30 bg-yellow-400/10"
-                              : "border-white/10 bg-black/25"
+                              ? "bg-yellow-50"
+                              : "bg-neutral-100"
                         }`}
                       >
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">
+                        <p
+                          className={`text-[11px] font-bold uppercase tracking-[0.24em] ${
+                            jobState.priority === "needs_action"
+                              ? "text-orange-600"
+                              : jobState.priority === "waiting"
+                                ? "text-yellow-700"
+                                : "text-black/40"
+                          }`}
+                        >
                           Următorul pas
                         </p>
 
-                        <p className="mt-2 text-sm font-semibold leading-6 text-white">
+                        <p className="mt-4 text-base font-bold leading-7 text-black">
                           {jobState.message}
                         </p>
                       </div>
 
                       {job.appointment && (
                         <div
-                          className={`mt-4 rounded-2xl border p-4 ${
+                          className={`mt-4 rounded-[24px] p-5 ${
                             job.appointment.status === "declined"
-                              ? "border-red-500/25 bg-red-500/10"
-                              : "border-orange-500/25 bg-orange-500/10"
+                              ? "bg-red-50"
+                              : "bg-orange-50"
                           }`}
                         >
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-orange-300">
+                          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-orange-600">
                             {job.appointment.status === "confirmed"
                               ? "Programare confirmată"
                               : job.appointment.status === "declined"
@@ -916,8 +888,8 @@ export default function WorkshopWonJobsPage() {
                                 : "Programare în așteptare"}
                           </p>
 
-                          <div className="mt-3 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-orange-500/20 p-3">
-                            <p className="text-base font-black text-white">
+                          <div className="mt-4 rounded-[22px] bg-white p-4">
+                            <p className="text-lg font-black text-black">
                               📅{" "}
                               {formatAppointmentDate(
                                 job.appointment.proposed_date ||
@@ -925,14 +897,14 @@ export default function WorkshopWonJobsPage() {
                               )}
                             </p>
 
-                            <p className="mt-1 text-sm font-semibold text-white/70">
-                              🕐 Ora{" "}
+                            <p className="mt-2 text-base font-bold text-black/70">
+                              🕘 Ora{" "}
                               {job.appointment.proposed_time ||
                                 job.appointment.appointment_time}
                             </p>
                           </div>
 
-                          <p className="mt-1 text-sm text-white/70">
+                          <p className="mt-4 text-sm leading-6 text-black/65">
                             {job.appointment.handover_method ===
                             "customer_dropoff"
                               ? "Clientul aduce mașina la service"
