@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type MouseEvent } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { interactiveCard } from "@/lib/ui";
 
 type WorkshopSummaryCardProps = {
   workshopUserId: string;
@@ -71,7 +72,7 @@ export default function WorkshopSummaryCard({
         event.stopPropagation();
         onClick?.(event);
       }}
-      className="mt-4 cursor-pointer rounded-2xl bg-gray-100 p-4"
+      className={`${interactiveCard} mt-4 rounded-2xl bg-gray-100 p-4`}
     >
       <p className="text-xs text-black/40">Service</p>
 

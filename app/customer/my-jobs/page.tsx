@@ -13,9 +13,10 @@ import {
 } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
-import { CalendarDays, Clock3 } from "lucide-react";
+import { CalendarDays, Clock3, Eye } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
+import { interactiveButton } from "@/lib/ui";
 
 type RepairAppointment = {
   id: string;
@@ -404,11 +405,23 @@ export default function MyJobsPage() {
               </div>
             )}
             {visibleJobs.map(({ request, acceptedOffer, appointment }) => {
+              console.log("JOB STATUS:", {
+                requestId: request.id,
+                requestStatus: request.status,
+                appointmentStatus: appointment?.status,
+                appointment,
+              });
+
+              const isAppointmentConfirmed =
+                appointment?.status === "confirmed";
+              const isAppointmentRequested =
+                !appointment || appointment.status === "requested";
+
               return (
                 <div
                   key={request.id}
                   onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
-                  className="cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition active:scale-[0.99]"
+                  className="cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition"
                 >
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
@@ -425,15 +438,15 @@ export default function MyJobsPage() {
                           {
                             text:
                               activeTab === "scheduled"
-                                ? appointment?.status === "confirmed"
-                                  ? "Programată"
+                                ? isAppointmentConfirmed
+                                  ? "Programare confirmată"
                                   : "Necesită programare"
                                 : activeTab === "in_progress"
                                   ? "În lucru"
                                   : "Finalizată",
                             color:
                               activeTab === "scheduled"
-                                ? appointment?.status === "confirmed"
+                                ? isAppointmentConfirmed
                                   ? "blue"
                                   : "yellow"
                                 : activeTab === "in_progress"
@@ -470,24 +483,12 @@ export default function MyJobsPage() {
                   {acceptedOffer && (
                     <div
                       className="mt-5"
-                      onClick={(event) => {
-                        event.stopPropagation();
-
-                        const slug =
-                          workshopSlugs[acceptedOffer.workshop_user_id];
-
-                        if (!slug) {
-                          alert("Profilul service-ului nu este disponibil.");
-                          return;
-                        }
-
-                        router.push(`/workshops/profile/${slug}`);
-                      }}
+                      onClick={(event) => event.stopPropagation()}
                     >
                       <OfferSummaryCard
                         title={
                           activeTab === "scheduled"
-                            ? appointment?.status === "confirmed"
+                            ? isAppointmentConfirmed
                               ? "Programare confirmată"
                               : "Programare în așteptare"
                             : activeTab === "in_progress"
@@ -513,7 +514,7 @@ export default function MyJobsPage() {
                         }
                         statusText={
                           activeTab === "scheduled"
-                            ? appointment?.status === "confirmed"
+                            ? isAppointmentConfirmed
                               ? "Confirmată"
                               : "Așteaptă confirmare"
                             : activeTab === "in_progress"
@@ -550,27 +551,42 @@ export default function MyJobsPage() {
                           `/chat/${request.id}?offerId=${acceptedOffer.id}`,
                         );
                       }}
-                      className="rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white disabled:opacity-40"
+                      className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white disabled:opacity-40`}
                     >
                       💬 Chat
                     </button>
 
-                    {activeTab === "scheduled" && (
+                    {(activeTab === "scheduled" ||
+                      activeTab === "in_progress") && (
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          router.push(
-                            `/customer/schedule-damage/${request.id}`,
-                          );
+
+                          if (
+                            activeTab === "scheduled" &&
+                            isAppointmentRequested
+                          ) {
+                            router.push(
+                              `/customer/schedule-damage/${request.id}`,
+                            );
+                            return;
+                          }
+
+                          router.push(`/customer/my-jobs/${request.id}`);
                         }}
-                        className={
-                          appointment
-                            ? "rounded-[20px] border border-orange-500 px-4 py-5 text-center text-sm font-bold text-orange-600"
-                            : "rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-bold text-white"
-                        }
+                        className={`${interactiveButton} rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
                       >
-                        {appointment ? "📅 Modifică" : "📅 Programează"}
+                        {(activeTab === "scheduled" ||
+                          activeTab === "in_progress") &&
+                          (appointment?.status === "requested" ? (
+                            <>📅 Modifică</>
+                          ) : (
+                            <span className="inline-flex items-center justify-center gap-2">
+                              <Eye size={17} strokeWidth={2.4} />
+                              Urmărește
+                            </span>
+                          ))}
                       </button>
                     )}
 

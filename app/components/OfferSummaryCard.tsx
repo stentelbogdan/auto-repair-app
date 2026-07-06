@@ -1,5 +1,6 @@
 import { Clock3 } from "lucide-react";
 import AppointmentCard from "@/app/components/AppointmentCard";
+import { interactiveCard } from "@/lib/ui";
 
 type OfferSummaryCardProps = {
   price?: string | number | null;
@@ -21,7 +22,10 @@ export default function OfferSummaryCard({
   title = "Oferta primită",
 }: OfferSummaryCardProps) {
   return (
-    <div className="mt-5 rounded-2xl bg-gray-100 p-4">
+    <div
+      onClick={(event) => event.stopPropagation()}
+      className="mt-4 rounded-2xl bg-gray-100 p-4"
+    >
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm text-black/40">{title}</p>
 
