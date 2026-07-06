@@ -538,7 +538,7 @@ export default function WorkshopWonJobsPage() {
         .update({
           proposed_date: newAppointmentDate,
           proposed_time: newAppointmentTime,
-          status: "requested",
+          status: "workshop_proposed",
           workshop_note: "Service-ul a propus o altă dată.",
           updated_at: new Date().toISOString(),
         })

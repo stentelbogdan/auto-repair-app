@@ -33,7 +33,12 @@ type RepairAppointment = {
 
   updated_at?: string | null;
 
-  status: "requested" | "confirmed" | "declined" | "cancelled";
+  status:
+    | "workshop_proposed"
+    | "customer_proposed"
+    | "confirmed"
+    | "declined"
+    | "cancelled";
 };
 
 export default function MyJobsPage() {
@@ -408,7 +413,7 @@ export default function MyJobsPage() {
               const isAppointmentConfirmed =
                 appointment?.status === "confirmed";
               const isAppointmentRequested =
-                !appointment || appointment.status === "requested";
+                !appointment || appointment.status === "workshop_proposed";
 
               return (
                 <div
@@ -620,9 +625,9 @@ function getAppointmentBadgeClass(
   proposedTime?: string | null,
 ) {
   if (status === "confirmed") return "bg-green-100 text-green-700";
-  if (status === "requested" && proposedDate && proposedTime)
-    return "bg-orange-500 text-white";
-  if (status === "requested") return "bg-yellow-100 text-yellow-700";
+  if (status === "customer_proposed") return "bg-orange-500 text-white";
+
+  if (status === "workshop_proposed") return "bg-yellow-100 text-yellow-700";
   if (status === "declined") return "bg-red-100 text-red-700";
   if (status === "cancelled") return "bg-gray-100 text-gray-700";
 
@@ -735,8 +740,11 @@ function getStatusClass(status?: string | null) {
 
 function formatAppointmentStatus(status?: string | null) {
   switch (status) {
-    case "requested":
-      return "Așteaptă confirmare";
+    case "workshop_proposed":
+      return "Service-ul a propus o programare";
+
+    case "customer_proposed":
+      return "Așteaptă confirmarea service-ului";
 
     case "confirmed":
       return "Confirmată";
