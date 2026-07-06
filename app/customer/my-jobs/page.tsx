@@ -436,17 +436,21 @@ export default function MyJobsPage() {
                           {
                             text:
                               activeTab === "scheduled"
-                                ? isAppointmentConfirmed
+                                ? appointment?.status === "confirmed"
                                   ? "Programare confirmată"
-                                  : "Necesită programare"
+                                  : appointment?.status === "workshop_proposed"
+                                    ? "Service-ul a propus altă dată"
+                                    : "Necesită programare"
                                 : activeTab === "in_progress"
                                   ? "În lucru"
                                   : "Finalizată",
                             color:
                               activeTab === "scheduled"
-                                ? isAppointmentConfirmed
+                                ? appointment?.status === "confirmed"
                                   ? "blue"
-                                  : "yellow"
+                                  : appointment?.status === "workshop_proposed"
+                                    ? "orange"
+                                    : "yellow"
                                 : activeTab === "in_progress"
                                   ? "orange"
                                   : "green",
@@ -496,14 +500,20 @@ export default function MyJobsPage() {
                         price={acceptedOffer.price}
                         days={acceptedOffer.days}
                         appointmentDate={
-                          appointment?.appointment_date ||
-                          acceptedOffer.available_date ||
-                          null
+                          appointment?.status === "workshop_proposed"
+                            ? appointment.proposed_date ||
+                              appointment.appointment_date
+                            : appointment?.appointment_date ||
+                              acceptedOffer.available_date ||
+                              null
                         }
                         appointmentTime={
-                          appointment?.appointment_time ||
-                          acceptedOffer.available_time ||
-                          null
+                          appointment?.status === "workshop_proposed"
+                            ? appointment.proposed_time ||
+                              appointment.appointment_time
+                            : appointment?.appointment_time ||
+                              acceptedOffer.available_time ||
+                              null
                         }
                         handoverText={
                           appointment?.handover_method === "workshop_pickup"

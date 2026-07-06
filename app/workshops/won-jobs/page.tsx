@@ -549,7 +549,7 @@ export default function WorkshopWonJobsPage() {
         })
         .eq("id", job.appointment.id)
         .select(
-          "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status, updated_at",
+          "id, request_id, appointment_date, appointment_time, proposed_date, proposed_time, handover_method, pickup_address, customer_note, workshop_note, status, updated_at",
         )
         .single();
 
