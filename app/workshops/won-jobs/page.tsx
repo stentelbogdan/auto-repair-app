@@ -33,7 +33,12 @@ type RepairAppointment = {
   proposed_date: string | null;
   proposed_time: string | null;
   updated_at?: string | null;
-  status: "requested" | "confirmed" | "declined" | "cancelled";
+  status:
+    | "workshop_proposed"
+    | "customer_proposed"
+    | "confirmed"
+    | "declined"
+    | "cancelled";
 };
 
 type WonJob = {
@@ -933,7 +938,7 @@ export default function WorkshopWonJobsPage() {
                                   : "Așteaptă confirmare"}
                           </span>
 
-                          {job.appointment.status === "requested" && (
+                          {job.appointment.status === "customer_proposed" && (
                             <div className="mt-4 grid grid-cols-2 gap-2">
                               <button
                                 type="button"
@@ -969,7 +974,7 @@ export default function WorkshopWonJobsPage() {
                       )}
 
                       {job.appointment &&
-                        ["requested", "declined"].includes(
+                        ["customer_proposed", "declined"].includes(
                           job.appointment.status,
                         ) && (
                           <div
@@ -1201,24 +1206,25 @@ function getJobState(job: WonJob): {
   }
 
   if (
-    appointment.status === "requested" &&
+    appointment.status === "customer_proposed" &&
     appointment.proposed_date &&
     appointment.proposed_time
   ) {
     return {
       stage: "appointments",
-      priority: "waiting",
-      label: "Așteaptă clientul",
-      message: "Ai propus o altă dată. Clientul trebuie să răspundă.",
+      priority: "needs_action",
+      label: "Clientul a propus altă dată",
+      message:
+        "Clientul a propus o nouă programare. Confirmă sau propune altă dată.",
     };
   }
 
-  if (appointment.status === "requested") {
+  if (appointment.status === "workshop_proposed") {
     return {
       stage: "appointments",
-      priority: "needs_action",
-      label: "Necesită acțiune",
-      message: "Clientul a cerut o programare. Confirmă sau propune altă dată.",
+      priority: "waiting",
+      label: "Așteaptă clientul",
+      message: "Ai propus o altă dată. Clientul trebuie să răspundă.",
     };
   }
 
