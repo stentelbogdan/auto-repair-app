@@ -253,7 +253,7 @@ export default function ScheduleDamagePage() {
         pickup_address:
           handoverMethod === "workshop_pickup" ? pickupAddress.trim() : null,
         customer_note: customerNote.trim() || null,
-        status: "requested",
+        status: "confirmed",
       });
 
       if (error) {

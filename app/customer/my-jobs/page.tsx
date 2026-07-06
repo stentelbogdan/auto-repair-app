@@ -405,13 +405,6 @@ export default function MyJobsPage() {
               </div>
             )}
             {visibleJobs.map(({ request, acceptedOffer, appointment }) => {
-              console.log("JOB STATUS:", {
-                requestId: request.id,
-                requestStatus: request.status,
-                appointmentStatus: appointment?.status,
-                appointment,
-              });
-
               const isAppointmentConfirmed =
                 appointment?.status === "confirmed";
               const isAppointmentRequested =
@@ -563,10 +556,7 @@ export default function MyJobsPage() {
                         onClick={(event) => {
                           event.stopPropagation();
 
-                          if (
-                            activeTab === "scheduled" &&
-                            isAppointmentRequested
-                          ) {
+                          if (activeTab === "scheduled" && !appointment) {
                             router.push(
                               `/customer/schedule-damage/${request.id}`,
                             );
@@ -577,16 +567,14 @@ export default function MyJobsPage() {
                         }}
                         className={`${interactiveButton} rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
                       >
-                        {(activeTab === "scheduled" ||
-                          activeTab === "in_progress") &&
-                          (appointment?.status === "requested" ? (
-                            <>📅 Modifică</>
-                          ) : (
-                            <span className="inline-flex items-center justify-center gap-2">
-                              <Eye size={17} strokeWidth={2.4} />
-                              Urmărește
-                            </span>
-                          ))}
+                        {activeTab === "scheduled" && !appointment ? (
+                          <>📅 Modifică</>
+                        ) : (
+                          <span className="inline-flex items-center justify-center gap-2">
+                            <Eye size={17} strokeWidth={2.4} />
+                            Urmărește
+                          </span>
+                        )}
                       </button>
                     )}
 
