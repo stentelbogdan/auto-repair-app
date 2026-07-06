@@ -556,7 +556,10 @@ export default function MyJobsPage() {
                         onClick={(event) => {
                           event.stopPropagation();
 
-                          if (activeTab === "scheduled" && !appointment) {
+                          if (
+                            activeTab === "scheduled" &&
+                            appointment?.status !== "confirmed"
+                          ) {
                             router.push(
                               `/customer/schedule-damage/${request.id}`,
                             );
@@ -567,7 +570,8 @@ export default function MyJobsPage() {
                         }}
                         className={`${interactiveButton} rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
                       >
-                        {activeTab === "scheduled" && !appointment ? (
+                        {activeTab === "scheduled" &&
+                        appointment?.status !== "confirmed" ? (
                           <>📅 Modifică</>
                         ) : (
                           <span className="inline-flex items-center justify-center gap-2">
