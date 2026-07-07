@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
@@ -35,6 +35,10 @@ export default function WorkshopRequestDetailsPage() {
   const params = useParams();
   const id = params.id as string;
 
+  const searchParams = useSearchParams();
+  const dateFromUrl = searchParams.get("date");
+  const timeFromUrl = searchParams.get("time");
+
   const [request, setRequest] = useState<RepairRequestRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [price, setPrice] = useState("");
@@ -48,6 +52,15 @@ export default function WorkshopRequestDetailsPage() {
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
+
+    // Dacă venim din calendar, folosim direct valorile din URL.
+    if (dateFromUrl) {
+      setAvailableDate(dateFromUrl);
+    }
+
+    if (timeFromUrl) {
+      setAvailableTime(timeFromUrl);
+    }
 
     const savedAvailability = sessionStorage.getItem(`availability-${id}`);
 
@@ -112,7 +125,10 @@ export default function WorkshopRequestDetailsPage() {
 
     if (isSubmitting || !request) return;
 
-    if (!price || !days || !availableDate || !availableTime) {
+    const finalAvailableDate = availableDate || dateFromUrl || "";
+    const finalAvailableTime = availableTime || timeFromUrl || "";
+
+    if (!price || !days || !finalAvailableDate || !finalAvailableTime) {
       alert("Completează prețul, durata, data și ora.");
       return;
     }
@@ -147,8 +163,8 @@ export default function WorkshopRequestDetailsPage() {
         days,
         message,
         workshopName,
-        availableDate,
-        availableTime,
+        availableDate: finalAvailableDate,
+        availableTime: finalAvailableTime,
       });
 
       router.replace("/workshops/dashboard?offerSent=1");

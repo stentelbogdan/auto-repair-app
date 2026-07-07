@@ -61,7 +61,9 @@ export default function WorkshopRequestCalendarPage() {
       }),
     );
 
-    router.push(`/workshops/${requestId}`);
+    router.push(
+      `/workshops/${requestId}?date=${selectedDate}&time=${selectedTime}`,
+    );
   };
 
   return (
