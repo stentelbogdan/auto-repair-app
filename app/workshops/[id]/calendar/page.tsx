@@ -22,39 +22,44 @@ const busyHoursByDate: Record<string, string[]> = {
 export default function WorkshopRequestCalendarPage() {
   const router = useRouter();
   const params = useParams();
-  const requestId = params.id as string;
+  const requestId = String(params.id);
 
-  const today = new Date();
+  const today = useMemo(() => new Date(), []);
   const [selectedDate, setSelectedDate] = useState(toInputDate(today));
   const [selectedTime, setSelectedTime] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const days = useMemo(() => {
     return Array.from({ length: 14 }).map((_, index) => {
-      const date = new Date();
+      const date = new Date(today);
       date.setDate(today.getDate() + index);
       return date;
     });
-  }, []);
+  }, [today]);
 
   const busyHours = busyHoursByDate[selectedDate] || [];
 
   const continueToOffer = () => {
+    if (isSubmitting) return;
+
     if (!selectedDate || !selectedTime) {
       alert("Alege o zi și o oră disponibilă.");
       return;
     }
 
-    const existingDraft = sessionStorage.getItem(`availability-${requestId}`);
-const parsedDraft = existingDraft ? JSON.parse(existingDraft) : {};
+    setIsSubmitting(true);
 
-sessionStorage.setItem(
-  `availability-${requestId}`,
-  JSON.stringify({
-    ...parsedDraft,
-    date: selectedDate,
-    time: selectedTime,
-  }),
-);
+    const existingDraft = sessionStorage.getItem(`availability-${requestId}`);
+    const parsedDraft = existingDraft ? JSON.parse(existingDraft) : {};
+
+    sessionStorage.setItem(
+      `availability-${requestId}`,
+      JSON.stringify({
+        ...parsedDraft,
+        date: selectedDate,
+        time: selectedTime,
+      }),
+    );
 
     router.push(`/workshops/${requestId}`);
   };
@@ -63,6 +68,7 @@ sessionStorage.setItem(
     <main className="min-h-screen bg-black px-4 py-8 text-white">
       <div className="mx-auto max-w-md">
         <button
+          type="button"
           onClick={() => router.push(`/workshops/${requestId}`)}
           className="mb-6 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80"
         >
@@ -149,12 +155,22 @@ sessionStorage.setItem(
           </div>
         </section>
 
+        {selectedDate && selectedTime && (
+          <p className="mt-5 text-center text-sm font-semibold text-white/70">
+            Ai ales:{" "}
+            <span className="text-white">
+              {formatDisplayDate(selectedDate)} · {selectedTime}
+            </span>
+          </p>
+        )}
+
         <button
           type="button"
           onClick={continueToOffer}
-          className="mt-6 w-full rounded-full bg-orange-500 px-6 py-4 text-base font-bold text-white transition active:scale-[0.98]"
+          disabled={isSubmitting}
+          className="mt-6 w-full rounded-full bg-orange-500 px-6 py-4 text-base font-bold text-white transition active:scale-[0.98] disabled:opacity-60"
         >
-          Continuă către ofertă
+          {isSubmitting ? "Se salvează..." : "Continuă către ofertă"}
         </button>
       </div>
     </main>
@@ -162,7 +178,16 @@ sessionStorage.setItem(
 }
 
 function toInputDate(date: Date) {
-  return date.toISOString().split("T")[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatDisplayDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
 }
 
 function formatWeekday(date: Date) {
