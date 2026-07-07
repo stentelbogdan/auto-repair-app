@@ -49,6 +49,18 @@ export default function WorkshopRequestDetailsPage() {
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
 
+    const savedAvailability = sessionStorage.getItem(`availability-${id}`);
+
+    if (savedAvailability) {
+      const parsed = JSON.parse(savedAvailability);
+
+      setAvailableDate(parsed.date || "");
+      setAvailableTime(parsed.time || "");
+      setPrice(parsed.price || "");
+      setDays(parsed.days || "");
+      setMessage(parsed.message || "");
+    }
+
     const loadRequest = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
@@ -85,18 +97,6 @@ export default function WorkshopRequestDetailsPage() {
         }
 
         setRequest(data);
-
-        const savedAvailability = sessionStorage.getItem(`availability-${id}`);
-
-        if (savedAvailability) {
-          const parsed = JSON.parse(savedAvailability);
-
-          setAvailableDate(parsed.date || "");
-          setAvailableTime(parsed.time || "");
-          setPrice(parsed.price || "");
-          setDays(parsed.days || "");
-          setMessage(parsed.message || "");
-        }
       } catch {
         setRequest(null);
       } finally {
