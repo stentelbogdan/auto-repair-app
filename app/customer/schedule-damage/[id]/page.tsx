@@ -248,11 +248,11 @@ export default function ScheduleDamagePage() {
         customer_id: authData.user.id,
         workshop_id: offer.workshop_user_id,
 
-        appointment_date: offer.available_date,
-        appointment_time: offer.available_time,
+        appointment_date: appointmentDate,
+        appointment_time: appointmentTime,
 
-        proposed_date: appointmentDate,
-        proposed_time: appointmentTime,
+        original_date: offer.available_date,
+        original_time: offer.available_time,
 
         handover_method: handoverMethod,
         pickup_address:
