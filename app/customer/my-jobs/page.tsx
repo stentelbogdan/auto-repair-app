@@ -302,25 +302,11 @@ export default function MyJobsPage() {
         : completedJobs;
 
   const acceptAppointmentProposal = async (appointmentId: string) => {
-    const appointment = appointments.find((a) => a.id === appointmentId);
-
-    if (!appointment) return;
-
-    if (!appointment.proposed_date || !appointment.proposed_time) {
-      alert("Nu există o dată propusă de service.");
-      return;
-    }
-
     try {
       const { error } = await supabase
         .from("repair_appointments")
         .update({
           status: "confirmed",
-          appointment_date: appointment.proposed_date,
-          appointment_time: appointment.proposed_time,
-          proposed_date: null,
-          proposed_time: null,
-          workshop_note: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", appointmentId);
@@ -543,29 +529,48 @@ export default function MyJobsPage() {
                     </p>
                   </div>
 
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      disabled={!acceptedOffer}
-                      onClick={(event) => {
-                        event.stopPropagation();
+                  <div className="mt-6 space-y-3">
+                    {activeTab === "scheduled" &&
+                      appointment?.status === "workshop_proposed" && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
 
-                        if (!acceptedOffer) {
-                          alert("Oferta acceptată nu a fost găsită.");
-                          return;
-                        }
+                            if (!appointment) {
+                              alert("Programarea nu a fost găsită.");
+                              return;
+                            }
 
-                        router.push(
-                          `/chat/${request.id}?offerId=${acceptedOffer.id}`,
-                        );
-                      }}
-                      className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white disabled:opacity-40`}
-                    >
-                      💬 Chat
-                    </button>
+                            acceptAppointmentProposal(appointment.id);
+                          }}
+                          className={`${interactiveButton} w-full rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-black text-white`}
+                        >
+                          Acceptă programarea
+                        </button>
+                      )}
 
-                    {(activeTab === "scheduled" ||
-                      activeTab === "in_progress") && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        disabled={!acceptedOffer}
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          if (!acceptedOffer) {
+                            alert("Oferta acceptată nu a fost găsită.");
+                            return;
+                          }
+
+                          router.push(
+                            `/chat/${request.id}?offerId=${acceptedOffer.id}`,
+                          );
+                        }}
+                        className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white disabled:opacity-40`}
+                      >
+                        💬 Chat
+                      </button>
+
                       <button
                         type="button"
                         onClick={(event) => {
@@ -587,7 +592,7 @@ export default function MyJobsPage() {
                       >
                         {activeTab === "scheduled" &&
                         appointment?.status !== "confirmed" ? (
-                          <>📅 Modifică</>
+                          <>📅 Modifică data</>
                         ) : (
                           <span className="inline-flex items-center justify-center gap-2">
                             <Eye size={17} strokeWidth={2.4} />
@@ -595,30 +600,30 @@ export default function MyJobsPage() {
                           </span>
                         )}
                       </button>
-                    )}
-
-                    {request.status === "completed" &&
-                      (reviewedRequestIds.includes(request.id) ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="rounded-2xl bg-emerald-100 px-4 py-4 text-base font-bold text-emerald-700"
-                        >
-                          ✓ Review trimis
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            router.push(`/review?id=${request.id}`);
-                          }}
-                          className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
-                        >
-                          ⭐ Lasă review
-                        </button>
-                      ))}
+                    </div>
                   </div>
+
+                  {request.status === "completed" &&
+                    (reviewedRequestIds.includes(request.id) ? (
+                      <button
+                        type="button"
+                        disabled
+                        className="rounded-2xl bg-emerald-100 px-4 py-4 text-base font-bold text-emerald-700"
+                      >
+                        ✓ Review trimis
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          router.push(`/review?id=${request.id}`);
+                        }}
+                        className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
+                      >
+                        ⭐ Lasă review
+                      </button>
+                    ))}
                 </div>
               );
             })}
