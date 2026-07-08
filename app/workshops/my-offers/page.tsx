@@ -258,6 +258,7 @@ export default function WorkshopMyOffersPage() {
           <div className="space-y-6">
             {normalizedOffers.map((offer) => {
               const request = offer.repair_requests;
+              const appointment = offer.repair_appointments?.[0];
 
               return (
                 <article
@@ -312,6 +313,20 @@ export default function WorkshopMyOffersPage() {
                         </div>
                       </div>
 
+                      {appointment?.appointment_date &&
+                        appointment?.appointment_time && (
+                          <div className="mt-3 rounded-2xl bg-orange-50 p-4">
+                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
+                              Programare propusă
+                            </p>
+
+                            <p className="mt-2 text-sm font-black text-black">
+                              {formatDisplayDate(appointment.appointment_date)}{" "}
+                              · {appointment.appointment_time}
+                            </p>
+                          </div>
+                        )}
+
                       {offer.message && (
                         <p className="mt-3 line-clamp-2 text-sm text-black/60">
                           {offer.message}
@@ -327,4 +342,9 @@ export default function WorkshopMyOffersPage() {
       </div>
     </main>
   );
+}
+
+function formatDisplayDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
 }
