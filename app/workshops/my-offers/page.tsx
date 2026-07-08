@@ -28,6 +28,15 @@ type RepairRequest = {
   images?: RepairImage[];
 };
 
+type RepairAppointment = {
+  id: string;
+  offer_id: string;
+  request_id: string;
+  appointment_date: string | null;
+  appointment_time: string | null;
+  status: string | null;
+};
+
 type RepairOffer = {
   id: string;
   request_id: string;
@@ -39,6 +48,7 @@ type RepairOffer = {
   status?: string | null;
   created_at: string;
   repair_requests?: RepairRequest | null;
+  repair_appointments?: RepairAppointment[] | null;
 };
 
 type DerivedOffer = RepairOffer & {
@@ -86,28 +96,36 @@ export default function WorkshopMyOffersPage() {
           .from("repair_offers")
           .select(
             `
-            id,
-            request_id,
-            workshop_user_id,
-            workshop_name,
-            price,
-            days,
-            message,
-            status,
-            created_at,
-            repair_requests (
-              id,
-              car_brand,
-              car_model,
-              car_year,
-              city,
-              damage_type,
-              description,
-              status,
-              accepted_offer_id,
-              images
-            )
-          `,
+  id,
+  request_id,
+  workshop_user_id,
+  workshop_name,
+  price,
+  days,
+  message,
+  status,
+  created_at,
+  repair_requests (
+    id,
+    car_brand,
+    car_model,
+    car_year,
+    city,
+    damage_type,
+    description,
+    status,
+    accepted_offer_id,
+    images
+  ),
+  repair_appointments (
+    id,
+    offer_id,
+    request_id,
+    appointment_date,
+    appointment_time,
+    status
+  )
+`,
           )
           .eq("workshop_user_id", authData.user.id)
           .order("created_at", { ascending: false });
@@ -143,6 +161,16 @@ export default function WorkshopMyOffersPage() {
                   : [],
               }
             : null,
+          repair_appointments: Array.isArray(row.repair_appointments)
+            ? row.repair_appointments.map((appointment: any) => ({
+                id: String(appointment.id),
+                offer_id: String(appointment.offer_id),
+                request_id: String(appointment.request_id),
+                appointment_date: appointment.appointment_date ?? null,
+                appointment_time: appointment.appointment_time ?? null,
+                status: appointment.status ?? null,
+              }))
+            : [],
         }));
 
         setOffers(mapped);
@@ -166,7 +194,15 @@ export default function WorkshopMyOffersPage() {
 
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers
-      .filter((offer) => (offer.status || "pending") === "pending")
+      .filter((offer) => {
+        const appointment = offer.repair_appointments?.[0];
+
+        if (!appointment) {
+          return (offer.status || "pending") === "pending";
+        }
+
+        return appointment.status !== "confirmed";
+      })
       .map((offer) => ({
         ...offer,
         derivedStatus: "pending" as const,

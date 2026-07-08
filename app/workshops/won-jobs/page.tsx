@@ -359,6 +359,11 @@ export default function WorkshopWonJobsPage() {
     return jobs.filter((job) => {
       const jobState = getJobState(job);
 
+      const shouldShowInWonJobs =
+        job.request.status === "in_progress" ||
+        job.request.status === "completed" ||
+        job.appointment?.status === "confirmed";
+
       const matchesTab = jobState.stage === activeTab;
 
       const haystack = [
@@ -379,13 +384,16 @@ export default function WorkshopWonJobsPage() {
 
       const matchesSearch = query ? haystack.includes(query) : true;
 
-      return matchesTab && matchesSearch;
+      return shouldShowInWonJobs && matchesTab && matchesSearch;
     });
   }, [jobs, search, activeTab]);
 
   const appointmentsJobsCount = useMemo(() => {
-    return jobs.filter((job) => getJobState(job).stage === "appointments")
-      .length;
+    return jobs.filter(
+      (job) =>
+        getJobState(job).stage === "appointments" &&
+        job.appointment?.status === "confirmed",
+    ).length;
   }, [jobs]);
 
   const workshopJobsCount = useMemo(() => {
@@ -1094,18 +1102,6 @@ export default function WorkshopWonJobsPage() {
 
                       <div className="mt-5 space-y-3">
                         <button
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            router.push(
-                              `/workshops/in-workshop/${job.requestId}`,
-                            );
-                          }}
-                          className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
-                        >
-                          Deschide lucrarea
-                        </button>
-
-                        <button
                           type="button"
                           onClick={(event) => {
                             event.stopPropagation();
@@ -1118,6 +1114,20 @@ export default function WorkshopWonJobsPage() {
                         >
                           Chat cu clientul
                         </button>
+
+                        {job.appointment?.status === "confirmed" && (
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(
+                                `/workshops/in-workshop/${job.requestId}`,
+                              );
+                            }}
+                            className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
+                          >
+                            Deschide lucrarea
+                          </button>
+                        )}
 
                         {job.request.status === "matched" &&
                           job.appointment?.status === "confirmed" && (
@@ -1138,24 +1148,6 @@ export default function WorkshopWonJobsPage() {
                               Începe lucrarea
                             </button>
                           )}
-
-                        {job.request.status === "in_progress" && (
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              if (
-                                confirm(
-                                  "Ești sigur că vrei să finalizezi această lucrare?",
-                                )
-                              ) {
-                                markAsCompleted(job);
-                              }
-                            }}
-                            className="mt-2 hidden w-full rounded-2xl border border-green-400/30 bg-green-500/10 px-4 py-4 text-sm font-semibold text-green-300 transition hover:bg-green-500/20 md:block sm:col-span-2"
-                          >
-                            Marchează ca finalizată
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
