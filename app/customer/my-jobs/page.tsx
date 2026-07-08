@@ -762,7 +762,7 @@ function formatAppointmentStatus(status?: string | null) {
       return "Așteaptă confirmarea service-ului";
 
     case "confirmed":
-      return "Confirmată";
+      return "Programare confirmată";
 
     case "declined":
       return "Refuzată";

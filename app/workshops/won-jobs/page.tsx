@@ -887,7 +887,7 @@ export default function WorkshopWonJobsPage() {
                         >
                           <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-orange-600">
                             {job.appointment.status === "confirmed"
-                              ? "Programare confirmată"
+                              ? "Programare confirmată de client"
                               : job.appointment.status === "declined"
                                 ? "Programare refuzată"
                                 : "Programare în așteptare"}
@@ -1232,8 +1232,8 @@ function getJobState(job: WonJob): {
     return {
       stage: "appointments",
       priority: "ok",
-      label: "Confirmată",
-      message: `Programată pe ${formatAppointmentDate(
+      label: "Programare confirmată",
+      message: `Clientul a confirmat programarea pentru ${formatAppointmentDate(
         appointment.appointment_date,
       )} la ${appointment.appointment_time}.`,
     };
