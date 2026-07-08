@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import ImageGallery from "@/app/components/ImageGallery";
+import CarHeader from "@/app/components/CarHeader";
+import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 
 type ProfileRow = {
   role: string[] | null;
@@ -21,6 +22,7 @@ type RepairRequest = {
   car_model: string | null;
   car_year: string | null;
   city: string | null;
+  license_plate: string | null;
   damage_type: string | null;
   description: string | null;
   status?: string | null;
@@ -47,6 +49,8 @@ type RepairOffer = {
   message: string | null;
   status?: string | null;
   created_at: string;
+  available_date?: string | null;
+  available_time?: string | null;
   repair_requests?: RepairRequest | null;
   repair_appointments?: RepairAppointment[] | null;
 };
@@ -105,12 +109,15 @@ export default function WorkshopMyOffersPage() {
   message,
   status,
   created_at,
+  available_date,
+available_time,
   repair_requests (
     id,
     car_brand,
     car_model,
     car_year,
     city,
+    license_plate,
     damage_type,
     description,
     status,
@@ -144,6 +151,8 @@ export default function WorkshopMyOffersPage() {
           message: row.message || "",
           status: row.status || "pending",
           created_at: String(row.created_at),
+          available_date: row.available_date ?? null,
+          available_time: row.available_time ?? null,
           repair_requests: row.repair_requests
             ? {
                 id: String(row.repair_requests.id),
@@ -151,6 +160,7 @@ export default function WorkshopMyOffersPage() {
                 car_model: row.repair_requests.car_model ?? null,
                 car_year: row.repair_requests.car_year ?? null,
                 city: row.repair_requests.city ?? null,
+                license_plate: row.repair_requests.license_plate ?? null,
                 damage_type: row.repair_requests.damage_type ?? null,
                 description: row.repair_requests.description ?? null,
                 status: row.repair_requests.status ?? null,
@@ -259,81 +269,58 @@ export default function WorkshopMyOffersPage() {
             {normalizedOffers.map((offer) => {
               const request = offer.repair_requests;
               const appointment = offer.repair_appointments?.[0];
+              const displayDate =
+                appointment?.appointment_date || offer.available_date;
+              const displayTime =
+                appointment?.appointment_time || offer.available_time;
 
               return (
                 <article
                   key={offer.id}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
-                  <div className="flex gap-4">
-                    <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
-                      {request?.images && request.images.length > 0 ? (
-                        <ImageGallery
-                          images={request.images}
-                          alt={`${request?.car_brand || ""} ${request?.car_model || ""}`}
-                          className="h-24 w-24 object-cover"
-                          wrapperClassName="block h-24 w-24 overflow-hidden rounded-2xl"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-2xl">
-                          🚗
-                        </div>
-                      )}
+                  <CarHeader
+                    images={request?.images || []}
+                    plate={request?.license_plate || null}
+                    brand={request?.car_brand || "Mașină"}
+                    model={request?.car_model || ""}
+                    year={request?.car_year || ""}
+                    city={request?.city || ""}
+                    variant="listLarge"
+                    platePosition="bottom"
+                    details={[
+                      {
+                        text: "În așteptare",
+                        color: "orange",
+                      },
+                      {
+                        text: request?.damage_type || "Daună",
+                        color: "yellow",
+                      },
+                    ]}
+                  />
+
+                  <OfferSummaryCard
+                    price={offer.price}
+                    days={offer.days}
+                    appointmentDate={displayDate}
+                    appointmentTime={displayTime}
+                    handoverText="Predare la service"
+                    statusText="Așteaptă confirmare"
+                    title="Oferta service-ului"
+                  />
+
+                  {offer.message && (
+                    <div className="mt-4 rounded-[24px] bg-gray-100 p-5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-black/45">
+                        Mesaj service
+                      </p>
+
+                      <p className="mt-3 text-sm leading-6 text-black/80">
+                        {offer.message}
+                      </p>
                     </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="truncate text-xl font-black leading-tight">
-                            {request?.car_brand || "Mașină"}{" "}
-                            {request?.car_model || ""}
-                          </h2>
-
-                          <p className="mt-1 text-sm text-black/50">
-                            {request?.car_year || "-"} • {request?.city || "-"}
-                          </p>
-                        </div>
-
-                        <span className="shrink-0 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                          În așteptare
-                        </span>
-                      </div>
-
-                      <div className="mt-4 rounded-2xl bg-gray-100 p-4">
-                        <p className="text-xs text-black/40">Oferta ta</p>
-
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-sm text-black/60">
-                            {offer.days}
-                          </span>
-
-                          <span className="text-xl font-black">
-                            €{offer.price}
-                          </span>
-                        </div>
-                      </div>
-
-                      {appointment?.appointment_date &&
-                        appointment?.appointment_time && (
-                          <div className="mt-3 rounded-2xl bg-orange-50 p-4">
-                            <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
-                              Programare propusă
-                            </p>
-
-                            <p className="mt-2 text-sm font-black text-black">
-                              {formatDisplayDate(appointment.appointment_date)}{" "}
-                              · {appointment.appointment_time}
-                            </p>
-                          </div>
-                        )}
-
-                      {offer.message && (
-                        <p className="mt-3 line-clamp-2 text-sm text-black/60">
-                          {offer.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                  )}
                 </article>
               );
             })}
@@ -342,9 +329,4 @@ export default function WorkshopMyOffersPage() {
       </div>
     </main>
   );
-}
-
-function formatDisplayDate(value: string) {
-  const [year, month, day] = value.split("-");
-  return `${day}-${month}-${year}`;
 }
