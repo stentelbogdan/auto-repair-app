@@ -31,9 +31,7 @@ export default function AppointmentActions({
         >
           <Check size={19} strokeWidth={2.5} />
 
-          <span>
-            {confirming ? "Se confirmă..." : "Confirmă programarea"}
-          </span>
+          <span>{confirming ? "Se confirmă..." : "Confirmă programarea"}</span>
         </button>
       )}
 
