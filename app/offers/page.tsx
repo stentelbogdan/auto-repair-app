@@ -8,6 +8,7 @@ import CarHeader from "@/app/components/CarHeader";
 import { CalendarDays, Check, MessageCircle } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
+import AppointmentActions from "@/app/components/AppointmentActions";
 
 type RepairRequest = {
   id: string;

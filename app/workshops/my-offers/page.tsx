@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
-import { interactiveButton } from "@/lib/ui";
+import AppointmentActions from "@/app/components/AppointmentActions";
 
 type ProfileRow = {
   role: string[] | null;
@@ -376,66 +376,35 @@ available_time,
                     </div>
                   )}
 
-                  <div className="mt-6 space-y-3">
-                    {appointment?.status === "customer_proposed" && (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                  <AppointmentActions
+                    showConfirm={appointment?.status === "customer_proposed"}
+                    onConfirm={() => {
+                      if (!appointment?.id) {
+                        alert("Programarea nu a fost găsită.");
+                        return;
+                      }
 
-                          if (!appointment?.id) {
-                            alert("Programarea nu a fost găsită.");
-                            return;
-                          }
+                      confirmAppointment(appointment.id);
+                    }}
+                    onChat={() => {
+                      if (!request?.id) {
+                        alert("Lucrarea nu a fost găsită.");
+                        return;
+                      }
 
-                          confirmAppointment(appointment.id);
-                        }}
-                        className={`${interactiveButton} w-full rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-black text-white`}
-                      >
-                        Confirmă programarea
-                      </button>
-                    )}
+                      router.push(`/chat/${request.id}?offerId=${offer.id}`);
+                    }}
+                    onChangeDate={() => {
+                      if (!request?.id) {
+                        alert("Lucrarea nu a fost găsită.");
+                        return;
+                      }
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-
-                          if (!request?.id) {
-                            alert("Lucrarea nu a fost găsită.");
-                            return;
-                          }
-
-                          router.push(
-                            `/chat/${request.id}?offerId=${offer.id}`,
-                          );
-                        }}
-                        className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white`}
-                      >
-                        💬 Chat
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-
-                          if (!request?.id) {
-                            alert("Lucrarea nu a fost găsită.");
-                            return;
-                          }
-
-                          router.push(
-                            `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=workshop`,
-                          );
-                        }}
-                        className={`${interactiveButton} rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
-                      >
-                        📅 Modifică data
-                      </button>
-                    </div>
-                  </div>
+                      router.push(
+                        `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=workshop`,
+                      );
+                    }}
+                  />
                 </article>
               );
             })}
