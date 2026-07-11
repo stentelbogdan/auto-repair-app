@@ -91,6 +91,24 @@ export default function OffersPage() {
   const [, setWorkshopRatings] = useState<Record<string, WorkshopRating>>({});
 
   useEffect(() => {
+    const resetScroll = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    resetScroll();
+
+    const frame = window.requestAnimationFrame(resetScroll);
+    const timeout = window.setTimeout(resetScroll, 120);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  useEffect(() => {
     const checkUserAndLoad = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
