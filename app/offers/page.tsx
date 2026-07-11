@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
-import { CalendarDays, Check } from "lucide-react";
+import { CalendarDays, Check, MessageCircle } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 
@@ -44,6 +43,25 @@ type RepairOffer = {
   availableTime: string | null;
 };
 
+type AppointmentStatus =
+  | "workshop_proposed"
+  | "customer_proposed"
+  | "requested"
+  | "confirmed"
+  | "declined"
+  | "cancelled";
+
+type RepairAppointment = {
+  id: string;
+  requestId: string;
+  offerId: string | null;
+  status: AppointmentStatus | null;
+  appointmentDate: string | null;
+  appointmentTime: string | null;
+  proposedDate: string | null;
+  proposedTime: string | null;
+};
+
 type WorkshopRating = {
   average: number;
   count: number;
@@ -55,6 +73,7 @@ type WorkshopRating = {
 type OfferWithRequest = {
   offer: RepairOffer;
   request: RepairRequest;
+  appointment: RepairAppointment | null;
 };
 
 type ProfileRow = {
@@ -69,9 +88,7 @@ export default function OffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
-  const [workshopRatings, setWorkshopRatings] = useState<
-    Record<string, WorkshopRating>
-  >({});
+  const [, setWorkshopRatings] = useState<Record<string, WorkshopRating>>({});
 
   useEffect(() => {
     const checkUserAndLoad = async () => {
@@ -149,6 +166,55 @@ export default function OffersPage() {
         console.error("Failed to load offers:", error);
         setItems([]);
         return;
+      }
+
+      const offerIds = (offerRows || []).map((offer) => offer.id);
+
+      let appointmentMap = new Map<string, RepairAppointment>();
+
+      if (offerIds.length > 0) {
+        const { data: appointmentRows, error: appointmentError } =
+          await supabase
+            .from("repair_appointments")
+            .select(
+              `
+      id,
+      request_id,
+      offer_id,
+      status,
+      appointment_date,
+      appointment_time,
+      proposed_date,
+      proposed_time
+    `,
+            )
+            .in("offer_id", offerIds);
+
+        if (appointmentError) {
+          console.error(
+            "Failed to load repair appointments:",
+            appointmentError,
+          );
+        } else {
+          appointmentMap = new Map<string, RepairAppointment>();
+
+          (appointmentRows || []).forEach((appointment) => {
+            if (!appointment.offer_id) return;
+
+            appointmentMap.set(appointment.offer_id, {
+              id: appointment.id,
+              requestId: appointment.request_id,
+              offerId: appointment.offer_id,
+              status: appointment.status
+                ? (appointment.status as AppointmentStatus)
+                : null,
+              appointmentDate: appointment.appointment_date || null,
+              appointmentTime: appointment.appointment_time || null,
+              proposedDate: appointment.proposed_date || null,
+              proposedTime: appointment.proposed_time || null,
+            });
+          });
+        }
       }
 
       const unreadOfferIds = (offerRows || [])
@@ -331,6 +397,7 @@ export default function OffersPage() {
             availableTime: offer.available_time || null,
           },
           request: matchingRequest,
+          appointment: appointmentMap.get(offer.id) || null,
         });
       });
 
@@ -344,33 +411,17 @@ export default function OffersPage() {
     }
   };
 
-  const handleAcceptOffer = async (offerId: string, requestId: string) => {
+  const handleConfirmAppointment = async (offerId: string) => {
     try {
       setAcceptingOfferId(offerId);
-      await acceptRepairOffer({ offerId, requestId });
-      router.push("/customer/my-jobs");
+
+      // aici vom implementa confirmarea programării
     } catch (error) {
-      console.error("Failed to accept offer:", error);
-      alert("Nu am putut accepta oferta.");
+      console.error(error);
+      alert("Nu am putut confirma programarea.");
     } finally {
       setAcceptingOfferId(null);
     }
-  };
-
-  const formatSpecialty = (value: string) => {
-    const labels: Record<string, string> = {
-      service: "Service",
-      engine: "Motor",
-      dent: "Îndreptare",
-      scratch: "Zgârieturi",
-      steering: "Direcție",
-      electrical: "Electrică",
-      detailing_exterior: "Detailing exterior",
-      bodywork: "Caroserie",
-      mechanical: "Mecanică",
-    };
-
-    return labels[value] || value;
   };
 
   const formatDamageType = (value?: string) => {
@@ -432,9 +483,31 @@ export default function OffersPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {items.map(({ offer, request }) => {
-              const status = offer.status || "pending";
-              const workshopRating = workshopRatings[offer.workshopUserId];
+            {items.map(({ offer, request, appointment }) => {
+              const appointmentStatus = appointment?.status;
+
+              const isCustomerProposed =
+                appointmentStatus === "customer_proposed";
+
+              const isWorkshopProposed =
+                appointmentStatus === "workshop_proposed" ||
+                appointmentStatus === "requested";
+
+              const displayedAppointmentDate =
+                appointment?.proposedDate ||
+                appointment?.appointmentDate ||
+                offer.availableDate;
+
+              const displayedAppointmentTime =
+                appointment?.proposedTime ||
+                appointment?.appointmentTime ||
+                offer.availableTime;
+
+              const appointmentStatusText = isCustomerProposed
+                ? "Așteaptă confirmarea service-ului"
+                : isWorkshopProposed
+                  ? "Așteaptă confirmarea ta"
+                  : "Așteaptă confirmare";
 
               return (
                 <div
@@ -481,10 +554,10 @@ export default function OffersPage() {
                     title="Oferta service-ului"
                     price={offer.price}
                     days={offer.days}
-                    appointmentDate={offer.availableDate}
-                    appointmentTime={offer.availableTime}
+                    appointmentDate={displayedAppointmentDate}
+                    appointmentTime={displayedAppointmentTime}
                     handoverText="Predare la service"
-                    statusText="Așteaptă confirmare"
+                    statusText={appointmentStatusText}
                   />
 
                   {offer.message && (
@@ -498,29 +571,52 @@ export default function OffersPage() {
                     </div>
                   )}
                   <p className="mt-5 text-center text-[13px] font-medium text-black/60">
-                    Confirmă programarea sau modifică data propusă
+                    {isCustomerProposed
+                      ? "Așteaptă confirmarea service-ului."
+                      : "Confirmă programarea sau modifică data propusă."}
                   </p>
-                  <div className="mt-4 grid grid-cols-2 gap-3">
+
+                  <div
+                    className={`mt-4 grid gap-3 ${
+                      isCustomerProposed ? "grid-cols-2" : "grid-cols-3"
+                    }`}
+                  >
+                    {!isCustomerProposed && (
+                      <button
+                        type="button"
+                        onClick={() => handleConfirmAppointment(offer.id)}
+                        disabled={acceptingOfferId === offer.id}
+                        className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {acceptingOfferId === offer.id ? (
+                          "Se confirmă..."
+                        ) : (
+                          <span className="flex items-center justify-center gap-1.5">
+                            <Check size={18} strokeWidth={2.5} />
+                            <span>Confirmă programarea</span>
+                          </span>
+                        )}
+                      </button>
+                    )}
+
                     <button
-                      onClick={() => handleAcceptOffer(offer.id, request.id)}
-                      disabled={acceptingOfferId === offer.id}
-                      className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+                      type="button"
+                      onClick={() =>
+                        router.push(`/chat/${request.id}?offerId=${offer.id}`)
+                      }
+                      className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98]"
                     >
-                      {acceptingOfferId === offer.id ? (
-                        "Se confirmă..."
-                      ) : (
-                        <span className="flex items-center justify-center gap-1.5">
-                          <Check size={18} strokeWidth={2.5} />
-                          <span>Confirmă programarea</span>
-                        </span>
-                      )}
+                      <span className="flex items-center justify-center gap-1.5">
+                        <MessageCircle size={18} strokeWidth={2.3} />
+                        <span>Chat</span>
+                      </span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() =>
                         router.push(
-                          `/customer/schedule-damage/${request.id}?offerId=${offer.id}`,
+                          `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=customer`,
                         )
                       }
                       className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98]"

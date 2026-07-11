@@ -35,10 +35,15 @@ export default function AppNavbar() {
   const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
   const [directRequestsUnreadCount, setDirectRequestsUnreadCount] = useState(0);
   const [newRequestsUnreadCount, setNewRequestsUnreadCount] = useState(0);
+  const [fromParam, setFromParam] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
     const role = params.get("role");
+    const from = params.get("from");
+
+    setFromParam(from);
 
     if (role === "workshop" || role === "customer") {
       setRoleParam(role);
@@ -63,6 +68,12 @@ export default function AppNavbar() {
     }
 
     if (pathname.startsWith("/customer")) {
+      if (fromParam === "workshop" || roleParam === "workshop") {
+        localStorage.setItem("activeRole", "workshop");
+        setActiveRole("workshop");
+        return;
+      }
+
       localStorage.setItem("activeRole", "customer");
       setActiveRole("customer");
       return;
@@ -73,17 +84,15 @@ export default function AppNavbar() {
     if (savedRole === "workshop" || savedRole === "customer") {
       setActiveRole(savedRole);
     }
-  }, [pathname, roleParam]);
+  }, [pathname, roleParam, fromParam]);
 
   const isWorkshopMode =
     pathname.startsWith("/workshops") ||
     roleParam === "workshop" ||
+    fromParam === "workshop" ||
     (pathname.startsWith("/chat") && activeRole === "workshop");
 
-  const isClientMode =
-    pathname.startsWith("/customer") ||
-    roleParam === "customer" ||
-    !isWorkshopMode;
+  const isClientMode = !isWorkshopMode;
 
   useEffect(() => {
     let mounted = true;

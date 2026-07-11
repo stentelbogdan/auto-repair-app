@@ -36,6 +36,12 @@ export default function ScheduleDamagePage() {
   const searchParams = useSearchParams();
   const offerIdFromUrl = searchParams.get("offerId");
 
+  const roleFromUrl = searchParams.get("from");
+
+  const isWorkshopMode = roleFromUrl === "workshop";
+  const isInitialOfferMode =
+    isWorkshopMode && searchParams.get("mode") === "initial-offer";
+
   const [request, setRequest] = useState<RepairRequest | null>(null);
   const [offer, setOffer] = useState<RepairOffer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -67,35 +73,110 @@ export default function ScheduleDamagePage() {
         return;
       }
 
+      // MOD SERVICE
+      if (isWorkshopMode) {
+        const { data: requestRow, error: requestError } = await supabase
+          .from("repair_requests")
+          .select("*")
+          .eq("id", requestId)
+          .maybeSingle();
+
+        if (requestError) throw requestError;
+
+        if (!requestRow) {
+          alert("Lucrarea nu a fost găsită.");
+          router.push("/workshops");
+          return;
+        }
+
+        setRequest(requestRow as RepairRequest);
+
+        // Oferta inițială încă nu există în baza de date.
+        // Folosim temporar datele salvate în sessionStorage.
+        if (isInitialOfferMode) {
+          const savedDraft = sessionStorage.getItem(
+            `availability-${requestId}`,
+          );
+          const parsedDraft = savedDraft ? JSON.parse(savedDraft) : {};
+
+          setOffer({
+            id: "",
+            request_id: requestId,
+            workshop_user_id: authData.user.id,
+            price: parsedDraft.price || "",
+            days: parsedDraft.days || "",
+            message: parsedDraft.message || null,
+            workshop_name: parsedDraft.workshopName || "Service",
+            available_date: parsedDraft.date || null,
+            available_time: parsedDraft.time || null,
+            status: "draft",
+            created_at: new Date().toISOString(),
+          } as RepairOffer);
+
+          if (parsedDraft.date) {
+            setAppointmentDate(parsedDraft.date);
+            setDateInput(parsedDraft.date.split("-").reverse().join("."));
+          }
+
+          if (parsedDraft.time) {
+            setAppointmentTime(parsedDraft.time);
+          }
+
+          return;
+        }
+
+        // Modificarea unei programări existente
+        if (!offerIdFromUrl) {
+          alert("Oferta nu a fost găsită.");
+          router.push("/workshops/my-offers");
+          return;
+        }
+
+        const { data: offerRow, error: offerError } = await supabase
+          .from("repair_offers")
+          .select("*")
+          .eq("id", offerIdFromUrl)
+          .eq("request_id", requestId)
+          .eq("workshop_user_id", authData.user.id)
+          .maybeSingle();
+
+        if (offerError) throw offerError;
+
+        if (!offerRow) {
+          alert("Oferta nu a fost găsită pentru acest service.");
+          router.push("/workshops/my-offers");
+          return;
+        }
+
+        setOffer(offerRow as RepairOffer);
+        return;
+      }
+
+      // MOD CLIENT
       const [requestRows, offerRows] = await Promise.all([
         getOwnRepairRequests(authData.user.id),
         getOffersForCustomerRequests(authData.user.id),
       ]);
 
-      console.log("requestId din URL:", requestId);
-      console.log(
-        "requestRows:",
-        requestRows.map((item) => item.id),
-      );
-
       const foundRequest = requestRows.find((item) => item.id === requestId);
 
       if (!foundRequest) {
         alert("Lucrarea nu a fost găsită.");
-        router.push("/customer/my-jobs");
+        router.push("/offers");
         return;
       }
 
       const foundOffer = offerRows.find(
-        (offer) =>
-          offer.id === offerIdFromUrl ||
-          offer.id === foundRequest.accepted_offer_id ||
-          (offer.request_id === foundRequest.id && offer.status === "accepted"),
+        (currentOffer) =>
+          currentOffer.id === offerIdFromUrl ||
+          currentOffer.id === foundRequest.accepted_offer_id ||
+          (currentOffer.request_id === foundRequest.id &&
+            currentOffer.status === "accepted"),
       );
 
       if (!foundOffer) {
         alert("Oferta nu a fost găsită.");
-        router.push("/customer/my-jobs");
+        router.push("/offers");
         return;
       }
 
@@ -110,8 +191,15 @@ export default function ScheduleDamagePage() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "activeRole",
+        isWorkshopMode ? "workshop" : "customer",
+      );
+    }
+
     loadData();
-  }, []);
+  }, [isWorkshopMode, offerIdFromUrl, requestId]);
 
   const loadBookedSlots = async (date: string, workshopId: string) => {
     if (!date || !workshopId) {
@@ -124,10 +212,16 @@ export default function ScheduleDamagePage() {
 
       const { data, error } = await supabase
         .from("repair_appointments")
-        .select("appointment_time")
+        .select(
+          "id, appointment_date, appointment_time, proposed_date, proposed_time, status",
+        )
         .eq("workshop_id", workshopId)
-        .eq("appointment_date", date)
-        .in("status", ["requested", "confirmed"]);
+        .in("status", [
+          "requested",
+          "customer_proposed",
+          "workshop_proposed",
+          "confirmed",
+        ]);
 
       if (error) {
         console.error("Failed to load booked slots:", error);
@@ -135,11 +229,23 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      setBookedSlots(
-        (data || [])
-          .map((appointment) => appointment.appointment_time)
-          .filter(Boolean),
-      );
+      const slots = (data || [])
+        .filter((appointment) => {
+          const activeDate =
+            appointment.status === "confirmed"
+              ? appointment.appointment_date
+              : appointment.proposed_date || appointment.appointment_date;
+
+          return activeDate === date;
+        })
+        .map((appointment) => {
+          return appointment.status === "confirmed"
+            ? appointment.appointment_time
+            : appointment.proposed_time || appointment.appointment_time;
+        })
+        .filter(Boolean);
+
+      setBookedSlots(slots);
     } finally {
       setLoadingSlots(false);
     }
@@ -168,20 +274,50 @@ export default function ScheduleDamagePage() {
       return;
     }
 
-    if (bookedSlots.includes(appointmentTime)) {
-      alert("Acest interval a fost ocupat. Alege altă oră.");
-      return;
+    let currentAppointmentId: string | null = null;
+
+    if (!isInitialOfferMode && offer.id) {
+      const { data: currentAppointment, error: currentAppointmentError } =
+        await supabase
+          .from("repair_appointments")
+          .select("id")
+          .eq("offer_id", offer.id)
+          .eq("request_id", request.id)
+          .maybeSingle();
+
+      if (currentAppointmentError) {
+        console.error(
+          "Failed to load current appointment:",
+          currentAppointmentError,
+        );
+        alert("Nu am putut verifica programarea curentă.");
+        return;
+      }
+
+      currentAppointmentId = currentAppointment?.id || null;
+    }
+
+    let slotQuery = supabase
+      .from("repair_appointments")
+      .select("id")
+      .eq("workshop_id", offer.workshop_user_id)
+      .or(
+        `and(appointment_date.eq.${appointmentDate},appointment_time.eq.${appointmentTime}),and(proposed_date.eq.${appointmentDate},proposed_time.eq.${appointmentTime})`,
+      )
+      .in("status", [
+        "requested",
+        "customer_proposed",
+        "workshop_proposed",
+        "confirmed",
+      ])
+      .limit(1);
+
+    if (currentAppointmentId) {
+      slotQuery = slotQuery.neq("id", currentAppointmentId);
     }
 
     const { data: existingAppointments, error: existingAppointmentsError } =
-      await supabase
-        .from("repair_appointments")
-        .select("id")
-        .eq("workshop_id", offer.workshop_user_id)
-        .eq("appointment_date", appointmentDate)
-        .eq("appointment_time", appointmentTime)
-        .in("status", ["requested", "confirmed"])
-        .limit(1);
+      await slotQuery;
 
     if (existingAppointmentsError) {
       console.error(
@@ -217,58 +353,161 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      const { error: offerUpdateError } = await supabase
-        .from("repair_offers")
-        .update({ status: "accepted" })
-        .eq("id", offer.id);
+      if (isInitialOfferMode) {
+        const savedDraft = sessionStorage.getItem(`availability-${request.id}`);
+        const parsedDraft = savedDraft ? JSON.parse(savedDraft) : {};
 
-      if (offerUpdateError) {
-        console.error("Failed to accept offer:", offerUpdateError);
-        alert("Nu am putut accepta oferta.");
+        sessionStorage.setItem(
+          `availability-${request.id}`,
+          JSON.stringify({
+            ...parsedDraft,
+            date: appointmentDate,
+            time: appointmentTime,
+            handoverMethod,
+            pickupAddress:
+              handoverMethod === "workshop_pickup" ? pickupAddress.trim() : "",
+          }),
+        );
+
+        router.push(
+          `/workshops/${request.id}?date=${appointmentDate}&time=${appointmentTime}`,
+        );
+
         return;
       }
 
-      const { error: requestUpdateError } = await supabase
-        .from("repair_requests")
+      if (isWorkshopMode) {
+        const { data: existingAppointment, error: appointmentLoadError } =
+          await supabase
+            .from("repair_appointments")
+            .select("id")
+            .eq("offer_id", offer.id)
+            .eq("request_id", request.id)
+            .eq("workshop_id", authData.user.id)
+            .maybeSingle();
+
+        if (appointmentLoadError) {
+          console.error(
+            "Failed to load existing appointment:",
+            appointmentLoadError,
+          );
+          alert("Nu am putut găsi programarea.");
+          return;
+        }
+
+        if (!existingAppointment) {
+          alert("Programarea nu a fost găsită.");
+          return;
+        }
+
+        console.log("SALVARE PROGRAMARE", {
+          roleFromUrl,
+          isWorkshopMode,
+          statusTrimis: isWorkshopMode
+            ? "workshop_proposed"
+            : "customer_proposed",
+          offerId: offer.id,
+        });
+
+        const { data: updatedAppointment, error: appointmentUpdateError } =
+          await supabase
+            .from("repair_appointments")
+            .update({
+              proposed_date: appointmentDate,
+              proposed_time: appointmentTime,
+
+              handover_method: handoverMethod,
+
+              pickup_address:
+                handoverMethod === "workshop_pickup"
+                  ? pickupAddress.trim()
+                  : null,
+
+              customer_note: customerNote.trim() || null,
+              workshop_note: null,
+
+              status: "workshop_proposed",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existingAppointment.id)
+            .select(
+              "id, proposed_date, proposed_time, status, workshop_id, customer_id",
+            )
+            .single();
+
+        if (appointmentUpdateError) {
+          console.error(
+            "Failed to update workshop appointment:",
+            appointmentUpdateError,
+          );
+          alert("Nu am putut trimite noua dată.");
+          return;
+        }
+
+        if (!updatedAppointment) {
+          alert("Programarea nu a fost actualizată.");
+          return;
+        }
+
+        console.log("Programare actualizată:", updatedAppointment);
+
+        router.replace("/workshops/my-offers?appointmentUpdated=1");
+        return;
+      }
+
+      const { data: existingAppointment, error: appointmentLoadError } =
+        await supabase
+          .from("repair_appointments")
+          .select("id")
+          .eq("offer_id", offer.id)
+          .eq("request_id", request.id)
+          .eq("customer_id", authData.user.id)
+          .maybeSingle();
+
+      if (appointmentLoadError) {
+        console.error(
+          "Failed to load existing appointment:",
+          appointmentLoadError,
+        );
+        alert("Nu am putut găsi programarea.");
+        return;
+      }
+
+      if (!existingAppointment) {
+        alert("Programarea nu a fost găsită.");
+        return;
+      }
+
+      const { error: appointmentUpdateError } = await supabase
+        .from("repair_appointments")
         .update({
-          status: "matched",
-          accepted_offer_id: offer.id,
+          proposed_date: appointmentDate,
+          proposed_time: appointmentTime,
+
+          handover_method: handoverMethod,
+
+          pickup_address:
+            handoverMethod === "workshop_pickup" ? pickupAddress.trim() : null,
+
+          customer_note: customerNote.trim() || null,
+          workshop_note: null,
+
+          status: "customer_proposed",
+          updated_at: new Date().toISOString(),
         })
-        .eq("id", request.id);
+        .eq("id", existingAppointment.id);
 
-      if (requestUpdateError) {
-        console.error("Failed to update request:", requestUpdateError);
-        alert("Oferta a fost acceptată, dar nu am putut actualiza lucrarea.");
+      if (appointmentUpdateError) {
+        console.error(
+          "Failed to update customer appointment:",
+          appointmentUpdateError,
+        );
+        alert("Nu am putut trimite noua dată.");
         return;
       }
 
-      const { error } = await supabase.from("repair_appointments").insert({
-        request_id: request.id,
-        offer_id: offer.id,
-        customer_id: authData.user.id,
-        workshop_id: offer.workshop_user_id,
-
-        appointment_date: appointmentDate,
-        appointment_time: appointmentTime,
-
-        original_date: offer.available_date,
-        original_time: offer.available_time,
-
-        handover_method: handoverMethod,
-        pickup_address:
-          handoverMethod === "workshop_pickup" ? pickupAddress.trim() : null,
-        customer_note: customerNote.trim() || null,
-
-        status: "customer_proposed",
-      });
-
-      if (error) {
-        console.error("Failed to create appointment:", error);
-        alert("Nu am putut trimite programarea.");
-        return;
-      }
-
-      router.replace("/customer/dashboard?appointmentSent=1");
+      router.replace("/offers?appointmentUpdated=1");
+      return;
     } finally {
       setSaving(false);
     }
@@ -294,8 +533,15 @@ export default function ScheduleDamagePage() {
           </div>
 
           <button
-            onClick={() => router.push("/customer/my-jobs")}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm text-xs font-medium text-white"
+            onClick={() => {
+              if (isInitialOfferMode) {
+                router.push(`/workshops/${requestId}`);
+                return;
+              }
+
+              router.push(isWorkshopMode ? "/workshops/my-offers" : "/offers");
+            }}
+            className="rounded-full border border-white/15 px-4 py-2 text-xs font-medium text-white"
           >
             Înapoi
           </button>
@@ -544,7 +790,13 @@ export default function ScheduleDamagePage() {
               onClick={submitAppointment}
               className="w-full rounded-[22px] bg-orange-500 py-4 text-lg font-black text-black disabled:opacity-50"
             >
-              {saving ? "Se trimite..." : "Trimite programarea"}
+              {saving
+                ? "Se salvează..."
+                : isInitialOfferMode
+                  ? "Continuă către ofertă"
+                  : isWorkshopMode
+                    ? "Trimite noua dată"
+                    : "Trimite programarea"}
             </button>
           </div>
         )}

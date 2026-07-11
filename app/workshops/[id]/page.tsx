@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
+import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
 
 type RepairImage = {
@@ -125,8 +126,8 @@ export default function WorkshopRequestDetailsPage() {
 
     if (isSubmitting || !request) return;
 
-    const finalAvailableDate = availableDate || dateFromUrl || "";
-    const finalAvailableTime = availableTime || timeFromUrl || "";
+    const finalAvailableDate = availableDate;
+    const finalAvailableTime = availableTime;
 
     if (!price || !days || !finalAvailableDate || !finalAvailableTime) {
       alert("Completează prețul, durata, data și ora.");
@@ -156,6 +157,12 @@ export default function WorkshopRequestDetailsPage() {
         workshopEmail.split("@")[0] ||
         "Workshop";
 
+      const savedAvailability = sessionStorage.getItem(`availability-${id}`);
+
+      const parsedAvailability = savedAvailability
+        ? JSON.parse(savedAvailability)
+        : {};
+
       await createRepairOffer({
         requestId: id,
         workshopUserId: authData.user.id,
@@ -165,6 +172,8 @@ export default function WorkshopRequestDetailsPage() {
         workshopName,
         availableDate: finalAvailableDate,
         availableTime: finalAvailableTime,
+        handoverMethod: parsedAvailability.handoverMethod || "customer_dropoff",
+        pickupAddress: parsedAvailability.pickupAddress || "",
       });
 
       router.replace("/workshops/dashboard?offerSent=1");
@@ -299,44 +308,28 @@ export default function WorkshopRequestDetailsPage() {
             </select>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-600">
-              Disponibilitate service
-            </p>
+          <AppointmentSummaryCard
+            date={availableDate}
+            time={availableTime}
+            editable
+            onClick={() => {
+              sessionStorage.setItem(
+                `availability-${request.id}`,
+                JSON.stringify({
+                  date: availableDate,
+                  time: availableTime,
+                  price,
+                  days,
+                  message,
+                }),
+              );
 
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.setItem(
-                  `availability-${request.id}`,
-                  JSON.stringify({
-                    date: availableDate,
-                    time: availableTime,
-                    price,
-                    days,
-                    message,
-                  }),
-                );
-
-                router.push(`/workshops/${request.id}/calendar`);
-              }}
-              className="mt-3 flex w-full items-center justify-between rounded-2xl bg-white px-4 py-4 text-left shadow-sm transition hover:bg-orange-50"
-            >
-              <div>
-                <p className="text-sm font-bold text-black">
-                  {availableDate
-                    ? formatDisplayDate(availableDate) + " • " + availableTime
-                    : "Alege din calendar"}
-                </p>
-
-                <p className="mt-1 text-xs text-black/50">
-                  Vezi toate programările și orele disponibile.
-                </p>
-              </div>
-
-              <span className="text-2xl">📅</span>
-            </button>
-          </div>
+              router.push(
+                `/customer/schedule-damage/${request.id}?from=workshop&mode=initial-offer`,
+              );
+            }}
+            className="mt-5"
+          />
 
           <div className="mt-4">
             <label className="mb-2 block text-sm font-bold">
@@ -384,14 +377,4 @@ function formatDamageType(value: string) {
     default:
       return "Altă daună";
   }
-}
-
-function formatDisplayDate(value: string) {
-  if (!value) return "";
-
-  const [year, month, day] = value.split("-");
-
-  if (!year || !month || !day) return value;
-
-  return `${day}-${month}-${year}`;
 }

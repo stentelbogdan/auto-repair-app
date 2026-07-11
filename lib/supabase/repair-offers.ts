@@ -23,8 +23,26 @@ export async function createRepairOffer(input: {
   workshopName: string;
   availableDate?: string;
   availableTime?: string;
+  handoverMethod?: "customer_dropoff" | "workshop_pickup";
+  pickupAddress?: string;
 }) {
-  const { data, error } = await supabase
+  // 1. Luăm clientul căruia îi aparține cererea
+  const { data: request, error: requestError } = await supabase
+    .from("repair_requests")
+    .select("user_id")
+    .eq("id", input.requestId)
+    .single();
+
+  if (requestError) {
+    throw requestError;
+  }
+
+  if (!request?.user_id) {
+    throw new Error("Nu am putut identifica clientul cererii.");
+  }
+
+  // 2. Creăm oferta
+  const { data: offer, error: offerError } = await supabase
     .from("repair_offers")
     .insert({
       request_id: input.requestId,
@@ -40,11 +58,59 @@ export async function createRepairOffer(input: {
     .select()
     .single();
 
-  if (error) {
-    throw error;
+  if (offerError) {
+    throw offerError;
   }
 
-  return data as RepairOfferRow;
+  if (!offer?.id) {
+    throw new Error("Oferta a fost creată fără un ID valid.");
+  }
+
+  // 3. Creăm programarea inițială propusă de service
+  const { error: appointmentError } = await supabase
+    .from("repair_appointments")
+    .insert({
+      request_id: input.requestId,
+      offer_id: offer.id,
+      customer_id: request.user_id,
+      workshop_id: input.workshopUserId,
+
+      appointment_date: input.availableDate || null,
+      appointment_time: input.availableTime || null,
+
+      original_date: input.availableDate || null,
+      original_time: input.availableTime || null,
+
+      proposed_date: input.availableDate || null,
+      proposed_time: input.availableTime || null,
+
+      handover_method: input.handoverMethod || "customer_dropoff",
+
+      pickup_address:
+        input.handoverMethod === "workshop_pickup"
+          ? input.pickupAddress?.trim() || null
+          : null,
+
+      status: "requested",
+    });
+
+  if (appointmentError) {
+    const { error: rollbackError } = await supabase
+      .from("repair_offers")
+      .delete()
+      .eq("id", offer.id);
+
+    if (rollbackError) {
+      console.error(
+        "Programarea nu a fost creată, iar oferta nu a putut fi ștearsă:",
+        rollbackError,
+      );
+    }
+
+    throw appointmentError;
+  }
+
+  return offer as RepairOfferRow;
 }
 
 export async function getOffersForCustomerRequests(userId: string) {

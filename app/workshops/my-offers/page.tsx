@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
+import { interactiveButton } from "@/lib/ui";
 
 type ProfileRow = {
   role: string[] | null;
@@ -36,6 +37,8 @@ type RepairAppointment = {
   request_id: string;
   appointment_date: string | null;
   appointment_time: string | null;
+  proposed_date: string | null;
+  proposed_time: string | null;
   status: string | null;
 };
 
@@ -125,13 +128,15 @@ available_time,
     images
   ),
   repair_appointments (
-    id,
-    offer_id,
-    request_id,
-    appointment_date,
-    appointment_time,
-    status
-  )
+  id,
+  offer_id,
+  request_id,
+  appointment_date,
+  appointment_time,
+  proposed_date,
+  proposed_time,
+  status
+)
 `,
           )
           .eq("workshop_user_id", authData.user.id)
@@ -178,6 +183,8 @@ available_time,
                 request_id: String(appointment.request_id),
                 appointment_date: appointment.appointment_date ?? null,
                 appointment_time: appointment.appointment_time ?? null,
+                proposed_date: appointment.proposed_date ?? null,
+                proposed_time: appointment.proposed_time ?? null,
                 status: appointment.status ?? null,
               }))
             : [],
@@ -233,6 +240,33 @@ available_time,
 
   if (!authorized) return null;
 
+  const confirmAppointment = async (appointmentId: string) => {
+    try {
+      const { error } = await supabase
+        .from("repair_appointments")
+        .update({
+          status: "confirmed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", appointmentId);
+
+      if (error) throw error;
+
+      setOffers((currentOffers) =>
+        currentOffers.filter((offer) => {
+          const appointment = offer.repair_appointments?.[0];
+
+          if (!appointment) return true;
+
+          return appointment.id !== appointmentId;
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to confirm appointment:", error);
+      alert("Nu am putut confirma programarea.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-6xl">
@@ -269,10 +303,24 @@ available_time,
             {normalizedOffers.map((offer) => {
               const request = offer.repair_requests;
               const appointment = offer.repair_appointments?.[0];
+
               const displayDate =
-                appointment?.appointment_date || offer.available_date;
+                appointment?.status === "customer_proposed"
+                  ? appointment.proposed_date ||
+                    appointment.appointment_date ||
+                    offer.available_date
+                  : appointment?.proposed_date ||
+                    appointment?.appointment_date ||
+                    offer.available_date;
+
               const displayTime =
-                appointment?.appointment_time || offer.available_time;
+                appointment?.status === "customer_proposed"
+                  ? appointment.proposed_time ||
+                    appointment.appointment_time ||
+                    offer.available_time
+                  : appointment?.proposed_time ||
+                    appointment?.appointment_time ||
+                    offer.available_time;
 
               return (
                 <article
@@ -306,7 +354,13 @@ available_time,
                     appointmentDate={displayDate}
                     appointmentTime={displayTime}
                     handoverText="Predare la service"
-                    statusText="Așteaptă confirmare"
+                    statusText={
+                      appointment?.status === "customer_proposed"
+                        ? "Clientul a propus altă dată"
+                        : appointment?.status === "workshop_proposed"
+                          ? "Așteaptă confirmarea clientului"
+                          : "Așteaptă confirmare"
+                    }
                     title="Oferta service-ului"
                   />
 
@@ -321,6 +375,67 @@ available_time,
                       </p>
                     </div>
                   )}
+
+                  <div className="mt-6 space-y-3">
+                    {appointment?.status === "customer_proposed" && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          if (!appointment?.id) {
+                            alert("Programarea nu a fost găsită.");
+                            return;
+                          }
+
+                          confirmAppointment(appointment.id);
+                        }}
+                        className={`${interactiveButton} w-full rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-black text-white`}
+                      >
+                        Confirmă programarea
+                      </button>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          if (!request?.id) {
+                            alert("Lucrarea nu a fost găsită.");
+                            return;
+                          }
+
+                          router.push(
+                            `/chat/${request.id}?offerId=${offer.id}`,
+                          );
+                        }}
+                        className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white`}
+                      >
+                        💬 Chat
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+
+                          if (!request?.id) {
+                            alert("Lucrarea nu a fost găsită.");
+                            return;
+                          }
+
+                          router.push(
+                            `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=workshop`,
+                          );
+                        }}
+                        className={`${interactiveButton} rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
+                      >
+                        📅 Modifică data
+                      </button>
+                    </div>
+                  </div>
                 </article>
               );
             })}

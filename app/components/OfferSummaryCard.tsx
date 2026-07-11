@@ -1,6 +1,5 @@
 import { Clock3 } from "lucide-react";
 import AppointmentCard from "@/app/components/AppointmentCard";
-import { interactiveCard } from "@/lib/ui";
 
 type OfferSummaryCardProps = {
   price?: string | number | null;
@@ -17,7 +16,7 @@ export default function OfferSummaryCard({
   days,
   appointmentDate,
   appointmentTime,
-  handoverText = "Predare: Clientul aduce mașina",
+  handoverText = "Predare la service",
   statusText = "Așteaptă confirmare",
   title = "Oferta primită",
 }: OfferSummaryCardProps) {
@@ -45,12 +44,14 @@ export default function OfferSummaryCard({
         </div>
       </div>
 
-      <AppointmentCard
-        date={appointmentDate}
-        time={appointmentTime}
-        handoverText={handoverText}
-        statusText={statusText}
-      />
+      {(appointmentDate || appointmentTime) && (
+        <AppointmentCard
+          date={appointmentDate}
+          time={appointmentTime}
+          handoverText={handoverText}
+          statusText={statusText}
+        />
+      )}
     </div>
   );
 }

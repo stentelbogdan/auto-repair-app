@@ -257,12 +257,9 @@ function WorkshopDashboardContent() {
         <div className="mx-auto mb-4 max-w-md rounded-2xl border border-green-500/30 bg-green-500/10 p-4">
           <p className="text-sm font-bold text-green-300">
             ✅ Oferta a fost trimisă cu succes.
-            <p className="mt-1 text-xs text-green-100/80">
-              Clientul a fost notificat.
-            </p>
           </p>
 
-          <p className="mt-1 text-xs text-green-100/80">
+          <p className="mt-1 text-xs font-normal text-green-100/80">
             Clientul a fost notificat și îți va putea răspunde în scurt timp.
           </p>
         </div>
