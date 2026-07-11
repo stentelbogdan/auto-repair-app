@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
-import { CalendarDays, Check, MessageCircle } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
@@ -613,57 +612,20 @@ export default function OffersPage() {
                       : "Confirmă programarea sau modifică data propusă."}
                   </p>
 
-                  <div
-                    className={`mt-4 grid gap-3 ${
-                      isCustomerProposed ? "grid-cols-2" : "grid-cols-3"
-                    }`}
-                  >
-                    {!isCustomerProposed && (
-                      <button
-                        type="button"
-                        onClick={() => handleConfirmAppointment(offer.id)}
-                        disabled={acceptingOfferId === offer.id}
-                        className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {acceptingOfferId === offer.id ? (
-                          "Se confirmă..."
-                        ) : (
-                          <span className="flex items-center justify-center gap-1.5">
-                            <Check size={18} strokeWidth={2.5} />
-                            <span>Confirmă programarea</span>
-                          </span>
-                        )}
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(`/chat/${request.id}?offerId=${offer.id}`)
-                      }
-                      className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98]"
-                    >
-                      <span className="flex items-center justify-center gap-1.5">
-                        <MessageCircle size={18} strokeWidth={2.3} />
-                        <span>Chat</span>
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(
-                          `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=customer`,
-                        )
-                      }
-                      className="rounded-2xl bg-black px-4 py-4 text-sm font-bold text-white transition hover:bg-black/90 active:scale-[0.98]"
-                    >
-                      <span className="flex items-center justify-center gap-1.5">
-                        <CalendarDays size={18} strokeWidth={2.3} />
-                        <span>Modifică data</span>
-                      </span>
-                    </button>
-                  </div>
+                  <AppointmentActions
+                    showConfirm={!isCustomerProposed}
+                    confirming={acceptingOfferId === offer.id}
+                    confirmDisabled={acceptingOfferId === offer.id}
+                    onConfirm={() => handleConfirmAppointment(offer.id)}
+                    onChat={() => {
+                      router.push(`/chat/${request.id}?offerId=${offer.id}`);
+                    }}
+                    onChangeDate={() => {
+                      router.push(
+                        `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=customer`,
+                      );
+                    }}
+                  />
                 </div>
               );
             })}
