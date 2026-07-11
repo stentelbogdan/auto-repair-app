@@ -512,6 +512,27 @@ export default function OffersPage() {
                 appointmentStatus === "workshop_proposed" ||
                 appointmentStatus === "requested";
 
+              const customerBadge =
+                appointmentStatus === "confirmed"
+                  ? {
+                      text: "Programare confirmată",
+                      color: "green" as const,
+                    }
+                  : appointmentStatus === "customer_proposed"
+                    ? {
+                        text: "În așteptare",
+                        color: "yellow" as const,
+                      }
+                    : appointmentStatus === "workshop_proposed"
+                      ? {
+                          text: "Service-ul a propus altă dată",
+                          color: "orange" as const,
+                        }
+                      : {
+                          text: "Necesită programare",
+                          color: "orange" as const,
+                        };
+
               const displayedAppointmentDate =
                 appointment?.proposedDate ||
                 appointment?.appointmentDate ||
@@ -543,10 +564,7 @@ export default function OffersPage() {
                     city={request.city}
                     variant="listLarge"
                     details={[
-                      {
-                        text: "Necesită programare",
-                        color: "orange",
-                      },
+                      customerBadge,
                       {
                         text: formatDamageType(request.damageType),
                         color: "yellow",

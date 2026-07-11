@@ -304,6 +304,27 @@ available_time,
               const request = offer.repair_requests;
               const appointment = offer.repair_appointments?.[0];
 
+              const workshopBadge =
+                appointment?.status === "confirmed"
+                  ? {
+                      text: "Programare confirmată",
+                      color: "green" as const,
+                    }
+                  : appointment?.status === "customer_proposed"
+                    ? {
+                        text: "Clientul a propus altă dată",
+                        color: "orange" as const,
+                      }
+                    : appointment?.status === "workshop_proposed"
+                      ? {
+                          text: "În așteptare",
+                          color: "yellow" as const,
+                        }
+                      : {
+                          text: "Așteaptă confirmarea clientului",
+                          color: "yellow" as const,
+                        };
+
               const displayDate =
                 appointment?.status === "customer_proposed"
                   ? appointment.proposed_date ||
@@ -337,10 +358,7 @@ available_time,
                     variant="listLarge"
                     platePosition="bottom"
                     details={[
-                      {
-                        text: "În așteptare",
-                        color: "orange",
-                      },
+                      workshopBadge,
                       {
                         text: request?.damage_type || "Daună",
                         color: "yellow",
