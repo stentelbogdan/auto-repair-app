@@ -160,36 +160,12 @@ export async function acceptRepairOffer(input: {
   offerId: string;
   requestId: string;
 }) {
-  const { error: rejectError } = await supabase
-    .from("repair_offers")
-    .update({ status: "rejected" })
-    .eq("request_id", input.requestId);
+  const { error } = await supabase.rpc("accept_repair_offer", {
+    p_offer_id: input.offerId,
+    p_request_id: input.requestId,
+  });
 
-  if (rejectError) {
-    throw rejectError;
-  }
-
-  const { error: acceptError } = await supabase
-    .from("repair_offers")
-    .update({
-      status: "accepted",
-      workshop_read_at: null,
-    })
-    .eq("id", input.offerId);
-
-  if (acceptError) {
-    throw acceptError;
-  }
-
-  const { error: requestError } = await supabase
-    .from("repair_requests")
-    .update({
-      status: "matched",
-      accepted_offer_id: input.offerId,
-    })
-    .eq("id", input.requestId);
-
-  if (requestError) {
-    throw requestError;
+  if (error) {
+    throw error;
   }
 }
