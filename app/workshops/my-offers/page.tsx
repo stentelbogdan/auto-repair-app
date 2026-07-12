@@ -305,7 +305,7 @@ available_time,
       window.dispatchEvent(new Event("appointments-updated"));
       window.dispatchEvent(new Event("offers-read-updated"));
 
-      router.push("/workshops/won-jobs?tab=appointments");
+      router.push("/workshops/dashboard");
     } catch (error) {
       console.error("Failed to confirm appointment:", error);
 
