@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
@@ -69,6 +70,10 @@ export default function WorkshopMyOffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [confirmingOfferId, setConfirmingOfferId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -240,30 +245,78 @@ available_time,
 
   if (!authorized) return null;
 
-  const confirmAppointment = async (appointmentId: string) => {
+  const confirmAppointment = async (
+    offer: RepairOffer,
+    appointment: RepairAppointment,
+  ) => {
+    if (confirmingOfferId) return;
+
     try {
-      const { error } = await supabase
+      setConfirmingOfferId(offer.id);
+
+      const request = offer.repair_requests;
+
+      if (!request?.id) {
+        throw new Error("Lucrarea asociată ofertei nu a fost găsită.");
+      }
+
+      if (appointment.status !== "customer_proposed") {
+        throw new Error(
+          "Această programare nu mai poate fi confirmată de service.",
+        );
+      }
+
+      const confirmedDate =
+        appointment.proposed_date ||
+        appointment.appointment_date ||
+        offer.available_date;
+
+      const confirmedTime =
+        appointment.proposed_time ||
+        appointment.appointment_time ||
+        offer.available_time;
+
+      if (!confirmedDate || !confirmedTime) {
+        throw new Error("Programarea nu are o dată și o oră valide.");
+      }
+
+      const { error: appointmentError } = await supabase
         .from("repair_appointments")
         .update({
           status: "confirmed",
+          appointment_date: confirmedDate,
+          appointment_time: confirmedTime,
+          proposed_date: null,
+          proposed_time: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", appointmentId);
+        .eq("id", appointment.id)
+        .eq("offer_id", offer.id);
 
-      if (error) throw error;
+      if (appointmentError) {
+        throw appointmentError;
+      }
 
-      setOffers((currentOffers) =>
-        currentOffers.filter((offer) => {
-          const appointment = offer.repair_appointments?.[0];
+      await acceptRepairOffer({
+        offerId: offer.id,
+        requestId: request.id,
+      });
 
-          if (!appointment) return true;
+      window.dispatchEvent(new Event("appointments-updated"));
+      window.dispatchEvent(new Event("offers-read-updated"));
 
-          return appointment.id !== appointmentId;
-        }),
-      );
+      router.push("/workshops/won-jobs?tab=appointments");
     } catch (error) {
       console.error("Failed to confirm appointment:", error);
-      alert("Nu am putut confirma programarea.");
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Nu am putut confirma programarea.";
+
+      alert(message);
+    } finally {
+      setConfirmingOfferId(null);
     }
   };
 
@@ -396,13 +449,15 @@ available_time,
 
                   <AppointmentActions
                     showConfirm={appointment?.status === "customer_proposed"}
+                    confirming={confirmingOfferId === offer.id}
+                    confirmDisabled={confirmingOfferId === offer.id}
                     onConfirm={() => {
-                      if (!appointment?.id) {
+                      if (!appointment) {
                         alert("Programarea nu a fost găsită.");
                         return;
                       }
 
-                      confirmAppointment(appointment.id);
+                      confirmAppointment(offer, appointment);
                     }}
                     onChat={() => {
                       if (!request?.id) {
