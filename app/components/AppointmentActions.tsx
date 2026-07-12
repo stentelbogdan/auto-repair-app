@@ -48,7 +48,7 @@ export default function AppointmentActions({
         <button
           type="button"
           onClick={onChangeDate}
-          className={`${interactiveButton} flex items-center justify-center gap-2 rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
+          className={`${interactiveButton} flex items-center justify-center gap-2 rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white`}
         >
           <CalendarDays size={19} strokeWidth={2.3} />
           <span>Modifică data</span>

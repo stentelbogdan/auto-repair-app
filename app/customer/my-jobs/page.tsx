@@ -588,7 +588,7 @@ export default function MyJobsPage() {
 
                           router.push(`/customer/my-jobs/${request.id}`);
                         }}
-                        className={`${interactiveButton} rounded-[20px] border border-orange-500 bg-white px-4 py-5 text-center text-sm font-bold text-orange-600`}
+                        className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white`}
                       >
                         {activeTab === "scheduled" &&
                         appointment?.status !== "confirmed" ? (

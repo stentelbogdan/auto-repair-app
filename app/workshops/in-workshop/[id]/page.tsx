@@ -133,7 +133,7 @@ export default function InWorkshopCarPage() {
       <div className="mx-auto max-w-5xl">
         <button
           type="button"
-          onClick={() => router.push("/workshops/won-jobs?tab=workshop")}
+          onClick={() => router.back()}
           className="mb-4 rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white/80"
         >
           ← Înapoi

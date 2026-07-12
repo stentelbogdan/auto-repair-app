@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
 import CarHeader from "@/app/components/CarHeader";
+import { Wrench } from "lucide-react";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -1117,14 +1118,16 @@ export default function WorkshopWonJobsPage() {
 
                         {job.appointment?.status === "confirmed" && (
                           <button
+                            type="button"
                             onClick={(event) => {
                               event.stopPropagation();
                               router.push(
                                 `/workshops/in-workshop/${job.requestId}`,
                               );
                             }}
-                            className="w-full rounded-2xl bg-white px-4 py-4 text-sm font-semibold text-black transition hover:opacity-90"
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-black px-4 py-4 text-sm font-semibold text-white transition hover:opacity-90"
                           >
+                            <Wrench size={17} strokeWidth={2.4} />
                             Deschide lucrarea
                           </button>
                         )}
