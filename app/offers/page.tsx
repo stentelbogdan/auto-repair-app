@@ -497,7 +497,7 @@ export default function OffersPage() {
       window.dispatchEvent(new Event("appointments-updated"));
       window.dispatchEvent(new Event("offers-read-updated"));
 
-      router.push("/customer/my-jobs");
+      router.push("/customer/dashboard");
     } catch (error) {
       console.error("Failed to confirm appointment:", error);
 

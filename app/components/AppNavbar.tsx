@@ -11,8 +11,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
-import { FileText } from "lucide-react";
-import { ClipboardList } from "lucide-react";
 
 type Role = "customer" | "workshop";
 
@@ -35,6 +33,16 @@ export default function AppNavbar() {
   const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
   const [directRequestsUnreadCount, setDirectRequestsUnreadCount] = useState(0);
   const [newRequestsUnreadCount, setNewRequestsUnreadCount] = useState(0);
+  const [appointmentProposalUnreadCount, setAppointmentProposalUnreadCount] =
+    useState(0);
+
+  const [appointmentConfirmedUnreadCount, setAppointmentConfirmedUnreadCount] =
+    useState(0);
+  const [appointmentToast, setAppointmentToast] = useState<{
+    title: string;
+    message: string;
+    targetUrl: string | null;
+  } | null>(null);
   const [fromParam, setFromParam] = useState<string | null>(null);
 
   useEffect(() => {
@@ -147,6 +155,9 @@ export default function AppNavbar() {
       setWonJobsUnreadCount(0);
       setDirectRequestsUnreadCount(0);
       setNewRequestsUnreadCount(0);
+      setAppointmentProposalUnreadCount(0);
+      setAppointmentConfirmedUnreadCount(0);
+      setAppointmentToast(null);
       return;
     }
 
@@ -294,6 +305,47 @@ export default function AppNavbar() {
       setOfferUnreadCount(count || 0);
     };
 
+    const loadUnreadAppointmentNotifications = async () => {
+      const [
+        { count: proposalCount, error: proposalError },
+        { count: confirmedCount, error: confirmedError },
+      ] = await Promise.all([
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_id", userId)
+          .is("read_at", null)
+          .in("type", [
+            "customer_proposed_appointment",
+            "workshop_proposed_appointment",
+          ]),
+
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_id", userId)
+          .is("read_at", null)
+          .in("type", [
+            "customer_confirmed_appointment",
+            "workshop_confirmed_appointment",
+          ]),
+      ]);
+
+      if (proposalError || confirmedError) {
+        console.error(
+          "Failed to load appointment notifications:",
+          proposalError || confirmedError,
+        );
+
+        setAppointmentProposalUnreadCount(0);
+        setAppointmentConfirmedUnreadCount(0);
+        return;
+      }
+
+      setAppointmentProposalUnreadCount(proposalCount || 0);
+      setAppointmentConfirmedUnreadCount(confirmedCount || 0);
+    };
+
     const loadUnreadWonJobs = async () => {
       const { count, error } = await supabase
         .from("repair_offers")
@@ -359,6 +411,7 @@ export default function AppNavbar() {
     loadUnreadOffers();
     loadUnreadWonJobs();
     loadUnreadDirectRequests();
+    loadUnreadAppointmentNotifications();
 
     const channel = supabase
       .channel(`navbar-live-badges-${userId}`)
@@ -437,6 +490,58 @@ export default function AppNavbar() {
         },
       )
 
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        async (payload) => {
+          const notification = payload.new as {
+            actor_id?: string | null;
+            title?: string | null;
+            message?: string | null;
+            target_url?: string | null;
+          };
+
+          /*
+      Protecție suplimentară:
+      nu afișăm notificări produse de utilizatorul curent.
+    */
+          if (notification.actor_id === userId) {
+            return;
+          }
+
+          await loadUnreadAppointmentNotifications();
+
+          setAppointmentToast({
+            title: notification.title || "Actualizare programare",
+            message:
+              notification.message ||
+              "Ai primit o nouă actualizare de programare.",
+            targetUrl: notification.target_url || null,
+          });
+
+          window.setTimeout(() => {
+            setAppointmentToast(null);
+          }, 5000);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `recipient_id=eq.${userId}`,
+        },
+        async () => {
+          await loadUnreadAppointmentNotifications();
+        },
+      )
+
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           loadUnreadMessages();
@@ -445,6 +550,7 @@ export default function AppNavbar() {
           loadUnreadWonJobs();
           loadUnreadDirectRequests();
           loadUnreadOpenRequests();
+          loadUnreadAppointmentNotifications();
         }
       });
 
@@ -455,6 +561,7 @@ export default function AppNavbar() {
       loadUnreadWonJobs();
       loadUnreadDirectRequests();
       loadUnreadOpenRequests();
+      loadUnreadAppointmentNotifications();
     };
 
     window.addEventListener("focus", refreshBadges);
@@ -536,16 +643,6 @@ export default function AppNavbar() {
   };
 
   const goMessages = () => {
-    const goProgress = () => {
-      if (isWorkshopMode) {
-        localStorage.setItem("activeRole", "workshop");
-        window.location.href = "/workshops/won-jobs";
-        return;
-      }
-
-      localStorage.setItem("activeRole", "customer");
-      window.location.href = "/customer/my-jobs";
-    };
     if (isWorkshopMode) {
       localStorage.setItem("activeRole", "workshop");
       window.location.href = "/workshops/messages";
@@ -621,26 +718,87 @@ export default function AppNavbar() {
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                if (userId && appointmentProposalUnreadCount > 0) {
+                  const { error } = await supabase
+                    .from("notifications")
+                    .update({
+                      read_at: new Date().toISOString(),
+                    })
+                    .eq("recipient_id", userId)
+                    .is("read_at", null)
+                    .in("type", [
+                      "customer_proposed_appointment",
+                      "workshop_proposed_appointment",
+                    ]);
+
+                  if (error) {
+                    console.error(
+                      "Failed to mark appointment notifications as read:",
+                      error,
+                    );
+                  } else {
+                    setAppointmentProposalUnreadCount(0);
+                  }
+                }
+
+                if (isWorkshopMode) {
+                  localStorage.setItem("activeRole", "workshop");
+                  router.push("/workshops/my-offers");
+                  return;
+                }
+
                 localStorage.setItem("activeRole", "customer");
                 router.push("/offers");
               }}
               className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
-              aria-label="Oferte primite"
+              aria-label={isWorkshopMode ? "Ofertele tale" : "Oferte primite"}
             >
               <BadgeEuro size={18} strokeWidth={2.25} />
-              {isClientMode && offerUnreadCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                  {offerUnreadCount > 9 ? "9+" : offerUnreadCount}
+
+              {(isClientMode
+                ? offerUnreadCount + appointmentProposalUnreadCount
+                : appointmentProposalUnreadCount) > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                  {(isClientMode
+                    ? offerUnreadCount + appointmentProposalUnreadCount
+                    : appointmentProposalUnreadCount) > 9
+                    ? "9+"
+                    : isClientMode
+                      ? offerUnreadCount + appointmentProposalUnreadCount
+                      : appointmentProposalUnreadCount}
                 </span>
               )}
             </button>
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
+                if (userId && appointmentConfirmedUnreadCount > 0) {
+                  const { error } = await supabase
+                    .from("notifications")
+                    .update({
+                      read_at: new Date().toISOString(),
+                    })
+                    .eq("recipient_id", userId)
+                    .is("read_at", null)
+                    .in("type", [
+                      "customer_confirmed_appointment",
+                      "workshop_confirmed_appointment",
+                    ]);
+
+                  if (error) {
+                    console.error(
+                      "Failed to mark confirmed appointments as read:",
+                      error,
+                    );
+                  } else {
+                    setAppointmentConfirmedUnreadCount(0);
+                  }
+                }
+
                 if (isWorkshopMode) {
-                  router.push("/workshops/won-jobs");
+                  router.push("/workshops/won-jobs?tab=appointments");
                   return;
                 }
 
@@ -651,16 +809,26 @@ export default function AppNavbar() {
               <Wrench size={17} strokeWidth={2.25} />
 
               {isClientMode && progressUnreadCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white">
                   {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
                 </span>
               )}
 
               {isWorkshopMode && wonJobsUnreadCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
                   {wonJobsUnreadCount > 9 ? "9+" : wonJobsUnreadCount}
                 </span>
               )}
+
+              {appointmentConfirmedUnreadCount > 0 &&
+                !(isClientMode && progressUnreadCount > 0) &&
+                !(isWorkshopMode && wonJobsUnreadCount > 0) && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
+                    {appointmentConfirmedUnreadCount > 9
+                      ? "9+"
+                      : appointmentConfirmedUnreadCount}
+                  </span>
+                )}
             </button>
 
             {isAdmin && (
@@ -716,6 +884,29 @@ export default function AppNavbar() {
             Ai primit un nou status sau poze pentru lucrarea ta.
           </p>
         </div>
+      )}
+      {appointmentToast && (
+        <button
+          type="button"
+          onClick={() => {
+            const targetUrl = appointmentToast.targetUrl;
+
+            setAppointmentToast(null);
+
+            if (targetUrl) {
+              router.push(targetUrl);
+            }
+          }}
+          className="fixed left-1/2 top-24 z-[999] w-[92%] max-w-sm -translate-x-1/2 rounded-3xl border border-orange-500/25 bg-black/95 px-4 py-3 text-left text-white shadow-2xl backdrop-blur-xl"
+        >
+          <p className="text-sm font-bold text-orange-300">
+            📅 {appointmentToast.title}
+          </p>
+
+          <p className="mt-1 text-xs leading-5 text-white/65">
+            {appointmentToast.message}
+          </p>
+        </button>
       )}
     </nav>
   );
