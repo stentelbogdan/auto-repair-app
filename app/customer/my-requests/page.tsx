@@ -75,25 +75,19 @@ export default function MyRequestsPage() {
     const count = offerCounts[request.id] || 0;
 
     return (
-      request.status === "open" &&
-      !request.accepted_offer_id &&
-      count === 0
+      request.status === "open" && !request.accepted_offer_id && count === 0
     );
   });
 
   const withOfferRequests = requests.filter((request) => {
     const count = offerCounts[request.id] || 0;
 
-    return (
-      request.status === "open" &&
-      !request.accepted_offer_id &&
-      count > 0
-    );
+    return request.status === "open" && !request.accepted_offer_id && count > 0;
   });
 
-  const archiveRequests = requests.filter((request) =>
-    ["completed", "closed", "cancelled", "rejected"].includes(request.status),
-  );
+  const archiveRequests = requests.filter((request) => {
+    return request.status !== "open" || Boolean(request.accepted_offer_id);
+  });
 
   const visibleRequests =
     activeTab === "waiting"
@@ -174,7 +168,9 @@ export default function MyRequestsPage() {
             </h2>
 
             <p className="mt-2 text-sm text-black/60">
-              Postează o daună ca să primești oferte de la service-uri.
+              {activeTab === "archive"
+                ? "Cererile programate, în lucru sau finalizate vor apărea aici."
+                : "Postează o daună ca să primești oferte de la service-uri."}
             </p>
 
             <button

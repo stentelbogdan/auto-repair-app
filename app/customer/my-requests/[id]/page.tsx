@@ -4,10 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import LicensePlate from "@/app/components/LicensePlate";
-import {
-  formatLicensePlateInput,
-  formatLicensePlateForDb,
-} from "@/lib/utils/licensePlate";
+import ImageGallery from "@/app/components/ImageGallery";
+import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 
 type RepairImage = {
   name?: string;
@@ -258,31 +256,7 @@ export default function EditMyRequestPage() {
           {request.car_year} • {request.city}
         </p>
 
-        {!canEdit && (
-          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-200">
-            Această cerere are deja un service selectat și nu mai poate fi
-            editată sau ștearsă.
-          </div>
-        )}
-
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
-          <div className="mb-6">
-            <label className="text-sm font-semibold text-black/60">
-              Număr de înmatriculare
-            </label>
-
-            <input
-              type="text"
-              value={licensePlate}
-              onChange={(e) =>
-                setLicensePlate(formatLicensePlateInput(e.target.value))
-              }
-              disabled={!canEdit}
-              className="mt-3 w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 text-base font-bold uppercase outline-none disabled:opacity-60"
-              placeholder="Ex: BH 73 JDJ"
-            />
-          </div>
-
           <label className="text-sm font-semibold text-black/60">
             Descriere problemă
           </label>
@@ -304,7 +278,7 @@ export default function EditMyRequestPage() {
               <div className="mt-3 rounded-2xl bg-black/5 p-6 text-center text-sm text-black/45">
                 Nu ai poze încă.
               </div>
-            ) : (
+            ) : canEdit ? (
               <div className="mt-3 grid grid-cols-3 gap-3">
                 {images.map((image, index) => {
                   const src =
@@ -318,7 +292,7 @@ export default function EditMyRequestPage() {
                       {src ? (
                         <img
                           src={src}
-                          alt=""
+                          alt={`Imagine daună ${index + 1}`}
                           className="h-24 w-full object-cover"
                         />
                       ) : (
@@ -327,18 +301,26 @@ export default function EditMyRequestPage() {
                         </div>
                       )}
 
-                      {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => removeImage(index)}
-                          className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white"
-                        >
-                          ✕
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white"
+                        aria-label={`Șterge imaginea ${index + 1}`}
+                      >
+                        ✕
+                      </button>
                     </div>
                   );
                 })}
+              </div>
+            ) : (
+              <div className="mt-3">
+                <ImageGallery
+                  images={images}
+                  alt={`${request.car_brand} ${request.car_model}`}
+                  className="h-52 w-full object-cover"
+                  wrapperClassName="block w-full overflow-hidden rounded-2xl"
+                />
               </div>
             )}
           </div>
@@ -371,6 +353,7 @@ export default function EditMyRequestPage() {
 
           {canEdit && (
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving}
               className="mt-6 w-full rounded-2xl bg-black px-5 py-4 font-bold text-white disabled:opacity-50"
@@ -380,8 +363,16 @@ export default function EditMyRequestPage() {
           )}
         </section>
 
+        {!canEdit && (
+          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-200">
+            Această cerere are deja un service selectat și nu mai poate fi
+            editată sau ștearsă.
+          </div>
+        )}
+
         {canEdit && (
           <button
+            type="button"
             onClick={handleDelete}
             disabled={deleting}
             className="relative z-10 mt-5 w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-bold text-red-300 disabled:opacity-50"
