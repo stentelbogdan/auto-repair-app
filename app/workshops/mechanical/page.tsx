@@ -7,7 +7,8 @@ import {
   getWorkshopRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
-import ImageGallery from "@/app/components/ImageGallery";
+import CarHeader from "@/app/components/CarHeader";
+import { formatPostedTime } from "@/lib/formatters";
 
 type WorkshopRequest = {
   id: string;
@@ -15,6 +16,7 @@ type WorkshopRequest = {
   carModel: string;
   carYear: string;
   city: string;
+  licensePlate: string | null;
   damageType: string;
   description: string;
   images: {
@@ -158,6 +160,7 @@ export default function WorkshopsPage() {
           carModel: req.car_model || "Unknown model",
           carYear: req.car_year || "-",
           city: req.city || "-",
+          licensePlate: req.license_plate,
           damageType: req.damage_type || "other",
           description: req.description || "No description provided.",
           images: Array.isArray(req.images) ? req.images : [],
@@ -270,7 +273,7 @@ export default function WorkshopsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             {filteredRequests.map((request) => {
               const isAcceptata = request.status === "matched";
               const service = getServiceMeta(request.damageType);
@@ -278,60 +281,50 @@ export default function WorkshopsPage() {
               return (
                 <div
                   key={request.id}
-                  className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-white/20"
+                  className="w-full overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
-                  <ImageGallery
+                  <CarHeader
                     images={request.images}
-                    alt={`${request.carBrand} ${request.carModel}`}
-                    className="h-56 w-full object-cover"
-                    wrapperClassName="block w-full overflow-hidden"
+                    plate={request.licensePlate}
+                    platePosition="bottom"
+                    brand={request.carBrand}
+                    model={request.carModel}
+                    year={request.carYear}
+                    city={request.city}
+                    variant="listLarge"
+                    details={[
+                      {
+                        text: isAcceptata ? "Acceptată" : "Deschisă",
+                        color: isAcceptata ? "green" : "yellow",
+                      },
+                      {
+                        text: service.label,
+                        color: "orange",
+                      },
+                      {
+                        text: formatPostedTime(request.postedAt),
+                        color: "gray",
+                      },
+                    ]}
                   />
 
-                  <div className="p-5">
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="text-2xl font-semibold">
-                          {request.carBrand} {request.carModel}
-                        </h2>
-                        <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-orange-500/10 px-3 py-1 text-sm font-bold text-orange-400">
-                          <span>{service.icon}</span>
-
-                          <span>{service.label}</span>
-                        </div>
-                        <p className="mt-1 text-sm text-white/50">
-                          {request.carYear} • {request.city}
-                        </p>
-                      </div>
-
-                      <span className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-white/70">
-                        {request.postedAt}
-                      </span>
-                    </div>
-
-                    <div className="mb-4 flex flex-wrap gap-2">
-                      <span
-                        className={`inline-block rounded-full border px-3 py-1 text-xs font-medium ${
-                          isAcceptata
-                            ? "border-green-500/20 bg-green-500/15 text-green-300"
-                            : "border-yellow-500/20 bg-yellow-500/15 text-yellow-300"
-                        }`}
-                      >
-                        {isAcceptata ? "Acceptată" : "Deschisă"}
-                      </span>
-                    </div>
-
-                    <p className="min-h-[72px] text-sm leading-6 text-white/75">
-                      {request.description}
+                  <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                    <p className="mb-2 text-xs font-semibold text-black/45">
+                      📝 Descriere
                     </p>
 
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/workshops/${request.id}`)}
-                      className="mt-5 w-full rounded-xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
-                    >
-                      Vezi detalii
-                    </button>
+                    <p className="text-sm leading-6 text-black/70">
+                      {request.description || "Nu există descriere."}
+                    </p>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/workshops/${request.id}`)}
+                    className="mt-4 w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
+                  >
+                    Vezi detalii și trimite ofertă
+                  </button>
                 </div>
               );
             })}
