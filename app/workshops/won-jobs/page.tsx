@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
 import CarHeader from "@/app/components/CarHeader";
 import { Wrench } from "lucide-react";
+import JobAppointmentCard from "@/app/components/JobAppointmentCard";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -778,6 +779,73 @@ export default function WorkshopWonJobsPage() {
                     </div>
                   </button>
                 </div>
+              );
+            })}
+          </div>
+        ) : activeTab === "appointments" ? (
+          <div className="space-y-4">
+            {filteredJobs.map((job) => {
+              const jobState = getJobState(job);
+              const appointment = job.appointment;
+
+              const displayDate =
+                appointment?.proposed_date ||
+                appointment?.appointment_date ||
+                null;
+
+              const displayTime =
+                appointment?.proposed_time ||
+                appointment?.appointment_time ||
+                null;
+
+              const handoverText =
+                appointment?.handover_method === "workshop_pickup"
+                  ? "Predare: Service-ul ridică mașina"
+                  : "Predare: Clientul aduce mașina";
+
+              return (
+                <JobAppointmentCard
+                  key={job.offerId}
+                  requestId={job.requestId}
+                  offerId={job.offerId}
+                  images={job.request.images}
+                  licensePlate={job.request.licensePlate}
+                  carBrand={job.request.carBrand}
+                  carModel={job.request.carModel}
+                  carYear={job.request.carYear}
+                  city={job.request.city}
+                  damageType={job.request.damageType}
+                  description={job.request.description}
+                  price={job.price}
+                  days={job.days}
+                  appointmentDate={displayDate}
+                  appointmentTime={displayTime}
+                  handoverText={handoverText}
+                  statusText={
+                    appointment?.status === "confirmed"
+                      ? "Confirmată"
+                      : "Așteaptă confirmare"
+                  }
+                  badgeText={jobState.label}
+                  badgeColor={
+                    jobState.priority === "needs_action"
+                      ? "orange"
+                      : jobState.priority === "waiting"
+                        ? "yellow"
+                        : "blue"
+                  }
+                  message={job.message}
+                  onChat={() => {
+                    localStorage.setItem("activeRole", "workshop");
+
+                    router.push(
+                      `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,
+                    );
+                  }}
+                  onOpenJob={() => {
+                    router.push(`/workshops/in-workshop/${job.requestId}`);
+                  }}
+                />
               );
             })}
           </div>

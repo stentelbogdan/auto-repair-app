@@ -12,8 +12,7 @@ import {
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
-import { formatPostedTime } from "@/lib/formatters";
-import { CalendarDays, Clock3, Eye } from "lucide-react";
+import { Eye } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import { interactiveButton } from "@/lib/ui";
@@ -159,18 +158,43 @@ export default function MyJobsPage() {
       );
 
       if (unreadRequestIds.length > 0 && authData.user.id) {
-        await supabase.from("work_progress_reads").upsert(
-          unreadRequestIds.map((requestId) => ({
-            request_id: requestId,
-            customer_user_id: authData.user.id,
-            read_at: new Date().toISOString(),
-          })),
-          { onConflict: "request_id,customer_user_id" },
-        );
+        const { data: unreadUpdates, error: unreadUpdatesError } =
+          await supabase
+            .from("work_progress_updates")
+            .select("id, request_id")
+            .in("request_id", unreadRequestIds);
 
-        window.dispatchEvent(new Event("progress-read-updated"));
-        window.dispatchEvent(new Event("offers-read-updated"));
-        setUnreadByRequestId({});
+        if (unreadUpdatesError) {
+          console.error(
+            "Failed to load unread progress update ids:",
+            unreadUpdatesError,
+          );
+        } else {
+          const readsToInsert = (unreadUpdates || []).map((update) => ({
+            update_id: update.id,
+            user_id: authData.user.id,
+            read_at: new Date().toISOString(),
+          }));
+
+          if (readsToInsert.length > 0) {
+            const { error: progressReadError } = await supabase
+              .from("work_progress_reads")
+              .upsert(readsToInsert, {
+                onConflict: "update_id,user_id",
+              });
+
+            if (progressReadError) {
+              console.error(
+                "Failed to mark progress updates as read:",
+                progressReadError,
+              );
+            } else {
+              window.dispatchEvent(new Event("progress-read-updated"));
+              window.dispatchEvent(new Event("offers-read-updated"));
+              setUnreadByRequestId({});
+            }
+          }
+        }
       }
 
       if (unreadRequestIds.length === 0) {
