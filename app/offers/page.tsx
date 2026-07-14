@@ -9,6 +9,7 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
+import { markNotificationsAsRead } from "@/lib/notifications";
 
 type RepairRequest = {
   id: string;
@@ -108,6 +109,19 @@ export default function OffersPage() {
       window.clearTimeout(timeout);
     };
   }, []);
+
+  useEffect(() => {
+  if (!authorized) return;
+
+  markNotificationsAsRead({
+    recipientRole: "customer",
+    types: [
+      "workshop_proposed_appointment",
+      "offer_received",
+      "appointment_confirmed",
+    ],
+  });
+}, [authorized]);
 
   useEffect(() => {
     const checkUserAndLoad = async () => {

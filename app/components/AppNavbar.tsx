@@ -569,6 +569,7 @@ export default function AppNavbar() {
     window.addEventListener("progress-read-updated", refreshBadges);
     window.addEventListener("offers-read-updated", refreshBadges);
     window.addEventListener("direct-requests-read-updated", refreshBadges);
+    window.addEventListener("notifications-read-updated", refreshBadges);
 
     return () => {
       window.removeEventListener("focus", refreshBadges);
@@ -576,6 +577,7 @@ export default function AppNavbar() {
       window.removeEventListener("progress-read-updated", refreshBadges);
       window.removeEventListener("offers-read-updated", refreshBadges);
       window.removeEventListener("direct-requests-read-updated", refreshBadges);
+      window.removeEventListener("notifications-read-updated", refreshBadges);
 
       supabase.removeChannel(channel);
     };
