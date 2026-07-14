@@ -7,6 +7,7 @@ import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
+import { markNotificationsAsRead } from "@/lib/notifications";
 
 type ProfileRow = {
   role: string[] | null;
@@ -213,6 +214,15 @@ available_time,
       isMounted = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    if (!authorized) return;
+
+    markNotificationsAsRead({
+      recipientRole: "workshop",
+      types: ["customer_proposed_appointment"],
+    });
+  }, [authorized]);
 
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers
