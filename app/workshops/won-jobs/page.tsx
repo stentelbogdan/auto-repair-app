@@ -7,6 +7,7 @@ import ImageGallery from "@/app/components/ImageGallery";
 import CarHeader from "@/app/components/CarHeader";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
+import { markNotificationsAsRead } from "@/lib/notifications";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -126,6 +127,11 @@ export default function WorkshopWonJobsPage() {
         }
 
         setAuthorized(true);
+        
+        await markNotificationsAsRead({
+          recipientRole: "workshop",
+          types: ["customer_confirmed_appointment"],
+        });
 
         const { error: readError } = await supabase
           .from("repair_offers")
