@@ -16,6 +16,7 @@ import { Eye } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import { interactiveButton } from "@/lib/ui";
+import { markNotificationsAsRead } from "@/lib/notifications";
 
 type RepairAppointment = {
   id: string;
@@ -227,6 +228,13 @@ export default function MyJobsPage() {
 
   useEffect(() => {
     loadJobs();
+  }, []);
+
+  useEffect(() => {
+    markNotificationsAsRead({
+      recipientRole: "customer",
+      types: ["workshop_confirmed_appointment"],
+    });
   }, []);
 
   useEffect(() => {
