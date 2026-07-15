@@ -312,6 +312,21 @@ available_time,
         requestId: request.id,
       });
 
+      const { error: workshopReadError } = await supabase
+        .from("repair_offers")
+        .update({
+          workshop_read_at: new Date().toISOString(),
+        })
+        .eq("id", offer.id)
+        .eq("workshop_user_id", offer.workshop_user_id);
+
+      if (workshopReadError) {
+        console.error(
+          "Failed to keep the confirmed offer marked as read:",
+          workshopReadError,
+        );
+      }
+
       window.dispatchEvent(new Event("appointments-updated"));
       window.dispatchEvent(new Event("offers-read-updated"));
 

@@ -84,6 +84,11 @@ export default function MyJobsPage() {
         return;
       }
 
+      await markNotificationsAsRead({
+        recipientRole: "customer",
+        types: ["workshop_confirmed_appointment"],
+      });
+
       const { data: reviewsData } = await supabase
         .from("reviews")
         .select("request_id")
@@ -228,13 +233,6 @@ export default function MyJobsPage() {
 
   useEffect(() => {
     loadJobs();
-  }, []);
-
-  useEffect(() => {
-    markNotificationsAsRead({
-      recipientRole: "customer",
-      types: ["workshop_confirmed_appointment"],
-    });
   }, []);
 
   useEffect(() => {
