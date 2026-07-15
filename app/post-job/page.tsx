@@ -20,6 +20,7 @@ import {
   isValidLicensePlate,
   getLicensePlateError,
 } from "@/lib/utils/licensePlate";
+import ImageGallery from "@/app/components/ImageGallery";
 
 type DamageType =
   | "scratch"
@@ -154,7 +155,7 @@ function PostJobContent() {
         files.map((file) => uploadRepairImage(file, authData.user.id)),
       );
 
-      const createdRequest = await createRepairRequest({
+      await createRepairRequest({
         userId: authData.user.id,
         carBrand,
         carModel,
@@ -169,7 +170,6 @@ function PostJobContent() {
       });
 
       sessionStorage.setItem("job-posted-success", "true");
-      router.replace("/customer/dashboard");
 
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
@@ -498,27 +498,44 @@ function PostJobContent() {
                 Previzualizare poze
               </p>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                {previewUrls.map((url, index) => (
-                  <div
-                    key={index}
-                    className="relative overflow-hidden rounded-2xl"
-                  >
-                    <img
-                      src={url}
-                      alt={`Poză ${index + 1}`}
-                      className="h-28 w-full object-cover"
-                    />
+                {previewUrls.map((url, index) => {
+                  const galleryImages = previewUrls.map(
+                    (previewUrl, previewIndex) => ({
+                      name:
+                        files[previewIndex]?.name || `Poză ${previewIndex + 1}`,
+                      url: previewUrl,
+                    }),
+                  );
 
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-red-600"
-                      aria-label="Șterge poza"
+                  return (
+                    <div
+                      key={`${files[index]?.name || "image"}-${index}`}
+                      className="relative overflow-hidden rounded-2xl bg-black/10"
                     >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      <ImageGallery
+                        images={galleryImages}
+                        initialIndex={index}
+                        hideCountBadge
+                        alt={`Poză ${index + 1}`}
+                        className="h-28 w-full object-cover"
+                        wrapperClassName="block h-28 w-full cursor-pointer overflow-hidden rounded-2xl"
+                      />
+
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          removeFile(index);
+                        }}
+                        className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/75 text-sm font-bold text-white shadow-lg backdrop-blur transition active:scale-90 hover:bg-red-600"
+                        aria-label={`Șterge poza ${index + 1}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

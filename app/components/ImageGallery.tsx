@@ -11,18 +11,35 @@ type GalleryImage = {
   dataUrl?: string;
 };
 
+type ImageGalleryProps = {
+  images: GalleryImage[];
+  alt?: string;
+  className?: string;
+  wrapperClassName?: string;
+
+  /**
+   * Imaginea afișată în miniatură și poziția de la care
+   * se deschide galeria.
+   */
+  initialIndex?: number;
+
+  /**
+   * Ascunde indicatorul +N.
+   * Util în grilele în care afișăm deja toate fotografiile.
+   */
+  hideCountBadge?: boolean;
+};
+
 export default function ImageGallery({
   images,
   alt = "Galerie imagini",
   className = "h-56 w-full object-cover",
   wrapperClassName = "block w-full overflow-hidden",
-}: {
-  images: GalleryImage[];
-  alt?: string;
-  className?: string;
-  wrapperClassName?: string;
-}) {
+  initialIndex = 0,
+  hideCountBadge = false,
+}: ImageGalleryProps) {
   const [open, setOpen] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
 
   const slides = (images || [])
     .map((img) => ({
@@ -31,6 +48,9 @@ export default function ImageGallery({
     .filter((img) => img.src);
 
   const imageCount = slides.length;
+
+  const safeInitialIndex =
+    imageCount > 0 ? Math.min(Math.max(initialIndex, 0), imageCount - 1) : 0;
 
   if (!slides.length) {
     return (
@@ -47,15 +67,21 @@ export default function ImageGallery({
           type="button"
           onClick={(event) => {
             event.stopPropagation();
+            setSelectedIndex(safeInitialIndex);
             setOpen(true);
           }}
           className="block w-full"
+          aria-label={`Deschide ${alt}`}
         >
-          <img src={slides[0].src} alt={alt} className={className} />
+          <img
+            src={slides[safeInitialIndex].src}
+            alt={alt}
+            className={className}
+          />
         </button>
 
-        {imageCount > 1 && (
-          <div className="absolute bottom-2 right-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-black/75 px-2 text-xs font-black text-white backdrop-blur">
+        {!hideCountBadge && imageCount > 1 && (
+          <div className="pointer-events-none absolute bottom-2 right-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-black/75 px-2 text-xs font-black text-white backdrop-blur">
             +{imageCount - 1}
           </div>
         )}
@@ -65,7 +91,7 @@ export default function ImageGallery({
         open={open}
         close={() => setOpen(false)}
         slides={slides}
-        index={0}
+        index={selectedIndex}
         plugins={[Zoom]}
         controller={{
           closeOnBackdropClick: true,
