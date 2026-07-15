@@ -16,7 +16,6 @@ import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
 import { romaniaCities } from "@/lib/data/romania-cities";
 import {
   formatLicensePlateInput,
-  formatLicensePlateForDb,
   isValidLicensePlate,
   getLicensePlateError,
 } from "@/lib/utils/licensePlate";
@@ -40,6 +39,68 @@ type DamageType =
   | "wheel_refurbishment"
   | "smart_repair"
   | "pdr";
+
+type ServiceDetailOption = {
+  value: string;
+  label: string;
+};
+
+const carPartDetails: ServiceDetailOption[] = [
+  { value: "part:front_bumper", label: "Bară față" },
+  { value: "part:rear_bumper", label: "Bară spate" },
+
+  { value: "part:hood", label: "Capotă" },
+  { value: "part:roof", label: "Pavilion" },
+  { value: "part:trunk", label: "Capac portbagaj / Hayon" },
+
+  { value: "part:left_front_fender", label: "Aripă față stânga" },
+  { value: "part:right_front_fender", label: "Aripă față dreapta" },
+
+  { value: "part:left_rear_quarter", label: "Aripă spate stânga" },
+  { value: "part:right_rear_quarter", label: "Aripă spate dreapta" },
+
+  { value: "part:left_front_door", label: "Ușă față stânga" },
+  { value: "part:left_rear_door", label: "Ușă spate stânga" },
+
+  { value: "part:right_front_door", label: "Ușă față dreapta" },
+  { value: "part:right_rear_door", label: "Ușă spate dreapta" },
+
+  { value: "part:left_sill", label: "Prag stânga" },
+  { value: "part:right_sill", label: "Prag dreapta" },
+
+  { value: "part:left_mirror", label: "Oglindă stânga" },
+  { value: "part:right_mirror", label: "Oglindă dreapta" },
+
+  { value: "part:left_headlight", label: "Far stânga" },
+  { value: "part:right_headlight", label: "Far dreapta" },
+
+  { value: "part:left_taillight", label: "Stop spate stânga" },
+  { value: "part:right_taillight", label: "Stop spate dreapta" },
+
+  { value: "part:left_front_wheel", label: "Jantă față stânga" },
+  { value: "part:right_front_wheel", label: "Jantă față dreapta" },
+  { value: "part:left_rear_wheel", label: "Jantă spate stânga" },
+  { value: "part:right_rear_wheel", label: "Jantă spate dreapta" },
+
+  { value: "part:windshield", label: "Parbriz / Geam" },
+
+  { value: "part:other", label: "Alt element" },
+];
+
+const damageKindDetails: ServiceDetailOption[] = [
+  { value: "damage:scratch", label: "Zgârietură" },
+  { value: "damage:dent", label: "Îndoitură" },
+  { value: "damage:crack", label: "Crăpătură" },
+  { value: "damage:broken", label: "Element spart" },
+  { value: "damage:deformed", label: "Element deformat" },
+  { value: "damage:paint_damage", label: "Vopsea deteriorată" },
+  { value: "damage:paint_peeling", label: "Vopsea exfoliată" },
+  { value: "damage:rust", label: "Rugină / Coroziune" },
+  { value: "damage:stone_chips", label: "Ciobituri de pietre" },
+  { value: "damage:replacement", label: "Necesită înlocuire" },
+  { value: "damage:painting", label: "Necesită vopsire" },
+  { value: "damage:other", label: "Alt tip de daună" },
+];
 
 type StoredImage = {
   name: string;
@@ -95,6 +156,7 @@ function PostJobContent() {
   const [licensePlate, setLicensePlate] = useState("");
 
   const [damageType, setDamageType] = useState<DamageType>("scratch");
+  const [serviceDetails, setServiceDetails] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -132,6 +194,14 @@ function PostJobContent() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const toggleServiceDetail = (detail: string) => {
+    setServiceDetails((currentDetails) =>
+      currentDetails.includes(detail)
+        ? currentDetails.filter((item) => item !== detail)
+        : [...currentDetails, detail],
+    );
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -163,6 +233,7 @@ function PostJobContent() {
         city,
         licensePlate,
         damageType,
+        serviceDetails,
         description,
         images: storedImages,
         requestType: targetWorkshopId ? "direct_request" : "repair",
@@ -349,7 +420,7 @@ function PostJobContent() {
                 Ce serviciu dorești?
               </label>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-3">
                 {[
                   {
                     value: "scratch",
@@ -423,25 +494,137 @@ function PostJobContent() {
                     icon: "🔨",
                     desc: "Îndreptare fără vopsire",
                   },
-                ].map((service) => (
-                  <button
-                    key={service.value}
-                    type="button"
-                    onClick={() => setDamageType(service.value as DamageType)}
-                    className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
-                      damageType === service.value
-                        ? "border-orange-400 bg-orange-50 shadow-sm"
-                        : "border-black/10 bg-black/[0.03] hover:border-orange-300"
-                    }`}
-                  >
-                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
-                      {service.icon}
-                    </div>
+                ].map((service) => {
+                  const isActive = damageType === service.value;
+                  const showRepairDetails =
+                    service.value === "scratch" && isActive;
 
-                    <p className="font-bold text-black">{service.title}</p>
-                    <p className="mt-1 text-sm text-black/55">{service.desc}</p>
-                  </button>
-                ))}
+                  return (
+                    <div key={service.value}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextDamageType = service.value as DamageType;
+
+                          if (nextDamageType !== damageType) {
+                            setServiceDetails([]);
+                          }
+
+                          setDamageType(nextDamageType);
+                        }}
+                        className={`w-full rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
+                          isActive
+                            ? "border-orange-400 bg-orange-50 shadow-sm"
+                            : "border-black/10 bg-black/[0.03] hover:border-orange-300"
+                        }`}
+                      >
+                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                          {service.icon}
+                        </div>
+
+                        <p className="font-bold text-black">{service.title}</p>
+
+                        <p className="mt-1 text-sm text-black/55">
+                          {service.desc}
+                        </p>
+                      </button>
+
+                      {showRepairDetails && (
+                        <div className="mt-3 rounded-[22px] border border-orange-200 bg-orange-50 p-4">
+                          <p className="text-sm font-bold text-black">
+                            Ce element este afectat?
+                          </p>
+
+                          <p className="mt-1 text-xs text-black/55">
+                            Poți selecta unul sau mai multe elemente.
+                          </p>
+
+                          <div className="mt-4 space-y-2">
+                            {carPartDetails.map((detail) => {
+                              const isSelected = serviceDetails.includes(
+                                detail.value,
+                              );
+
+                              return (
+                                <button
+                                  key={detail.value}
+                                  type="button"
+                                  onClick={() =>
+                                    toggleServiceDetail(detail.value)
+                                  }
+                                  aria-pressed={isSelected}
+                                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition active:scale-[0.99] ${
+                                    isSelected
+                                      ? "border-orange-500 bg-orange-500 text-black"
+                                      : "border-black/10 bg-white text-black"
+                                  }`}
+                                >
+                                  <span>{detail.label}</span>
+
+                                  <span
+                                    className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs ${
+                                      isSelected
+                                        ? "border-black bg-black text-white"
+                                        : "border-black/15 bg-white text-transparent"
+                                    }`}
+                                  >
+                                    ✓
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="my-5 h-px bg-black/10" />
+
+                          <p className="text-sm font-bold text-black">
+                            Ce tip de daună are?
+                          </p>
+
+                          <p className="mt-1 text-xs text-black/55">
+                            Poți selecta unul sau mai multe tipuri de daună.
+                          </p>
+
+                          <div className="mt-4 space-y-2">
+                            {damageKindDetails.map((detail) => {
+                              const isSelected = serviceDetails.includes(
+                                detail.value,
+                              );
+
+                              return (
+                                <button
+                                  key={detail.value}
+                                  type="button"
+                                  onClick={() =>
+                                    toggleServiceDetail(detail.value)
+                                  }
+                                  aria-pressed={isSelected}
+                                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition active:scale-[0.99] ${
+                                    isSelected
+                                      ? "border-orange-500 bg-orange-500 text-black"
+                                      : "border-black/10 bg-white text-black"
+                                  }`}
+                                >
+                                  <span>{detail.label}</span>
+
+                                  <span
+                                    className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs ${
+                                      isSelected
+                                        ? "border-black bg-black text-white"
+                                        : "border-black/15 bg-white text-transparent"
+                                    }`}
+                                  >
+                                    ✓
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

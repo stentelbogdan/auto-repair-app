@@ -10,6 +10,7 @@ export type RepairRequestRow = {
   city: string;
   license_plate: string | null;
   damage_type: string;
+  service_details?: string[];
 
   service_type?: "bodywork" | "mechanical";
 
@@ -39,6 +40,7 @@ export async function createRepairRequest(input: {
   city: string;
   licensePlate?: string;
   damageType: string;
+  serviceDetails?: string[];
   description: string;
   serviceType?: "bodywork" | "mechanical";
   requestType?: "repair" | "direct_request" | "direct_message";
@@ -60,6 +62,7 @@ export async function createRepairRequest(input: {
       city: input.city,
       license_plate: formatLicensePlateForDb(input.licensePlate),
       damage_type: input.damageType,
+      service_details: input.serviceDetails ?? [],
       description: input.description,
       service_type: input.serviceType ?? "bodywork",
       request_type: input.requestType ?? "repair",
