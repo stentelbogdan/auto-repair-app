@@ -192,6 +192,10 @@ function PostJobContent() {
     e.currentTarget.value = "";
   };
 
+  const removeFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -485,12 +489,25 @@ function PostJobContent() {
               </p>
               <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 {previewUrls.map((url, index) => (
-                  <img
+                  <div
                     key={index}
-                    src={url}
-                    alt={`Poză ${index + 1}`}
-                    className="h-28 w-full rounded-2xl object-cover"
-                  />
+                    className="relative overflow-hidden rounded-2xl"
+                  >
+                    <img
+                      src={url}
+                      alt={`Poză ${index + 1}`}
+                      className="h-28 w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-red-600"
+                      aria-label="Șterge poza"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
