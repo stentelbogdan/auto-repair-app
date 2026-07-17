@@ -8,7 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, X, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
@@ -155,7 +155,7 @@ function PostJobContent() {
   const [city, setCity] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
 
-  const [damageType, setDamageType] = useState<DamageType>("scratch");
+  const [expandedServices, setExpandedServices] = useState<DamageType[]>([]);
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -202,6 +202,32 @@ function PostJobContent() {
     );
   };
 
+  const serviceHasSelection = (service: DamageType) => {
+    if (service === "scratch") {
+      return serviceDetails.some(
+        (detail) => detail.startsWith("part:") || detail.startsWith("damage:"),
+      );
+    }
+
+    return serviceDetails.some((detail) => detail.startsWith(`${service}:`));
+  };
+
+  const removeSelectedService = (service: DamageType) => {
+    setExpandedServices((currentServices) =>
+      currentServices.filter((item) => item !== service),
+    );
+
+    setServiceDetails((currentDetails) =>
+      currentDetails.filter((detail) => {
+        if (service === "scratch") {
+          return !detail.startsWith("part:") && !detail.startsWith("damage:");
+        }
+
+        return !detail.startsWith(`${service}:`);
+      }),
+    );
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -219,11 +245,40 @@ function PostJobContent() {
         return;
       }
 
+      const availableServiceTypes: DamageType[] = [
+        "scratch",
+        "detailing_interior",
+        "detailing_exterior",
+        "polish",
+        "ceramic_coating",
+        "ppf",
+        "wrap",
+        "window_tint",
+        "dechroming",
+        "wheel_refurbishment",
+        "smart_repair",
+        "pdr",
+      ];
+
+      const selectedServiceTypes = availableServiceTypes.filter((service) =>
+        serviceHasSelection(service),
+      );
+
+      if (selectedServiceTypes.length === 0) {
+        alert("Selectează cel puțin o subcategorie.");
+        return;
+      }
+
       setIsSubmitting(true);
 
       const storedImages: StoredImage[] = await Promise.all(
         files.map((file) => uploadRepairImage(file, authData.user.id)),
       );
+
+      const completeServiceDetails = [
+        ...selectedServiceTypes.map((service) => `service:${service}`),
+        ...serviceDetails,
+      ];
 
       await createRepairRequest({
         userId: authData.user.id,
@@ -232,8 +287,8 @@ function PostJobContent() {
         carYear,
         city,
         licensePlate,
-        damageType,
-        serviceDetails,
+        damageType: selectedServiceTypes[0],
+        serviceDetails: completeServiceDetails,
         description,
         images: storedImages,
         requestType: targetWorkshopId ? "direct_request" : "repair",
@@ -495,39 +550,85 @@ function PostJobContent() {
                     desc: "Îndreptare fără vopsire",
                   },
                 ].map((service) => {
-                  const isActive = damageType === service.value;
+                  const serviceType = service.value as DamageType;
+                  const isActive = serviceHasSelection(serviceType);
+                  const isExpanded = expandedServices.includes(serviceType);
+
                   const showRepairDetails =
-                    service.value === "scratch" && isActive;
+                    serviceType === "scratch" && isExpanded;
 
                   return (
                     <div key={service.value}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextDamageType = service.value as DamageType;
-
-                          if (nextDamageType !== damageType) {
-                            setServiceDetails([]);
-                          }
-
-                          setDamageType(nextDamageType);
-                        }}
-                        className={`w-full rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
+                      <div
+                        className={`relative overflow-hidden rounded-2xl border transition ${
                           isActive
                             ? "border-orange-400 bg-orange-50 shadow-sm"
                             : "border-black/10 bg-black/[0.03] hover:border-orange-300"
                         }`}
                       >
-                        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
-                          {service.icon}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const nextDamageType = service.value as DamageType;
+
+                            setExpandedServices((currentServices) =>
+                              currentServices.includes(nextDamageType)
+                                ? currentServices.filter(
+                                    (item) => item !== nextDamageType,
+                                  )
+                                : [...currentServices, nextDamageType],
+                            );
+                          }}
+                          className="w-full p-4 pr-14 text-left transition active:scale-[0.99]"
+                          aria-expanded={isExpanded}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                              {service.icon}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-bold text-black">
+                                  {service.title}
+                                </p>
+
+                                {isActive && (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-bold text-black">
+                                    <Check size={13} strokeWidth={3} />
+                                    Selectat
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="mt-1 text-sm text-black/55">
+                                {service.desc}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="absolute right-3 top-3 flex items-center gap-1">
+                          {isActive && (
+                            <button
+                              type="button"
+                              onClick={() => removeSelectedService(serviceType)}
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black/50 shadow-sm transition hover:bg-red-50 hover:text-red-600 active:scale-90"
+                              aria-label={`Elimină serviciul ${service.title}`}
+                              title="Elimină serviciul"
+                            >
+                              <X size={17} />
+                            </button>
+                          )}
+
+                          <ChevronDown
+                            size={20}
+                            className={`pointer-events-none text-black/45 transition-transform duration-200 ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
                         </div>
-
-                        <p className="font-bold text-black">{service.title}</p>
-
-                        <p className="mt-1 text-sm text-black/55">
-                          {service.desc}
-                        </p>
-                      </button>
+                      </div>
 
                       {showRepairDetails && (
                         <div className="mt-3 rounded-[22px] border border-orange-200 bg-orange-50 p-4">
