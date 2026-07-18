@@ -22,6 +22,7 @@ import {
 import ImageGallery from "@/app/components/ImageGallery";
 import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import ServiceCard from "@/app/components/ServiceCard";
+import CarPartSelector from "@/app/components/CarPartSelector";
 import { SERVICES } from "@/lib/data/services";
 
 type DamageType =
@@ -453,13 +454,33 @@ function PostJobContent() {
                                 <div className="my-5 h-px bg-black/10" />
                               )}
 
-                              <ServiceOptionGroup
-                                title={group.title}
-                                description={group.description}
-                                options={group.options}
-                                selectedValues={serviceDetails}
-                                onToggle={toggleServiceDetail}
-                              />
+                              {group.display === "car-parts" ? (
+                                <>
+                                  <div className="mb-4">
+                                    <p className="text-base font-bold text-black">
+                                      {group.title}
+                                    </p>
+
+                                    <p className="mt-1 text-sm text-black/55">
+                                      {group.description}
+                                    </p>
+                                  </div>
+
+                                  <CarPartSelector
+                                    options={group.options}
+                                    selectedValues={serviceDetails}
+                                    onToggle={toggleServiceDetail}
+                                  />
+                                </>
+                              ) : (
+                                <ServiceOptionGroup
+                                  title={group.title}
+                                  description={group.description}
+                                  options={group.options}
+                                  selectedValues={serviceDetails}
+                                  onToggle={toggleServiceDetail}
+                                />
+                              )}
                             </div>
                           ))}
                         </div>

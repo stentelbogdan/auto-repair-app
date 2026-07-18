@@ -21,6 +21,7 @@ export type ServiceOptionGroupDefinition = {
   title: string;
   description: string;
   options: ServiceDetailOption[];
+  display?: "list" | "car-parts";
 };
 
 export type ServiceDefinition = {
@@ -166,8 +167,9 @@ export const SERVICES: ServiceDefinition[] = [
     groups: [
       {
         title: "Ce element este afectat?",
-        description: "Poți selecta unul sau mai multe elemente.",
+        description: "Atinge unul sau mai multe elemente ale mașinii.",
         options: carPartDetails,
+        display: "car-parts",
       },
       {
         title: "Ce tip de daună are?",
