@@ -22,7 +22,7 @@ import {
 import ImageGallery from "@/app/components/ImageGallery";
 import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import ServiceCard from "@/app/components/ServiceCard";
-import CarPartSelector from "@/app/components/CarPartSelector";
+import CarDamageSelector from "@/app/components/CarDamageSelector";
 import { SERVICES } from "@/lib/data/services";
 
 type DamageType =
@@ -466,7 +466,7 @@ function PostJobContent() {
                                     </p>
                                   </div>
 
-                                  <CarPartSelector
+                                  <CarDamageSelector
                                     options={group.options}
                                     selectedValues={serviceDetails}
                                     onToggle={toggleServiceDetail}
