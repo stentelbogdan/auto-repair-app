@@ -99,7 +99,7 @@ export default function Car3DViewer({
           <Suspense fallback={null}>
             <Model
               mode={mode}
-              position={[0.35, 0.08, 0]}
+              position={[0.35, 0, 0]}
               selectedPartIds={selectedPartIds}
               onTogglePart={handleTogglePart}
               onPartMeshesReady={handlePartMeshesReady}
