@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
+import { useGLTF } from "@react-three/drei";
 
 type Role = "customer" | "workshop";
 
@@ -19,6 +20,9 @@ export default function AppNavbar() {
   const router = useRouter();
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  useEffect(() => {
+    useGLTF.preload("/models/autorepair-car.glb");
+  }, []);
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);

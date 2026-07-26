@@ -4,6 +4,8 @@ import { useGLTF } from "@react-three/drei";
 import { Color } from "three";
 import { isSelectableCarPart } from "./carParts";
 
+useGLTF.preload("/models/autorepair-car.glb");
+
 const MODEL_PATH = "/models/autorepair-car.glb";
 
 const HOVER_COLOR = new Color("#fb923c");

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
+import { Suspense, useCallback, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import type { Mesh } from "three";
@@ -8,6 +8,7 @@ import type { Mesh } from "three";
 import { Model } from "./CarModel";
 import { CAR_PARTS } from "./carParts";
 import { useOutlineSelection } from "./useOutlineSelection";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 type Car3DViewerProps = {
   mode?: "preview" | "selection";
@@ -20,6 +21,8 @@ export default function Car3DViewer({
 }: Car3DViewerProps) {
   const isSelectionMode = mode === "selection";
 
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+
   const cameraPosition: [number, number, number] = isSelectionMode
     ? [7.4, 2.55, 4.15]
     : [4.6, 1.65, 2.7];
@@ -29,6 +32,34 @@ export default function Car3DViewer({
     : [0.35, 0.18, 0];
 
   const cameraFov = isSelectionMode ? 53 : 40;
+
+  const handleControlsReady = useCallback(
+  (controls: OrbitControlsImpl | null) => {
+    controlsRef.current = controls;
+
+    if (!controls || isSelectionMode) return;
+
+    const savedRotation = sessionStorage.getItem(
+      "dashboard-car-preview-rotation",
+    );
+
+    if (!savedRotation) return;
+
+    try {
+      const parsedRotation = JSON.parse(savedRotation) as {
+        azimuthalAngle: number;
+        polarAngle: number;
+      };
+
+      controls.setAzimuthalAngle(parsedRotation.azimuthalAngle);
+      controls.setPolarAngle(parsedRotation.polarAngle);
+      controls.update();
+    } catch {
+      sessionStorage.removeItem("dashboard-car-preview-rotation");
+    }
+  },
+  [isSelectionMode],
+);
 
   const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]);
 
@@ -57,6 +88,22 @@ export default function Car3DViewer({
   function handleRemovePart(partId: string) {
     setSelectedPartIds((currentPartIds) =>
       currentPartIds.filter((id) => id !== partId),
+    );
+  }
+
+  function handlePreviewRotationEnd() {
+    if (isSelectionMode) return;
+
+    const controls = controlsRef.current;
+
+    if (!controls) return;
+
+    sessionStorage.setItem(
+      "dashboard-car-preview-rotation",
+      JSON.stringify({
+        azimuthalAngle: controls.getAzimuthalAngle(),
+        polarAngle: controls.getPolarAngle(),
+      }),
     );
   }
 
@@ -117,6 +164,7 @@ export default function Car3DViewer({
           </Suspense>
 
           <OrbitControls
+            ref={handleControlsReady}
             makeDefault
             enableRotate
             enableZoom={isSelectionMode}
@@ -129,6 +177,7 @@ export default function Car3DViewer({
             minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.75}
             maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.25}
             target={cameraTarget}
+            onEnd={handlePreviewRotationEnd}
           />
         </Canvas>
       </div>
