@@ -130,7 +130,7 @@ function CustomerDashboardContent() {
   }
 
   return (
-    <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-[#101010] px-4 pb-4 pt-3 text-white">
+    <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-[#22262f] px-4 pb-4 pt-3 text-white">
       {(showAppointmentToast || showSuccessToast) && (
         <div className="pointer-events-none absolute left-4 right-4 top-3 z-50 mx-auto max-w-md md:max-w-5xl">
           {showAppointmentToast && (
@@ -168,14 +168,16 @@ function CustomerDashboardContent() {
 
         {!isWorkshop && (
           <>
-            <section className="mt-2 shrink-0">
+            <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+              <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
+
               <Car3DViewer
                 mode="preview"
                 heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
               />
             </section>
 
-            <section className="mt-2 grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
+            <section className="relative z-10 mt-auto -mb-4 grid shrink-0 -translate-y-4 grid-cols-2 gap-3 pt-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
               <Card
                 title="Postează daună"
                 desc="Estetică sau mecanică"
@@ -255,21 +257,21 @@ function Card({
     <button
       type="button"
       onClick={onClick}
-      className="relative flex h-full min-h-0 flex-col items-center justify-center rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] [@media(max-height:700px)]:p-3 md:p-6 md:hover:shadow-2xl"
+      className="relative rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:p-6 md:hover:shadow-2xl"
     >
       {typeof value !== "undefined" && (
-        <div className="absolute right-3 top-3 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md md:right-4 md:top-4">
+        <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
           {value}
         </div>
       )}
 
-      <div className="mx-auto mb-2 flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 text-xl font-bold [@media(max-height:700px)]:mb-1 [@media(max-height:700px)]:h-9 [@media(max-height:700px)]:w-9 [@media(max-height:700px)]:text-lg md:mb-3 md:h-14 md:w-14 md:text-3xl">
+      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold md:h-14 md:w-14 md:text-3xl">
         {icon}
       </div>
 
-      <h2 className="text-sm font-bold leading-tight md:text-lg">{title}</h2>
+      <h2 className="text-base font-bold leading-tight md:text-lg">{title}</h2>
 
-      <p className="mt-1 text-[11px] leading-snug text-black/55 [@media(max-height:700px)]:hidden md:block md:text-sm">
+      <p className="mt-1 text-xs leading-snug text-black/55 md:text-sm">
         {desc}
       </p>
     </button>

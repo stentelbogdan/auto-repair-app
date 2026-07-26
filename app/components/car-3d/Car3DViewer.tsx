@@ -63,7 +63,9 @@ export default function Car3DViewer({
   return (
     <div className="w-full">
       <div
-        className={`${heightClassName} w-full touch-none overflow-hidden rounded-2xl bg-neutral-900`}
+        className={`${heightClassName} w-full touch-none overflow-hidden ${
+          isSelectionMode ? "rounded-2xl bg-neutral-900" : "bg-transparent"
+        }`}
       >
         <Canvas
           dpr={[1, 1.5]}
@@ -75,19 +77,20 @@ export default function Car3DViewer({
           }}
           gl={{
             antialias: true,
+            alpha: true,
             powerPreference: "high-performance",
           }}
           onCreated={({ gl }) => {
-            gl.toneMappingExposure = 1.12;
+            gl.toneMappingExposure = 1.18;
           }}
         >
-          <color attach="background" args={["#171717"]} />
+          {isSelectionMode && <color attach="background" args={["#171717"]} />}
 
           <ambientLight intensity={0.22} />
 
           <hemisphereLight args={["#e8edf5", "#111318", 0.38]} />
 
-          <directionalLight position={[6, 8, 5]} intensity={2.15} />
+          <directionalLight position={[6, 8, 5]} intensity={2.35} />
 
           <directionalLight position={[-6, 4, 4]} intensity={1.35} />
 
@@ -96,20 +99,20 @@ export default function Car3DViewer({
           <Suspense fallback={null}>
             <Model
               mode={mode}
-              position={[0.35, 0, 0]}
+              position={[0.35, 0.08, 0]}
               selectedPartIds={selectedPartIds}
               onTogglePart={handleTogglePart}
               onPartMeshesReady={handlePartMeshesReady}
             />
 
-            <Environment preset="city" environmentIntensity={0.7} />
+            <Environment preset="city" environmentIntensity={0.85} />
 
             <ContactShadows
               position={[0, -0.75, 0]}
-              opacity={0.45}
-              scale={12}
-              blur={2.5}
-              far={5}
+              opacity={0.6}
+              scale={14}
+              blur={3.5}
+              far={6}
             />
           </Suspense>
 
@@ -119,11 +122,12 @@ export default function Car3DViewer({
             enableZoom={isSelectionMode}
             enablePan={false}
             enableDamping
-            dampingFactor={0.08}
+            rotateSpeed={isSelectionMode ? 1 : 0.35}
+            dampingFactor={isSelectionMode ? 0.08 : 0.14}
             minDistance={isSelectionMode ? 4.5 : 3.6}
             maxDistance={isSelectionMode ? 8.3 : 5.8}
-            minPolarAngle={Math.PI / 3.2}
-            maxPolarAngle={Math.PI / 2.05}
+            minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.75}
+            maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.25}
             target={cameraTarget}
           />
         </Canvas>
