@@ -4,8 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
-import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
-
 type ProfileRow = {
   role: string[] | null;
 };
@@ -171,9 +169,9 @@ function CustomerDashboardContent() {
             <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
               <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
 
-              <Car3DViewer
-                mode="preview"
-                heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
+              <div
+                id="dashboard-car-slot"
+                className="h-[125px] w-full [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
               />
             </section>
 
