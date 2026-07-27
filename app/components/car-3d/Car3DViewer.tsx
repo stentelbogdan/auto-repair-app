@@ -34,32 +34,32 @@ export default function Car3DViewer({
   const cameraFov = isSelectionMode ? 53 : 40;
 
   const handleControlsReady = useCallback(
-  (controls: OrbitControlsImpl | null) => {
-    controlsRef.current = controls;
+    (controls: OrbitControlsImpl | null) => {
+      controlsRef.current = controls;
 
-    if (!controls || isSelectionMode) return;
+      if (!controls || isSelectionMode) return;
 
-    const savedRotation = sessionStorage.getItem(
-      "dashboard-car-preview-rotation",
-    );
+      const savedRotation = sessionStorage.getItem(
+        "dashboard-car-preview-rotation",
+      );
 
-    if (!savedRotation) return;
+      if (!savedRotation) return;
 
-    try {
-      const parsedRotation = JSON.parse(savedRotation) as {
-        azimuthalAngle: number;
-        polarAngle: number;
-      };
+      try {
+        const parsedRotation = JSON.parse(savedRotation) as {
+          azimuthalAngle: number;
+          polarAngle: number;
+        };
 
-      controls.setAzimuthalAngle(parsedRotation.azimuthalAngle);
-      controls.setPolarAngle(parsedRotation.polarAngle);
-      controls.update();
-    } catch {
-      sessionStorage.removeItem("dashboard-car-preview-rotation");
-    }
-  },
-  [isSelectionMode],
-);
+        controls.setAzimuthalAngle(parsedRotation.azimuthalAngle);
+        controls.setPolarAngle(parsedRotation.polarAngle);
+        controls.update();
+      } catch {
+        sessionStorage.removeItem("dashboard-car-preview-rotation");
+      }
+    },
+    [isSelectionMode],
+  );
 
   const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]);
 
@@ -174,8 +174,8 @@ export default function Car3DViewer({
             dampingFactor={isSelectionMode ? 0.08 : 0.14}
             minDistance={isSelectionMode ? 4.5 : 3.6}
             maxDistance={isSelectionMode ? 8.3 : 5.8}
-            minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.75}
-            maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.25}
+            minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.65}
+            maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.45}
             target={cameraTarget}
             onEnd={handlePreviewRotationEnd}
           />

@@ -172,11 +172,11 @@ function CustomerDashboardContent() {
 
               <Car3DViewer
                 mode="preview"
-                heightClassName="h-[200px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
+                heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
               />
             </section>
 
-            <section className="relative z-10 mt-auto grid shrink-0 -translate-y-8 grid-cols-2 gap-3 pt-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
+            <section className="relative z-10 mt-auto grid shrink-0 -translate-y-8 grid-cols-2 gap-3 pt-10 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
               <Card
                 title="Postează daună"
                 desc="Estetică sau mecanică"
