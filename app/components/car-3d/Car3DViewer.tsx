@@ -25,7 +25,7 @@ export default function Car3DViewer({
 
   const cameraPosition: [number, number, number] = isSelectionMode
     ? [7.4, 2.55, 4.15]
-    : [4.6, 1.65, 2.7];
+    : [0.35, 1.65, 5.25];
 
   const cameraTarget: [number, number, number] = isSelectionMode
     ? [0.35, 0.3, 0]
