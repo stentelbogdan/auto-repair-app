@@ -34,6 +34,12 @@ const HEADLIGHT_SELECTED_BOOST = 3.2;
 const DRL_HOVER_BOOST = 0.35;
 const DRL_SELECTED_BOOST = 2.2;
 
+/*
+ * Farurile sunt aprinse permanent în modul preview.
+ * Nu afectează modul de selecție.
+ */
+const PREVIEW_HEADLIGHT_INTENSITY = 12;
+
 const REAR_LIGHT_HOVER_COLOR = new Color("#b91c1c");
 const REAR_LIGHT_SELECTED_COLOR = new Color("#c40000");
 
@@ -542,10 +548,23 @@ export function Model({
             }
           } else if (isLightPart) {
             /*
-             * Stopurile spate au trei stări clare:
-             * stins, hover și selectat.
+             * În Dashboard, farurile și luminile de zi
+             * rămân aprinse permanent.
              */
-            if (isRearLightPart) {
+            if (!isSelectionMode && isHeadlightPart) {
+              targetColor = originalColor
+                ? originalColor.clone().lerp(HEADLIGHT_COLOR, 0.7)
+                : HEADLIGHT_COLOR;
+
+              if (material.emissive) {
+                targetEmissive = HEADLIGHT_COLOR;
+                targetEmissiveIntensity =
+                  originalEmissiveIntensity + PREVIEW_HEADLIGHT_INTENSITY;
+              }
+
+              targetRoughness = 0.16;
+              targetMetalness = 0;
+            } else if (isRearLightPart) {
               /*
                * Lentila își păstrează culoarea originală.
                * Diferența dintre stări vine doar din emissive.
