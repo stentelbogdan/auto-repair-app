@@ -129,7 +129,7 @@ function CustomerDashboardContent() {
   }
 
   return (
-    <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-[#0b0b0b] px-4 pb-4 pt-3 text-white">
+    <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-3 text-white">
       {(showAppointmentToast || showSuccessToast) && (
         <div className="pointer-events-none absolute left-4 right-4 top-3 z-50 mx-auto max-w-md md:max-w-5xl">
           {showAppointmentToast && (
