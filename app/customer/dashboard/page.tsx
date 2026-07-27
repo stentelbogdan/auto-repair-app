@@ -172,7 +172,7 @@ function CustomerDashboardContent() {
 
               <Car3DViewer
                 mode="preview"
-                heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
+                heightClassName="h-[200px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
               />
             </section>
 
