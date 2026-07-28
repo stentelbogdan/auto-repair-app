@@ -22,7 +22,7 @@ export default function Car3DViewer({
 
   const cameraPosition: [number, number, number] = isSelectionMode
     ? [7.4, 2.55, 4.15]
-    : [0.35, 1.65, 5.25];
+    : [0.35, 2.2, 5.05];
 
   const cameraTarget: [number, number, number] = isSelectionMode
     ? [0.35, 0.3, 0]
@@ -126,7 +126,7 @@ export default function Car3DViewer({
             minDistance={isSelectionMode ? 4.5 : 3.6}
             maxDistance={isSelectionMode ? 8.3 : 5.8}
             minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.65}
-            maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.45}
+            maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.4}
             target={cameraTarget}
           />
         </Canvas>
