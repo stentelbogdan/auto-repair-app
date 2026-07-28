@@ -68,7 +68,8 @@ export default function Car3DViewer({
         }`}
       >
         <Canvas
-          dpr={[1, 1.5]}
+          frameloop={isSelectionMode ? "always" : "demand"}
+          dpr={[1, 1.25]}
           camera={{
             position: cameraPosition,
             fov: cameraFov,
@@ -109,10 +110,11 @@ export default function Car3DViewer({
 
             <ContactShadows
               position={[0, -0.75, 0]}
-              opacity={0.6}
-              scale={14}
-              blur={3.5}
-              far={6}
+              opacity={0.55}
+              scale={10}
+              blur={3}
+              far={4}
+              resolution={256}
             />
           </Suspense>
           <OrbitControls
