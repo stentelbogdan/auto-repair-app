@@ -68,7 +68,7 @@ export default function Car3DViewer({
         }`}
       >
         <Canvas
-          frameloop={isSelectionMode ? "always" : "demand"}
+          frameloop="always"
           dpr={[1, 1.25]}
           camera={{
             position: cameraPosition,
@@ -83,6 +83,23 @@ export default function Car3DViewer({
           }}
           onCreated={({ gl }) => {
             gl.toneMappingExposure = 1.18;
+
+            const canvas = gl.domElement;
+
+            const handleContextLost = (event: Event) => {
+              event.preventDefault();
+              console.error("AUTOREPAIR_WEBGL_CONTEXT_LOST", event);
+            };
+
+            const handleContextRestored = () => {
+              console.info("AUTOREPAIR_WEBGL_CONTEXT_RESTORED");
+            };
+
+            canvas.addEventListener("webglcontextlost", handleContextLost);
+            canvas.addEventListener(
+              "webglcontextrestored",
+              handleContextRestored,
+            );
           }}
         >
           {isSelectionMode && <color attach="background" args={["#171717"]} />}
