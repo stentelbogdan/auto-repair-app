@@ -176,7 +176,7 @@ function CustomerDashboardContent() {
               />
             </section>
 
-            <section className="relative z-10 mt-auto grid shrink-0 grid-cols-2 gap-3 pt-4 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
+            <section className="relative z-10 mt-10 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
               <Card
                 title="Postează daună"
                 desc="Estetică sau mecanică"
