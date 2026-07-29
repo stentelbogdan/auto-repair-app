@@ -19,7 +19,9 @@ function PostChoiceContent() {
 
   const targetWorkshopId = searchParams.get("targetWorkshopId");
 
-  const query = targetWorkshopId ? `?targetWorkshopId=${targetWorkshopId}` : "";
+  const query = targetWorkshopId
+    ? `?targetWorkshopId=${targetWorkshopId}`
+    : "";
 
   return (
     <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-3 text-white">
@@ -89,7 +91,9 @@ function Card({
         {icon}
       </div>
 
-      <h2 className="text-base font-bold leading-tight md:text-lg">{title}</h2>
+      <h2 className="text-base font-bold leading-tight md:text-lg">
+        {title}
+      </h2>
 
       <p className="mt-1 text-xs leading-snug text-black/55 md:text-sm">
         {desc}
