@@ -22,7 +22,7 @@ function PostChoiceContent() {
   const query = targetWorkshopId ? `?targetWorkshopId=${targetWorkshopId}` : "";
 
   return (
-    <main className="h-[calc(100svh-236px)] overflow-hidden bg-black px-5 pb-[max(12px,env(safe-area-inset-bottom))] pt-4 text-white">
+    <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-3 text-white">
       <div className="mx-auto flex h-full max-w-md flex-col md:max-w-5xl">
         <section className="shrink-0 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
@@ -30,14 +30,16 @@ function PostChoiceContent() {
           </p>
         </section>
 
-        <section className="mt-4 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#17191d] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+        <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+          <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
+
           <Car3DViewer
             mode="preview"
             heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
           />
         </section>
 
-        <section className="mt-10 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:mt-8 md:max-w-3xl md:gap-6">
+        <section className="relative z-10 mt-11 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
           <Card
             title="Daună estetică"
             desc="Poze + descriere"
