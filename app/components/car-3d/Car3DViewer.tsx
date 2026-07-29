@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Suspense, useCallback, useRef, useState } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import type { Mesh } from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
 import { Model } from "./CarModel";
 import { CAR_PARTS } from "./carParts";
@@ -14,11 +15,79 @@ type Car3DViewerProps = {
   heightClassName?: string;
 };
 
+type PreviewCameraIntroProps = {
+  active: boolean;
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+  onComplete: () => void;
+};
+
+function PreviewCameraIntro({
+  active,
+  controlsRef,
+  onComplete,
+}: PreviewCameraIntroProps) {
+  const elapsedRef = useRef(0);
+  const completedRef = useRef(false);
+
+  // Poziția inițială: botul mai jos.
+  const startPosition: [number, number, number] = [0.35, 2.2, 5.05];
+
+  // Poziția finală: botul se ridică.
+  const endPosition: [number, number, number] = [0.35, 1.65, 5.25];
+
+  useFrame(({ camera }, delta) => {
+    if (!active || completedRef.current) return;
+
+    elapsedRef.current += delta;
+
+    const delay = 0.8;
+    const duration = 0.9;
+
+    if (elapsedRef.current < delay) {
+      camera.position.set(...startPosition);
+      controlsRef.current?.update();
+      return;
+    }
+
+    const progress = Math.min((elapsedRef.current - delay) / duration, 1);
+
+    // Ease in-out: mișcare lină la început și la final.
+    const easedProgress =
+      progress < 0.5
+        ? 4 * progress * progress * progress
+        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+
+    camera.position.set(
+      startPosition[0] + (endPosition[0] - startPosition[0]) * easedProgress,
+      startPosition[1] + (endPosition[1] - startPosition[1]) * easedProgress,
+      startPosition[2] + (endPosition[2] - startPosition[2]) * easedProgress,
+    );
+
+    controlsRef.current?.update();
+
+    if (progress >= 1) {
+      completedRef.current = true;
+      onComplete();
+    }
+  });
+
+  return null;
+}
+
 export default function Car3DViewer({
   mode = "selection",
   heightClassName = "h-[490px]",
 }: Car3DViewerProps) {
   const isSelectionMode = mode === "selection";
+
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+
+  const [isPreviewIntroComplete, setIsPreviewIntroComplete] =
+    useState(isSelectionMode);
+
+  const handlePreviewIntroComplete = useCallback(() => {
+    setIsPreviewIntroComplete(true);
+  }, []);
 
   const cameraPosition: [number, number, number] = isSelectionMode
     ? [7.4, 2.55, 4.15]
@@ -83,23 +152,6 @@ export default function Car3DViewer({
           }}
           onCreated={({ gl }) => {
             gl.toneMappingExposure = 1.18;
-
-            const canvas = gl.domElement;
-
-            const handleContextLost = (event: Event) => {
-              event.preventDefault();
-              console.error("AUTOREPAIR_WEBGL_CONTEXT_LOST", event);
-            };
-
-            const handleContextRestored = () => {
-              console.info("AUTOREPAIR_WEBGL_CONTEXT_RESTORED");
-            };
-
-            canvas.addEventListener("webglcontextlost", handleContextLost);
-            canvas.addEventListener(
-              "webglcontextrestored",
-              handleContextRestored,
-            );
           }}
         >
           {isSelectionMode && <color attach="background" args={["#171717"]} />}
@@ -134,9 +186,19 @@ export default function Car3DViewer({
               resolution={256}
             />
           </Suspense>
+
+          {!isSelectionMode && (
+            <PreviewCameraIntro
+              active={!isPreviewIntroComplete}
+              controlsRef={controlsRef}
+              onComplete={handlePreviewIntroComplete}
+            />
+          )}
+
           <OrbitControls
+            ref={controlsRef}
             makeDefault
-            enableRotate
+            enableRotate={isSelectionMode || isPreviewIntroComplete}
             enableZoom={isSelectionMode}
             enablePan={false}
             enableDamping
