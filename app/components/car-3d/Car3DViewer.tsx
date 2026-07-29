@@ -32,7 +32,7 @@ function PreviewCameraIntro({
 
   // Poziția inițială:
   // camera este mai aproape, iar botul mașinii este mai jos.
-  const startPosition: [number, number, number] = [0.35, 2.2, 4.7];
+  const startPosition: [number, number, number] = [0.35, 2.2, 4.8];
 
   // Poziția finală:
   // camera se ridică și se retrage discret.
