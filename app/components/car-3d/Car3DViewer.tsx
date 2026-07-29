@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
+import { PerspectiveCamera } from "three";
 import type { Mesh } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 
@@ -29,43 +30,79 @@ function PreviewCameraIntro({
   const elapsedRef = useRef(0);
   const completedRef = useRef(false);
 
-  // Poziția inițială: botul mai jos.
-  const startPosition: [number, number, number] = [0.35, 2.2, 5.05];
+  // Poziția inițială:
+  // camera este mai aproape, iar botul mașinii este mai jos.
+  const startPosition: [number, number, number] = [0.35, 2.2, 4.7];
 
-  // Poziția finală: botul se ridică.
+  // Poziția finală:
+  // camera se ridică și se retrage discret.
   const endPosition: [number, number, number] = [0.35, 1.65, 5.25];
+
+  const startFov = 39;
+  const endFov = 40;
+
+  const delay = 0.8;
+  const duration = 0.9;
 
   useFrame(({ camera }, delta) => {
     if (!active || completedRef.current) return;
 
     elapsedRef.current += delta;
 
-    const delay = 0.8;
-    const duration = 0.9;
-
     if (elapsedRef.current < delay) {
       camera.position.set(...startPosition);
+
+      if (camera instanceof PerspectiveCamera) {
+        camera.fov = startFov;
+        camera.updateProjectionMatrix();
+      }
+
       controlsRef.current?.update();
       return;
     }
 
     const progress = Math.min((elapsedRef.current - delay) / duration, 1);
 
-    // Ease in-out: mișcare lină la început și la final.
+    // Mișcare lină, fără pornire sau oprire bruscă.
     const easedProgress =
       progress < 0.5
         ? 4 * progress * progress * progress
         : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-    camera.position.set(
-      startPosition[0] + (endPosition[0] - startPosition[0]) * easedProgress,
-      startPosition[1] + (endPosition[1] - startPosition[1]) * easedProgress,
-      startPosition[2] + (endPosition[2] - startPosition[2]) * easedProgress,
-    );
+    const currentX =
+      startPosition[0] + (endPosition[0] - startPosition[0]) * easedProgress;
+
+    const currentY =
+      startPosition[1] + (endPosition[1] - startPosition[1]) * easedProgress;
+
+    const currentZ =
+      startPosition[2] + (endPosition[2] - startPosition[2]) * easedProgress;
+
+    camera.position.set(currentX, currentY, currentZ);
+
+    if (camera instanceof PerspectiveCamera) {
+      const baseFov = startFov + (endFov - startFov) * easedProgress;
+
+      // Mic efect cinematografic în mijlocul animației.
+      // Valoarea urcă până la aproximativ +1° și revine la final.
+      const fovPulse = Math.sin(progress * Math.PI);
+
+      camera.fov = baseFov + fovPulse;
+      camera.updateProjectionMatrix();
+    }
 
     controlsRef.current?.update();
 
     if (progress >= 1) {
+      camera.position.set(...endPosition);
+
+      if (camera instanceof PerspectiveCamera) {
+        camera.fov = endFov;
+        camera.updateProjectionMatrix();
+      }
+
+      controlsRef.current?.update();
+
       completedRef.current = true;
       onComplete();
     }
