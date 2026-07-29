@@ -49,8 +49,10 @@ function PreviewCameraIntro({
   // Inerția finală
   const settleDuration = 0.24;
 
-  useFrame(({ camera }, delta) => {
+  useFrame(({ camera, invalidate }, delta) => {
     if (!active || completedRef.current) return;
+
+    invalidate();
 
     elapsedRef.current += delta;
 
@@ -204,8 +206,8 @@ export default function Car3DViewer({
         }`}
       >
         <Canvas
-          frameloop="always"
-          dpr={[1, 1.25]}
+          frameloop="demand"
+          dpr={1}
           camera={{
             position: cameraPosition,
             fov: cameraFov,
@@ -250,7 +252,7 @@ export default function Car3DViewer({
               scale={10}
               blur={3}
               far={4}
-              resolution={256}
+              resolution={128}
             />
           </Suspense>
 
