@@ -42,13 +42,19 @@ function PreviewCameraIntro({
   const endFov = 40;
 
   const delay = 0.8;
-  const duration = 0.9;
+
+  // Mișcarea principală
+  const moveDuration = 0.85;
+
+  // Inerția finală
+  const settleDuration = 0.24;
 
   useFrame(({ camera }, delta) => {
     if (!active || completedRef.current) return;
 
     elapsedRef.current += delta;
 
+    // Menținem camera în poziția inițială în timpul pauzei.
     if (elapsedRef.current < delay) {
       camera.position.set(...startPosition);
 
@@ -61,31 +67,54 @@ function PreviewCameraIntro({
       return;
     }
 
-    const progress = Math.min((elapsedRef.current - delay) / duration, 1);
+    const totalDuration = moveDuration + settleDuration;
 
-    // Mișcare lină, fără pornire sau oprire bruscă.
-    const easedProgress =
-      progress < 0.5
-        ? 4 * progress * progress * progress
-        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+    const progress = Math.min((elapsedRef.current - delay) / totalDuration, 1);
 
+    let animationProgress: number;
+
+    const mainMovementEnd = moveDuration / totalDuration;
+
+    if (progress <= mainMovementEnd) {
+      // Etapa 1: mișcarea principală
+      const p = progress / mainMovementEnd;
+
+      animationProgress =
+        p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    } else {
+      // Etapa 2: inerția finală
+      const settleProgress =
+        (progress - mainMovementEnd) / (settleDuration / totalDuration);
+
+      const overshoot = 1.025;
+
+      animationProgress =
+        overshoot -
+        ((overshoot - 1) * (1 - Math.cos(settleProgress * Math.PI))) / 2;
+    }
+
+    // Aplicăm progresul asupra poziției camerei.
     const currentX =
-      startPosition[0] + (endPosition[0] - startPosition[0]) * easedProgress;
+      startPosition[0] +
+      (endPosition[0] - startPosition[0]) * animationProgress;
 
     const currentY =
-      startPosition[1] + (endPosition[1] - startPosition[1]) * easedProgress;
+      startPosition[1] +
+      (endPosition[1] - startPosition[1]) * animationProgress;
 
     const currentZ =
-      startPosition[2] + (endPosition[2] - startPosition[2]) * easedProgress;
+      startPosition[2] +
+      (endPosition[2] - startPosition[2]) * animationProgress;
 
     camera.position.set(currentX, currentY, currentZ);
 
+    // Aplicăm și efectul discret de FOV.
     if (camera instanceof PerspectiveCamera) {
-      const baseFov = startFov + (endFov - startFov) * easedProgress;
+      const baseFov = startFov + (endFov - startFov) * animationProgress;
 
-      // Mic efect cinematografic în mijlocul animației.
-      // Valoarea urcă până la aproximativ +1° și revine la final.
-      const fovPulse = Math.sin(progress * Math.PI);
+      const normalizedProgress = Math.min(animationProgress, 1);
+
+      const fovPulse = Math.sin(normalizedProgress * Math.PI);
 
       camera.fov = baseFov + fovPulse;
       camera.updateProjectionMatrix();
@@ -93,6 +122,7 @@ function PreviewCameraIntro({
 
     controlsRef.current?.update();
 
+    // La final fixăm exact poziția finală.
     if (progress >= 1) {
       camera.position.set(...endPosition);
 
