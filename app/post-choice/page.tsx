@@ -22,32 +22,22 @@ function PostChoiceContent() {
   const query = targetWorkshopId ? `?targetWorkshopId=${targetWorkshopId}` : "";
 
   return (
-    <main className="h-[100svh] overflow-hidden bg-black px-5 pb-6 pt-6 text-white">
+    <main className="h-[calc(100svh-236px)] overflow-hidden bg-black px-5 pb-[max(12px,env(safe-area-inset-bottom))] pt-4 text-white">
       <div className="mx-auto flex h-full max-w-md flex-col md:max-w-5xl">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="mb-5 rounded-full border border-white/15 px-4 py-2 text-sm text-white/70 transition active:scale-[0.98]"
-        >
-          ← Înapoi
-        </button>
-
-        <section className="mb-4 text-center">
+        <section className="shrink-0 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
             POSTEAZĂ CERERE
           </p>
         </section>
 
-        {/* Chenarul cu mașina 3D */}
-        <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#17191d] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+        <section className="mt-4 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-[#17191d] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
           <Car3DViewer
             mode="preview"
-            heightClassName="h-[220px] [@media(min-height:700px)]:h-[clamp(230px,30svh,300px)]"
+            heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
           />
         </section>
 
-        {/* Cardurile sunt așezate normal sub mașină */}
-        <section className="mt-10 grid grid-cols-2 gap-3 md:mx-auto md:mt-6 md:max-w-3xl md:gap-6">
+        <section className="mt-10 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:mt-8 md:max-w-3xl md:gap-6">
           <Card
             title="Daună estetică"
             desc="Poze + descriere"
