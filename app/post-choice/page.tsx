@@ -3,8 +3,6 @@
 import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import Car3DViewer from "../components/car-3d/Car3DViewer";
-
 export default function PostChoicePage() {
   return (
     <Suspense fallback={null}>
@@ -19,9 +17,7 @@ function PostChoiceContent() {
 
   const targetWorkshopId = searchParams.get("targetWorkshopId");
 
-  const query = targetWorkshopId
-    ? `?targetWorkshopId=${targetWorkshopId}`
-    : "";
+  const query = targetWorkshopId ? `?targetWorkshopId=${targetWorkshopId}` : "";
 
   return (
     <main className="relative h-[calc(100dvh-180px)] overflow-hidden bg-black px-4 pb-4 pt-3 text-white">
@@ -32,16 +28,7 @@ function PostChoiceContent() {
           </p>
         </section>
 
-        <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
-          <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
-
-          <Car3DViewer
-  mode="preview"
-  heightClassName="h-[190px] [@media(min-height:760px)]:h-[clamp(210px,25dvh,280px)]"
-/>
-        </section>
-
-        <section className="relative z-10 mt-11 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
+        <section className="relative z-10 mt-20 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
           <Card
             title="Daună estetică"
             desc="Poze + descriere"
@@ -91,9 +78,7 @@ function Card({
         {icon}
       </div>
 
-      <h2 className="text-base font-bold leading-tight md:text-lg">
-        {title}
-      </h2>
+      <h2 className="text-base font-bold leading-tight md:text-lg">{title}</h2>
 
       <p className="mt-1 text-xs leading-snug text-black/55 md:text-sm">
         {desc}
