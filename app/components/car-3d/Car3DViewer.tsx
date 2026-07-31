@@ -164,14 +164,14 @@ export default function Car3DViewer({
   }, []);
 
   const cameraPosition: [number, number, number] = isSelectionMode
-    ? [7.4, 2.55, 4.15]
+    ? [9.1, 2.7, 5.2]
     : [0.35, 2.2, 5.05];
 
   const cameraTarget: [number, number, number] = isSelectionMode
-    ? [0.35, 0.3, 0]
+    ? [0.05, 0.3, 0]
     : [0.35, 0.18, 0];
 
-  const cameraFov = isSelectionMode ? 53 : 40;
+  const cameraFov = isSelectionMode ? 52 : 40;
 
   const [internalSelectedPartIds, setInternalSelectedPartIds] = useState<
     string[]
@@ -293,8 +293,8 @@ export default function Car3DViewer({
             enableDamping
             rotateSpeed={isSelectionMode ? 1 : 0.35}
             dampingFactor={isSelectionMode ? 0.08 : 0.14}
-            minDistance={isSelectionMode ? 4.5 : 3.6}
-            maxDistance={isSelectionMode ? 8.3 : 5.8}
+            minDistance={isSelectionMode ? 5.4 : 3.6}
+            maxDistance={isSelectionMode ? 9.2 : 5.8}
             minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.65}
             maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.4}
             target={cameraTarget}
