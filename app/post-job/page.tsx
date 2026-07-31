@@ -22,7 +22,7 @@ import {
 import ImageGallery from "@/app/components/ImageGallery";
 import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import ServiceCard from "@/app/components/ServiceCard";
-import CarDamageSelector from "@/app/components/CarDamageSelector";
+import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
 import { SERVICES } from "@/lib/data/services";
 
 type DamageType =
@@ -99,6 +99,7 @@ function PostJobContent() {
 
   const [expandedServices, setExpandedServices] = useState<DamageType[]>([]);
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
+  const [selectedCarParts, setSelectedCarParts] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -466,10 +467,13 @@ function PostJobContent() {
                                     </p>
                                   </div>
 
-                                  <CarDamageSelector
-                                    options={group.options}
-                                    selectedValues={serviceDetails}
-                                    onToggle={toggleServiceDetail}
+                                  <Car3DViewer
+                                    mode="selection"
+                                    heightClassName="h-[420px]"
+                                    selectedPartIds={selectedCarParts}
+                                    onSelectedPartIdsChange={
+                                      setSelectedCarParts
+                                    }
                                   />
                                 </>
                               ) : (

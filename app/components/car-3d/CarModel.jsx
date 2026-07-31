@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { Color } from "three";
 import { isSelectableCarPart } from "./carParts";
@@ -259,6 +259,10 @@ export function Model({
 
   const [hoveredPartId, setHoveredPartId] = useState(null);
 
+  const invalidate = useThree((state) => state.invalidate);
+
+  const transitionFramesRemaining = useRef(0);
+
   const isSelectionMode = mode === "selection";
 
   const pointerDownPosition = useRef({
@@ -281,8 +285,18 @@ export function Model({
   }, [selectedPartIds]);
 
   useEffect(() => {
+    transitionFramesRemaining.current = 45;
+    invalidate();
+  }, [selectedPartIds, invalidate]);
+
+  useEffect(() => {
     hoveredPartIdRef.current = hoveredPartId;
   }, [hoveredPartId]);
+
+  useEffect(() => {
+    transitionFramesRemaining.current = 30;
+    invalidate();
+  }, [hoveredPartId, invalidate]);
 
   useEffect(() => {
     return () => {
@@ -413,6 +427,11 @@ export function Model({
   }, [onPartMeshesReady, partMeshes]);
 
   useFrame((state, delta) => {
+    if (transitionFramesRemaining.current > 0) {
+      transitionFramesRemaining.current -= 1;
+      state.invalidate();
+    }
+
     const colorAlpha = 1 - Math.exp(-COLOR_TRANSITION_SPEED * delta);
 
     const emissiveAlpha = 1 - Math.exp(-EMISSIVE_TRANSITION_SPEED * delta);

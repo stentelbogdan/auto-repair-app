@@ -14,6 +14,9 @@ import { useOutlineSelection } from "./useOutlineSelection";
 type Car3DViewerProps = {
   mode?: "preview" | "selection";
   heightClassName?: string;
+
+  selectedPartIds?: string[];
+  onSelectedPartIdsChange?: (partIds: string[]) => void;
 };
 
 type PreviewCameraIntroProps = {
@@ -146,6 +149,8 @@ function PreviewCameraIntro({
 export default function Car3DViewer({
   mode = "selection",
   heightClassName = "h-[490px]",
+  selectedPartIds: controlledSelectedPartIds,
+  onSelectedPartIdsChange,
 }: Car3DViewerProps) {
   const isSelectionMode = mode === "selection";
 
@@ -168,7 +173,22 @@ export default function Car3DViewer({
 
   const cameraFov = isSelectionMode ? 53 : 40;
 
-  const [selectedPartIds, setSelectedPartIds] = useState<string[]>([]);
+  const [internalSelectedPartIds, setInternalSelectedPartIds] = useState<
+    string[]
+  >([]);
+
+  const selectedPartIds = controlledSelectedPartIds ?? internalSelectedPartIds;
+
+  const updateSelectedPartIds = useCallback(
+    (nextPartIds: string[]) => {
+      if (controlledSelectedPartIds === undefined) {
+        setInternalSelectedPartIds(nextPartIds);
+      }
+
+      onSelectedPartIdsChange?.(nextPartIds);
+    },
+    [controlledSelectedPartIds, onSelectedPartIdsChange],
+  );
 
   const [partMeshes, setPartMeshes] = useState<Map<string, Mesh[]>>(new Map());
 
@@ -185,17 +205,17 @@ export default function Car3DViewer({
   });
 
   function handleTogglePart(partId: string) {
-    setSelectedPartIds((currentPartIds) =>
-      currentPartIds.includes(partId)
-        ? currentPartIds.filter((id) => id !== partId)
-        : [...currentPartIds, partId],
-    );
+    const nextPartIds = selectedPartIds.includes(partId)
+      ? selectedPartIds.filter((id) => id !== partId)
+      : [...selectedPartIds, partId];
+
+    updateSelectedPartIds(nextPartIds);
   }
 
   function handleRemovePart(partId: string) {
-    setSelectedPartIds((currentPartIds) =>
-      currentPartIds.filter((id) => id !== partId),
-    );
+    const nextPartIds = selectedPartIds.filter((id) => id !== partId);
+
+    updateSelectedPartIds(nextPartIds);
   }
 
   return (
