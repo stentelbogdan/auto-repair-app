@@ -479,11 +479,12 @@ function PostJobContent() {
                                           setSelectedCarParts
                                         }
                                         cameraPositionOverride={[
-                                          7.33, 2.66, 4.4,
+                                          8.15, 1.9, 0.35,
                                         ]}
-                                        cameraTargetOverride={[0.35, 0.24, 0]}
-                                        cameraFovOverride={52}
-                                        modelScaleOverride={1.45}
+                                        cameraTargetOverride={[0.35, 0.40, 0]}
+                                        cameraFovOverride={46}
+                                        modelScaleOverride={1.3}
+                                        modelPositionOverride={[0.35, -0.18, 0]}
                                       />
                                     </section>
                                   </div>

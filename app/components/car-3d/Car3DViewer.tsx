@@ -22,6 +22,8 @@ type Car3DViewerProps = {
   cameraTargetOverride?: [number, number, number];
   cameraFovOverride?: number;
   modelScaleOverride?: number;
+
+  modelPositionOverride?: [number, number, number];
 };
 
 type PreviewCameraIntroProps = {
@@ -160,6 +162,7 @@ export default function Car3DViewer({
   cameraTargetOverride,
   cameraFovOverride,
   modelScaleOverride = 1,
+  modelPositionOverride,
 }: Car3DViewerProps) {
   const isSelectionMode = mode === "selection";
 
@@ -187,6 +190,8 @@ export default function Car3DViewer({
   const cameraTarget = cameraTargetOverride ?? defaultCameraTarget;
 
   const cameraFov = cameraFovOverride ?? defaultCameraFov;
+
+  const modelPosition = modelPositionOverride ?? [0.35, 0, 0];
 
   const [internalSelectedPartIds, setInternalSelectedPartIds] = useState<
     string[]
@@ -271,7 +276,7 @@ export default function Car3DViewer({
           <Suspense fallback={null}>
             <Model
               mode={mode}
-              position={[0.35, 0, 0]}
+              position={modelPosition}
               scale={modelScaleOverride}
               selectedPartIds={selectedPartIds}
               onTogglePart={handleTogglePart}
