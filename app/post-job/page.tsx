@@ -100,6 +100,7 @@ function PostJobContent() {
   const [expandedServices, setExpandedServices] = useState<DamageType[]>([]);
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
   const [selectedCarParts, setSelectedCarParts] = useState<string[]>([]);
+  const [isCarSelectorFullscreen, setIsCarSelectorFullscreen] = useState(false);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -119,6 +120,18 @@ function PostJobContent() {
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [previewUrls]);
+
+  useEffect(() => {
+    if (!isCarSelectorFullscreen) return;
+
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isCarSelectorFullscreen]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const newFiles = Array.from(e.target.files || []);
@@ -467,14 +480,28 @@ function PostJobContent() {
                                     </p>
                                   </div>
 
-                                  <Car3DViewer
-                                    mode="selection"
-                                    heightClassName="h-[420px]"
-                                    selectedPartIds={selectedCarParts}
-                                    onSelectedPartIdsChange={
-                                      setSelectedCarParts
-                                    }
-                                  />
+                                  <div className="relative">
+                                    {!isCarSelectorFullscreen && (
+                                      <Car3DViewer
+                                        mode="selection"
+                                        heightClassName="h-[420px]"
+                                        selectedPartIds={selectedCarParts}
+                                        onSelectedPartIdsChange={
+                                          setSelectedCarParts
+                                        }
+                                      />
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setIsCarSelectorFullscreen(true)
+                                      }
+                                      className="absolute inset-x-4 bottom-[145px] flex items-center justify-center rounded-2xl border border-white/15 bg-black/75 px-4 py-3 text-sm font-semibold text-white shadow-lg backdrop-blur-md transition active:scale-[0.98]"
+                                    >
+                                      ⛶ Deschide selectorul pe tot ecranul
+                                    </button>
+                                  </div>
                                 </>
                               ) : (
                                 <ServiceOptionGroup
@@ -599,6 +626,55 @@ function PostJobContent() {
           </button>
         </form>
       </div>
+
+      {isCarSelectorFullscreen && (
+        <div className="fixed inset-0 z-[9999] flex flex-col bg-[#101010] text-white">
+          <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-black/80 px-4 py-3 backdrop-blur-xl">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-orange-400">
+                Selector 3D
+              </p>
+
+              <p className="mt-1 text-sm font-semibold text-white">
+                Selectează elementele avariate
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsCarSelectorFullscreen(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xl text-white transition active:scale-90"
+              aria-label="Închide selectorul"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            <Car3DViewer
+              mode="selection"
+              heightClassName="h-[62svh]"
+              selectedPartIds={selectedCarParts}
+              onSelectedPartIdsChange={setSelectedCarParts}
+            />
+          </div>
+
+          <div className="shrink-0 border-t border-white/10 bg-black/85 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={() => setIsCarSelectorFullscreen(false)}
+              className="w-full rounded-2xl bg-orange-500 px-5 py-4 text-base font-semibold text-white transition active:scale-[0.99]"
+            >
+              Gata
+              {selectedCarParts.length > 0
+                ? ` · ${selectedCarParts.length} ${
+                    selectedCarParts.length === 1 ? "piesă" : "piese"
+                  }`
+                : ""}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
