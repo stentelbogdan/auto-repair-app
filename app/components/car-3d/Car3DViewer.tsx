@@ -164,14 +164,14 @@ export default function Car3DViewer({
   }, []);
 
   const cameraPosition: [number, number, number] = isSelectionMode
-    ? [9.1, 2.7, 5.2]
+    ? [7.9, 2.55, 4.45]
     : [0.35, 2.2, 5.05];
 
   const cameraTarget: [number, number, number] = isSelectionMode
     ? [0.05, 0.3, 0]
     : [0.35, 0.18, 0];
 
-  const cameraFov = isSelectionMode ? 52 : 40;
+  const cameraFov = isSelectionMode ? 50 : 40;
 
   const [internalSelectedPartIds, setInternalSelectedPartIds] = useState<
     string[]
@@ -222,7 +222,7 @@ export default function Car3DViewer({
     <div className="w-full">
       <div
         className={`${heightClassName} w-full touch-none overflow-hidden ${
-          isSelectionMode ? "rounded-2xl bg-neutral-900" : "bg-transparent"
+          isSelectionMode ? "rounded-[32px] bg-transparent" : "bg-transparent"
         }`}
       >
         <Canvas
@@ -243,8 +243,6 @@ export default function Car3DViewer({
             gl.toneMappingExposure = 1.18;
           }}
         >
-          {isSelectionMode && <color attach="background" args={["#171717"]} />}
-
           <ambientLight intensity={0.22} />
 
           <hemisphereLight args={["#e8edf5", "#111318", 0.38]} />
@@ -293,8 +291,8 @@ export default function Car3DViewer({
             enableDamping
             rotateSpeed={isSelectionMode ? 1 : 0.35}
             dampingFactor={isSelectionMode ? 0.08 : 0.14}
-            minDistance={isSelectionMode ? 5.4 : 3.6}
-            maxDistance={isSelectionMode ? 9.2 : 5.8}
+            minDistance={isSelectionMode ? 4.7 : 3.6}
+            maxDistance={isSelectionMode ? 8.6 : 5.8}
             minPolarAngle={isSelectionMode ? Math.PI / 3.2 : Math.PI / 2.65}
             maxPolarAngle={isSelectionMode ? Math.PI / 2.05 : Math.PI / 2.4}
             target={cameraTarget}

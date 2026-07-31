@@ -467,15 +467,19 @@ function PostJobContent() {
                                     </p>
                                   </div>
 
-                                  <div className="-mx-4 md:mx-0">
-                                    <Car3DViewer
-                                      mode="selection"
-                                      heightClassName="h-[72svh] min-h-[600px] max-h-[760px] md:h-[620px] md:min-h-0"
-                                      selectedPartIds={selectedCarParts}
-                                      onSelectedPartIdsChange={
-                                        setSelectedCarParts
-                                      }
-                                    />
+                                  <div className="-mx-3 md:mx-0">
+                                    <section className="relative shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+                                      <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
+
+                                      <Car3DViewer
+                                        mode="selection"
+                                        heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
+                                        selectedPartIds={selectedCarParts}
+                                        onSelectedPartIdsChange={
+                                          setSelectedCarParts
+                                        }
+                                      />
+                                    </section>
                                   </div>
                                 </>
                               ) : (
