@@ -25,6 +25,8 @@ type CarHeaderProps = {
   variant?: "compact" | "listLarge";
   platePosition?: "top" | "bottom";
   details?: CarHeaderDetail[];
+  affectedParts?: string[];
+  damageTypes?: string[];
 };
 
 export default function CarHeader({
@@ -37,6 +39,8 @@ export default function CarHeader({
   variant = "compact",
   platePosition = "top",
   details = [],
+  affectedParts = [],
+  damageTypes = [],
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
@@ -128,6 +132,62 @@ export default function CarHeader({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {(affectedParts.length > 0 || damageTypes.length > 0) && (
+          <div className="mt-4 space-y-3">
+            {affectedParts.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                  Elemente afectate
+                </p>
+
+                <div className="mt-1.5 space-y-1">
+                  {affectedParts.slice(0, 3).map((part) => (
+                    <p
+                      key={part}
+                      className="text-xs font-semibold leading-snug text-black/70"
+                    >
+                      • {part}
+                    </p>
+                  ))}
+
+                  {affectedParts.length > 3 && (
+                    <p className="text-xs font-bold text-orange-600">
+                      +{affectedParts.length - 3}{" "}
+                      {affectedParts.length - 3 === 1 ? "element" : "elemente"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {damageTypes.length > 0 && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                  Tip daună
+                </p>
+
+                <div className="mt-1.5 space-y-1">
+                  {damageTypes.slice(0, 2).map((damage) => (
+                    <p
+                      key={damage}
+                      className="text-xs font-semibold leading-snug text-black/70"
+                    >
+                      • {damage}
+                    </p>
+                  ))}
+
+                  {damageTypes.length > 2 && (
+                    <p className="text-xs font-bold text-orange-600">
+                      +{damageTypes.length - 2}{" "}
+                      {damageTypes.length - 2 === 1 ? "tip" : "tipuri"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

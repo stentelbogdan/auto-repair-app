@@ -42,6 +42,8 @@ export default function RepairRequestCard({
 
   const selectedParts = structuredDetails?.carDamage.parts ?? [];
   const selectedDamages = structuredDetails?.carDamage.damages ?? [];
+  const affectedPartLabels = selectedParts.map(formatCarPartLabel);
+  const damageTypeLabels = selectedDamages.map(formatDamageLabel);
 
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"
@@ -72,6 +74,8 @@ export default function RepairRequestCard({
             city={request.city}
             variant="listLarge"
             platePosition="bottom"
+            affectedParts={affectedPartLabels}
+            damageTypes={damageTypeLabels}
             details={[
               {
                 text: formatStatus(request.status, request.accepted_offer_id),
@@ -128,74 +132,6 @@ export default function RepairRequestCard({
             {request.description || "Nu ai adăugat descriere."}
           </p>
         </div>
-
-        {(selectedParts.length > 0 || selectedDamages.length > 0) && (
-          <div
-            className={
-              dark
-                ? "mt-3 rounded-2xl border border-white/10 bg-white/5 p-3"
-                : "mt-3 rounded-2xl border border-black/10 bg-black/[0.03] p-3"
-            }
-          >
-            {selectedParts.length > 0 && (
-              <div>
-                <p
-                  className={
-                    dark
-                      ? "text-xs font-semibold text-white/45"
-                      : "text-xs font-semibold text-black/45"
-                  }
-                >
-                  Elemente afectate
-                </p>
-
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedParts.map((part) => (
-                    <span
-                      key={part}
-                      className={
-                        dark
-                          ? "rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs font-semibold text-orange-300"
-                          : "rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700"
-                      }
-                    >
-                      {formatCarPartLabel(part)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {selectedDamages.length > 0 && (
-              <div className={selectedParts.length > 0 ? "mt-3" : ""}>
-                <p
-                  className={
-                    dark
-                      ? "text-xs font-semibold text-white/45"
-                      : "text-xs font-semibold text-black/45"
-                  }
-                >
-                  Tip daună
-                </p>
-
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedDamages.map((damage) => (
-                    <span
-                      key={damage}
-                      className={
-                        dark
-                          ? "rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
-                          : "rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-black/70"
-                      }
-                    >
-                      {formatDamageLabel(damage)}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         <button
           type="button"
