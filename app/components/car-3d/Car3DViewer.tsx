@@ -310,7 +310,7 @@ export default function Car3DViewer({
             enableZoom={isSelectionMode}
             enablePan={false}
             enableDamping
-            rotateSpeed={isSelectionMode ? 1 : 0.35}
+            rotateSpeed={isSelectionMode ? 0.45 : 0.35}
             dampingFactor={isSelectionMode ? 0.08 : 0.14}
             minDistance={isSelectionMode ? 4.7 : 3.6}
             maxDistance={isSelectionMode ? 8.6 : 5.8}

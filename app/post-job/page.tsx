@@ -11,7 +11,10 @@ import {
 import { CheckCircle2, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { createRepairRequest } from "@/lib/supabase/repair-requests";
+import {
+  createRepairRequest,
+  type StructuredServiceDetails,
+} from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
 import { romaniaCities } from "@/lib/data/romania-cities";
 import {
@@ -242,10 +245,27 @@ function PostJobContent() {
         files.map((file) => uploadRepairImage(file, authData.user.id)),
       );
 
-      const completeServiceDetails = [
-        ...selectedServiceTypes.map((service) => `service:${service}`),
-        ...serviceDetails,
-      ];
+      const selectedDamageTypes = serviceDetails
+        .filter((detail) => detail.startsWith("damage:"))
+        .map((detail) => detail.slice("damage:".length));
+
+      const otherServiceOptions = serviceDetails.filter(
+        (detail) =>
+          !detail.startsWith("part:") && !detail.startsWith("damage:"),
+      );
+
+      const completeServiceDetails: StructuredServiceDetails = {
+        version: 1,
+
+        selectedServices: selectedServiceTypes,
+
+        carDamage: {
+          parts: selectedCarParts,
+          damages: selectedDamageTypes,
+        },
+
+        options: otherServiceOptions,
+      };
 
       await createRepairRequest({
         userId: authData.user.id,

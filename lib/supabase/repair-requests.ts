@@ -1,6 +1,21 @@
 import { supabase } from "@/lib/supabase/client";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 
+export type StructuredServiceDetails = {
+  version: 1;
+
+  selectedServices: string[];
+
+  carDamage: {
+    parts: string[];
+    damages: string[];
+  };
+
+  options: string[];
+};
+
+export type RepairServiceDetails = string[] | StructuredServiceDetails;
+
 export type RepairRequestRow = {
   id: string;
   user_id: string;
@@ -10,7 +25,7 @@ export type RepairRequestRow = {
   city: string;
   license_plate: string | null;
   damage_type: string;
-  service_details?: string[];
+  service_details?: RepairServiceDetails;
 
   service_type?: "bodywork" | "mechanical";
 
@@ -40,7 +55,7 @@ export async function createRepairRequest(input: {
   city: string;
   licensePlate?: string;
   damageType: string;
-  serviceDetails?: string[];
+  serviceDetails?: RepairServiceDetails;
   description: string;
   serviceType?: "bodywork" | "mechanical";
   requestType?: "repair" | "direct_request" | "direct_message";
@@ -97,7 +112,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, created_at",
+      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, created_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
