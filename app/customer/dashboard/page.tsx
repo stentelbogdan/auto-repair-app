@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
 
 type ProfileRow = {
   role: string[] | null;
@@ -167,13 +166,18 @@ function CustomerDashboardContent() {
 
         {!isWorkshop && (
           <>
-            <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+            <section className="relative mt-2 flex h-[125px] shrink-0 items-center justify-center overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]">
               <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
 
-              <Car3DViewer
-                mode="preview"
-                heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
-              />
+              <div className="relative text-center">
+                <div className="text-5xl">🚗</div>
+                <p className="mt-3 text-sm font-semibold text-white">
+                  Postează rapid o cerere
+                </p>
+                <p className="mt-1 text-xs text-white/55">
+                  Selectează serviciul potrivit
+                </p>
+              </div>
             </section>
 
             <section className="relative z-10 mt-11 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
