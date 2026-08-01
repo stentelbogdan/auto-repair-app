@@ -425,38 +425,54 @@ function PostJobContent() {
                   const isExpanded = expandedServices.includes(serviceType);
 
                   const optionGroups = service.groups || [];
-                  const showServiceDetails =
-                    isExpanded && optionGroups.length > 0;
+
+                  const carPartGroups = optionGroups.filter(
+                    (group) => group.display === "car-parts",
+                  );
+
+                  const regularGroups = optionGroups.filter(
+                    (group) => group.display !== "car-parts",
+                  );
+
+                  const hasCarPartSelector = carPartGroups.length > 0;
 
                   return (
-                    <ServiceCard
-                      key={service.value}
-                      title={service.title}
-                      icon={service.icon}
-                      description={service.desc}
-                      isActive={isActive}
-                      isExpanded={isExpanded}
-                      onToggle={() => {
-                        setExpandedServices((currentServices) =>
-                          currentServices.includes(serviceType)
-                            ? currentServices.filter(
-                                (item) => item !== serviceType,
-                              )
-                            : [...currentServices, serviceType],
-                        );
-                      }}
-                      onRemove={() => removeSelectedService(serviceType)}
-                    >
-                      {showServiceDetails && (
-                        <div className="mt-3 overflow-visible rounded-[22px] border border-orange-200 bg-orange-50 py-4">
-                          {optionGroups.map((group, groupIndex) => (
-                            <div key={`${serviceType}-${group.title}`}>
-                              {groupIndex > 0 && (
-                                <div className="my-5 h-px bg-black/10" />
-                              )}
+                    <div key={service.value}>
+                      <ServiceCard
+                        title={service.title}
+                        icon={service.icon}
+                        description={service.desc}
+                        isActive={isActive}
+                        isExpanded={isExpanded}
+                        onToggle={() => {
+                          setExpandedServices((currentServices) =>
+                            currentServices.includes(serviceType)
+                              ? currentServices.filter(
+                                  (item) => item !== serviceType,
+                                )
+                              : [...currentServices, serviceType],
+                          );
+                        }}
+                        onRemove={() => removeSelectedService(serviceType)}
+                      />
 
-                              {group.display === "car-parts" ? (
-                                <>
+                      {hasCarPartSelector && (
+                        <div
+                          aria-hidden={!isExpanded}
+                          className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${
+                            isExpanded
+                              ? "mt-3 grid-rows-[1fr] opacity-100"
+                              : "pointer-events-none mt-0 grid-rows-[0fr] opacity-0"
+                          }`}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                            <div className="overflow-visible rounded-[22px] border border-orange-200 bg-orange-50 py-4">
+                              {carPartGroups.map((group, groupIndex) => (
+                                <div key={`${serviceType}-${group.title}`}>
+                                  {groupIndex > 0 && (
+                                    <div className="my-5 h-px bg-black/10" />
+                                  )}
+
                                   <div className="mb-4 px-4">
                                     <p className="text-base font-bold text-black">
                                       {group.title}
@@ -481,28 +497,51 @@ function PostJobContent() {
                                         cameraPositionOverride={[
                                           8.15, 1.9, 0.35,
                                         ]}
-                                        cameraTargetOverride={[0.35, 0.40, 0]}
+                                        cameraTargetOverride={[0.35, 0.4, 0]}
                                         cameraFovOverride={46}
                                         modelScaleOverride={1.3}
                                         modelPositionOverride={[0.35, -0.18, 0]}
                                       />
                                     </section>
                                   </div>
-                                </>
-                              ) : (
-                                <ServiceOptionGroup
-                                  title={group.title}
-                                  description={group.description}
-                                  options={group.options}
-                                  selectedValues={serviceDetails}
-                                  onToggle={toggleServiceDetail}
-                                />
-                              )}
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          </div>
                         </div>
                       )}
-                    </ServiceCard>
+
+                      {regularGroups.length > 0 && (
+                        <div
+                          aria-hidden={!isExpanded}
+                          className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${
+                            isExpanded
+                              ? "mt-3 grid-rows-[1fr] opacity-100"
+                              : "pointer-events-none mt-0 grid-rows-[0fr] opacity-0"
+                          }`}
+                        >
+                          <div className="min-h-0 overflow-hidden">
+                            <div className="overflow-visible rounded-[22px] border border-orange-200 bg-orange-50 py-4">
+                              {regularGroups.map((group, groupIndex) => (
+                                <div key={`${serviceType}-${group.title}`}>
+                                  {groupIndex > 0 && (
+                                    <div className="my-5 h-px bg-black/10" />
+                                  )}
+
+                                  <ServiceOptionGroup
+                                    title={group.title}
+                                    description={group.description}
+                                    options={group.options}
+                                    selectedValues={serviceDetails}
+                                    onToggle={toggleServiceDetail}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
