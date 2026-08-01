@@ -1,7 +1,10 @@
 "use client";
 
 import CarHeader from "@/app/components/CarHeader";
-import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
+import type {
+  RepairRequestRow,
+  StructuredServiceDetails,
+} from "@/lib/supabase/repair-requests";
 
 type RepairRequestCardProps = {
   request: RepairRequestRow;
@@ -32,6 +35,13 @@ export default function RepairRequestCard({
 }: RepairRequestCardProps) {
   const isOpen = request.status === "open" && !request.accepted_offer_id;
   const isWorkshop = variant === "workshop";
+
+  const structuredDetails = Array.isArray(request.service_details)
+    ? null
+    : (request.service_details as StructuredServiceDetails | undefined);
+
+  const selectedParts = structuredDetails?.carDamage.parts ?? [];
+  const selectedDamages = structuredDetails?.carDamage.damages ?? [];
 
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"
@@ -119,6 +129,74 @@ export default function RepairRequestCard({
           </p>
         </div>
 
+        {(selectedParts.length > 0 || selectedDamages.length > 0) && (
+          <div
+            className={
+              dark
+                ? "mt-3 rounded-2xl border border-white/10 bg-white/5 p-3"
+                : "mt-3 rounded-2xl border border-black/10 bg-black/[0.03] p-3"
+            }
+          >
+            {selectedParts.length > 0 && (
+              <div>
+                <p
+                  className={
+                    dark
+                      ? "text-xs font-semibold text-white/45"
+                      : "text-xs font-semibold text-black/45"
+                  }
+                >
+                  Elemente afectate
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedParts.map((part) => (
+                    <span
+                      key={part}
+                      className={
+                        dark
+                          ? "rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-xs font-semibold text-orange-300"
+                          : "rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700"
+                      }
+                    >
+                      {formatCarPartLabel(part)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedDamages.length > 0 && (
+              <div className={selectedParts.length > 0 ? "mt-3" : ""}>
+                <p
+                  className={
+                    dark
+                      ? "text-xs font-semibold text-white/45"
+                      : "text-xs font-semibold text-black/45"
+                  }
+                >
+                  Tip daună
+                </p>
+
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedDamages.map((damage) => (
+                    <span
+                      key={damage}
+                      className={
+                        dark
+                          ? "rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white/75"
+                          : "rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-semibold text-black/70"
+                      }
+                    >
+                      {formatDamageLabel(damage)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <button
           type="button"
           onClick={onAction || (isOpen ? onEdit : onView)}
@@ -160,4 +238,45 @@ function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
     default:
       return status || "-";
   }
+}
+
+function formatCarPartLabel(value: string) {
+  const labels: Record<string, string> = {
+    hood: "Capotă",
+    front_bumper: "Bară față",
+    rear_bumper: "Bară spate",
+    left_front_fender: "Aripă față stânga",
+    right_front_fender: "Aripă față dreapta",
+    left_rear_quarter: "Aripă spate stânga",
+    right_rear_quarter: "Aripă spate dreapta",
+    left_front_door: "Ușă față stânga",
+    right_front_door: "Ușă față dreapta",
+    left_rear_door: "Ușă spate stânga",
+    right_rear_door: "Ușă spate dreapta",
+    left_sill: "Prag stânga",
+    right_sill: "Prag dreapta",
+    windscreen: "Parbriz",
+    rear_window: "Lunetă",
+    panoramic_roof: "Plafon panoramic",
+    front_light_left: "Far față stânga",
+    front_light_right: "Far față dreapta",
+    rear_lights: "Stopuri spate",
+  };
+
+  return labels[value] ?? value.replaceAll("_", " ");
+}
+
+function formatDamageLabel(value: string) {
+  const labels: Record<string, string> = {
+    scratch: "Zgârietură",
+    dent: "Îndoitură",
+    cracked: "Crăpătură",
+    broken: "Element spart",
+    deformed: "Element deformat",
+    painting: "Necesită vopsire",
+    paint_damage: "Vopsea deteriorată",
+    paint_peeling: "Vopsea exfoliată",
+  };
+
+  return labels[value] ?? value.replaceAll("_", " ");
 }
