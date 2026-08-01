@@ -99,9 +99,16 @@ function PostJobContent() {
 
   const [expandedServices, setExpandedServices] = useState<DamageType[]>([]);
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
-  const [selectedCarParts, setSelectedCarParts] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedCarParts = useMemo(
+    () =>
+      serviceDetails
+        .filter((detail) => detail.startsWith("part:"))
+        .map((detail) => detail.slice("part:".length)),
+    [serviceDetails],
+  );
 
   const availableModels = carModelsByBrand[carBrand] || [];
 
@@ -145,6 +152,18 @@ function PostJobContent() {
     );
   };
 
+  const handleSelectedCarPartsChange = (partIds: string[]) => {
+    setServiceDetails((currentDetails) => {
+      const detailsWithoutCarParts = currentDetails.filter(
+        (detail) => !detail.startsWith("part:"),
+      );
+
+      const nextCarPartDetails = partIds.map((partId) => `part:${partId}`);
+
+      return [...detailsWithoutCarParts, ...nextCarPartDetails];
+    });
+  };
+
   const serviceHasSelection = (service: DamageType) => {
     if (service === "scratch") {
       return serviceDetails.some(
@@ -160,14 +179,19 @@ function PostJobContent() {
       currentServices.filter((item) => item !== service),
     );
 
-    setServiceDetails((currentDetails) =>
-      currentDetails.filter((detail) => {
-        if (service === "scratch") {
-          return !detail.startsWith("part:") && !detail.startsWith("damage:");
-        }
+    if (service === "scratch") {
+      setServiceDetails((currentDetails) =>
+        currentDetails.filter(
+          (detail) =>
+            !detail.startsWith("part:") && !detail.startsWith("damage:"),
+        ),
+      );
 
-        return !detail.startsWith(`${service}:`);
-      }),
+      return;
+    }
+
+    setServiceDetails((currentDetails) =>
+      currentDetails.filter((detail) => !detail.startsWith(`${service}:`)),
     );
   };
 
@@ -492,7 +516,7 @@ function PostJobContent() {
                                         heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
                                         selectedPartIds={selectedCarParts}
                                         onSelectedPartIdsChange={
-                                          setSelectedCarParts
+                                          handleSelectedCarPartsChange
                                         }
                                         cameraPositionOverride={[
                                           8.15, 1.9, 0.35,
