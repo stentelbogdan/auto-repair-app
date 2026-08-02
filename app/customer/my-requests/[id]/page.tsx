@@ -6,6 +6,10 @@ import { supabase } from "@/lib/supabase/client";
 import LicensePlate from "@/app/components/LicensePlate";
 import ImageGallery from "@/app/components/ImageGallery";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
+import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
+import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
+import { SERVICES } from "@/lib/data/services";
+import type { StructuredServiceDetails } from "@/lib/supabase/repair-requests";
 
 type RepairImage = {
   name?: string;
@@ -23,6 +27,7 @@ type RepairRequest = {
   city: string;
   license_plate: string | null;
   damage_type: string;
+  service_details: StructuredServiceDetails | null;
   description: string | null;
   images: RepairImage[] | null;
   status: string;
@@ -40,6 +45,7 @@ export default function EditMyRequestPage() {
   const [request, setRequest] = useState<RepairRequest | null>(null);
   const [description, setDescription] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
+  const [serviceDetails, setServiceDetails] = useState<string[]>([]);
   const [images, setImages] = useState<RepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,9 +53,51 @@ export default function EditMyRequestPage() {
   const [deleting, setDeleting] = useState(false);
   const [offersCount, setOffersCount] = useState(0);
 
+  const selectedCarParts = useMemo(
+    () =>
+      serviceDetails
+        .filter((detail) => detail.startsWith("part:"))
+        .map((detail) => detail.slice("part:".length)),
+    [serviceDetails],
+  );
+
+  const damageOptionGroups = useMemo(() => {
+    const repairService = SERVICES.find(
+      (service) => service.value === "scratch",
+    );
+
+    return (repairService?.groups || []).filter(
+      (group) => group.display !== "car-parts",
+    );
+  }, []);
+
   const canEdit = useMemo(() => {
     return !request?.accepted_offer_id && request?.status === "open";
   }, [request]);
+
+  const handleSelectedCarPartsChange = (partIds: string[]) => {
+    if (!canEdit) return;
+
+    setServiceDetails((currentDetails) => {
+      const detailsWithoutCarParts = currentDetails.filter(
+        (detail) => !detail.startsWith("part:"),
+      );
+
+      const nextCarParts = partIds.map((partId) => `part:${partId}`);
+
+      return [...detailsWithoutCarParts, ...nextCarParts];
+    });
+  };
+
+  const toggleServiceDetail = (detail: string) => {
+    if (!canEdit) return;
+
+    setServiceDetails((currentDetails) =>
+      currentDetails.includes(detail)
+        ? currentDetails.filter((item) => item !== detail)
+        : [...currentDetails, detail],
+    );
+  };
 
   useEffect(() => {
     const loadRequest = async () => {
@@ -64,7 +112,7 @@ export default function EditMyRequestPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status, accepted_offer_id",
+            "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, description, images, status, accepted_offer_id",
           )
           .eq("id", requestId)
           .eq("user_id", authData.user.id)
@@ -82,6 +130,20 @@ export default function EditMyRequestPage() {
         setDescription(data.description || "");
         setLicensePlate(data.license_plate || "");
         setImages(Array.isArray(data.images) ? data.images : []);
+
+        const structuredDetails = data.service_details;
+
+        if (structuredDetails) {
+          setServiceDetails([
+            ...structuredDetails.carDamage.parts.map((part) => `part:${part}`),
+            ...structuredDetails.carDamage.damages.map(
+              (damage) => `damage:${damage}`,
+            ),
+            ...structuredDetails.options,
+          ]);
+        } else {
+          setServiceDetails([]);
+        }
 
         const { count, error: offersCountError } = await supabase
           .from("repair_offers")
@@ -144,10 +206,34 @@ export default function EditMyRequestPage() {
       const uploadedImages = await uploadImages(request.user_id);
       const nextImages = [...images, ...uploadedImages];
 
+      const selectedDamageTypes = serviceDetails
+        .filter((detail) => detail.startsWith("damage:"))
+        .map((detail) => detail.slice("damage:".length));
+
+      const otherServiceOptions = serviceDetails.filter(
+        (detail) =>
+          !detail.startsWith("part:") && !detail.startsWith("damage:"),
+      );
+
+      const nextServiceDetails: StructuredServiceDetails = {
+        version: 1,
+        selectedServices: request.service_details?.selectedServices?.length
+          ? request.service_details.selectedServices
+          : [request.damage_type],
+
+        carDamage: {
+          parts: selectedCarParts,
+          damages: selectedDamageTypes,
+        },
+
+        options: otherServiceOptions,
+      };
+
       const { error } = await supabase
         .from("repair_requests")
         .update({
           license_plate: formatLicensePlateForDb(licensePlate),
+          service_details: nextServiceDetails,
           description,
           images: nextImages,
         })
@@ -158,6 +244,17 @@ export default function EditMyRequestPage() {
 
       setImages(nextImages);
       setNewFiles([]);
+
+      setRequest((currentRequest) =>
+        currentRequest
+          ? {
+              ...currentRequest,
+              service_details: nextServiceDetails,
+              description,
+              images: nextImages,
+            }
+          : currentRequest,
+      );
       alert("Modificările au fost salvate.");
     } catch (error) {
       console.error(error);
@@ -257,6 +354,46 @@ export default function EditMyRequestPage() {
         </p>
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
+          <div>
+            <p className="text-sm font-semibold text-black/60">
+              Elemente afectate
+            </p>
+
+            <p className="mt-1 text-xs text-black/45">
+              Modifică elementele avariate direct pe modelul 3D.
+            </p>
+
+            <div className="mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
+              <Car3DViewer
+                mode={canEdit ? "selection" : "preview"}
+                heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
+                selectedPartIds={selectedCarParts}
+                onSelectedPartIdsChange={handleSelectedCarPartsChange}
+                cameraPositionOverride={[8.15, 1.9, 0.35]}
+                cameraTargetOverride={[0.35, 0.4, 0]}
+                cameraFovOverride={46}
+                modelScaleOverride={1.3}
+                modelPositionOverride={[0.35, -0.18, 0]}
+              />
+            </div>
+          </div>
+
+          {damageOptionGroups.map((group) => (
+            <div
+              key={group.title}
+              className="mt-5 rounded-[22px] border border-orange-200 bg-orange-50 py-4"
+            >
+              <ServiceOptionGroup
+                title={group.title}
+                description={group.description}
+                options={group.options}
+                selectedValues={serviceDetails}
+                onToggle={toggleServiceDetail}
+              />
+            </div>
+          ))}
+
+          <div className="my-6 h-px bg-black/10" />
           <label className="text-sm font-semibold text-black/60">
             Descriere problemă
           </label>
