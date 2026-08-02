@@ -6,15 +6,19 @@ import type {
 export function isStructuredServiceDetails(
   serviceDetails: RepairServiceDetails | null | undefined,
 ): serviceDetails is StructuredServiceDetails {
+  if (!serviceDetails || Array.isArray(serviceDetails)) {
+    return false;
+  }
+
+  const { version, selectedServices, carDamage, options } = serviceDetails;
+
   return (
-    Boolean(serviceDetails) &&
-    !Array.isArray(serviceDetails) &&
-    serviceDetails.version === 1 &&
-    Array.isArray(serviceDetails.selectedServices) &&
-    Boolean(serviceDetails.carDamage) &&
-    Array.isArray(serviceDetails.carDamage.parts) &&
-    Array.isArray(serviceDetails.carDamage.damages) &&
-    Array.isArray(serviceDetails.options)
+    version === 1 &&
+    Array.isArray(selectedServices) &&
+    Boolean(carDamage) &&
+    Array.isArray(carDamage.parts) &&
+    Array.isArray(carDamage.damages) &&
+    Array.isArray(options)
   );
 }
 
