@@ -18,6 +18,11 @@ export default function MyRequestsPage() {
   const [offerCounts, setOfferCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<MyRequestsTab>("waiting");
+  const [debugUser, setDebugUser] = useState<{
+    id: string;
+    email: string | null;
+    requestCount: number;
+  } | null>(null);
 
   useEffect(() => {
     const savedTab = sessionStorage.getItem("my-requests-active-tab");
@@ -42,6 +47,13 @@ export default function MyRequestsPage() {
         }
 
         const data = await getOwnRepairRequests(authData.user.id);
+
+        setDebugUser({
+          id: authData.user.id,
+          email: authData.user.email ?? null,
+          requestCount: data.length,
+        });
+
         setRequests(data);
 
         const requestIds = data.map((request) => request.id);
@@ -104,6 +116,22 @@ export default function MyRequestsPage() {
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
+        {debugUser && (
+          <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-white">
+            <p>
+              <strong>Cont:</strong> {debugUser.email || "fără email"}
+            </p>
+
+            <p className="mt-1 break-all">
+              <strong>User ID:</strong> {debugUser.id}
+            </p>
+
+            <p className="mt-1">
+              <strong>Cereri returnate:</strong> {debugUser.requestCount}
+            </p>
+          </div>
+        )}
+
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
