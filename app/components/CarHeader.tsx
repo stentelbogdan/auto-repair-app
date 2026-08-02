@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import ImageGallery from "@/app/components/ImageGallery";
 import LicensePlate from "@/app/components/LicensePlate";
@@ -45,6 +48,13 @@ export default function CarHeader({
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
   const isLarge = variant === "listLarge";
+
+  const [showAllParts, setShowAllParts] = useState(false);
+  const [showAllDamages, setShowAllDamages] = useState(false);
+
+  const visibleParts = showAllParts ? affectedParts : affectedParts.slice(0, 3);
+
+  const visibleDamages = showAllDamages ? damageTypes : damageTypes.slice(0, 2);
 
   const imageClassName = isLarge ? "h-[150px] w-[150px]" : "h-20 w-20";
   const wrapperClassName = isLarge
@@ -144,7 +154,7 @@ export default function CarHeader({
                 </p>
 
                 <div className="mt-1.5 space-y-1">
-                  {affectedParts.slice(0, 3).map((part) => (
+                  {visibleParts.map((part) => (
                     <p
                       key={part}
                       className="text-xs font-semibold leading-snug text-black/70"
@@ -154,10 +164,23 @@ export default function CarHeader({
                   ))}
 
                   {affectedParts.length > 3 && (
-                    <p className="text-xs font-bold text-orange-600">
-                      +{affectedParts.length - 3}{" "}
-                      {affectedParts.length - 3 === 1 ? "element" : "elemente"}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setShowAllParts((current) => !current);
+                      }}
+                      className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                      aria-expanded={showAllParts}
+                    >
+                      {showAllParts
+                        ? "Arată mai puține"
+                        : `+${affectedParts.length - 3} ${
+                            affectedParts.length - 3 === 1
+                              ? "element"
+                              : "elemente"
+                          }`}
+                    </button>
                   )}
                 </div>
               </div>
@@ -170,7 +193,7 @@ export default function CarHeader({
                 </p>
 
                 <div className="mt-1.5 space-y-1">
-                  {damageTypes.slice(0, 2).map((damage) => (
+                  {visibleDamages.map((damage) => (
                     <p
                       key={damage}
                       className="text-xs font-semibold leading-snug text-black/70"
@@ -180,10 +203,21 @@ export default function CarHeader({
                   ))}
 
                   {damageTypes.length > 2 && (
-                    <p className="text-xs font-bold text-orange-600">
-                      +{damageTypes.length - 2}{" "}
-                      {damageTypes.length - 2 === 1 ? "tip" : "tipuri"}
-                    </p>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setShowAllDamages((current) => !current);
+                      }}
+                      className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                      aria-expanded={showAllDamages}
+                    >
+                      {showAllDamages
+                        ? "Arată mai puține"
+                        : `+${damageTypes.length - 2} ${
+                            damageTypes.length - 2 === 1 ? "tip" : "tipuri"
+                          }`}
+                    </button>
                   )}
                 </div>
               </div>
