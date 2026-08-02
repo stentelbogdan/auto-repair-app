@@ -90,7 +90,7 @@ export default function CarHeader({
             </div>
 
             {details.length > 0 && (
-              <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1.5">
+              <div className="mt-2 flex flex-col items-center gap-1.5">
                 {details.map((detail) => {
                   const Icon = detail.icon;
 
