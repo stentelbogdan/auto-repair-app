@@ -316,9 +316,6 @@ export default function WorkshopsPage() {
                   key={request.id}
                   className="w-full overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
-                  const selectedParts = request.serviceDetails?.carDamage?.parts
-                  ?? []; const selectedDamages =
-                  request.serviceDetails?.carDamage?.damages ?? [];
                   <CarHeader
                     images={request.images}
                     plate={request.licensePlate}
@@ -345,6 +342,7 @@ export default function WorkshopsPage() {
                       },
                     ]}
                   />
+
                   <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
                     <p className="mb-2 text-xs font-semibold text-black/45">
                       📝 Descriere
@@ -354,6 +352,7 @@ export default function WorkshopsPage() {
                       {request.description || "Nu există descriere."}
                     </p>
                   </div>
+
                   <button
                     type="button"
                     onClick={() => router.push(`/workshops/${request.id}`)}
