@@ -7,23 +7,33 @@ import {
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
+import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import RepairRequestCard from "@/app/components/RepairRequestCard";
 
 type MyRequestsTab = "waiting" | "with_offer" | "archive";
 
 export default function MyRequestsPage() {
+  /*
+   * Acest router rămâne numai pentru redirectul automat
+   * de autentificare.
+   */
   const router = useRouter();
 
+  /*
+   * Navigările pornite prin apăsarea utilizatorului trec
+   * prin hook-ul comun.
+   */
+  const { navigate, isNavigating } = useSafeNavigation({
+    timeoutMs: 2500,
+  });
+
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
-  const [offerCounts, setOfferCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<MyRequestsTab>("waiting");
-  const [debugUser, setDebugUser] = useState<{
-    id: string;
-    email: string | null;
-    requestCount: number;
-  } | null>(null);
 
+  /*
+   * Restaurăm tabul ales anterior de utilizator.
+   */
   useEffect(() => {
     const savedTab = sessionStorage.getItem("my-requests-active-tab");
 
@@ -36,65 +46,85 @@ export default function MyRequestsPage() {
     }
   }, []);
 
+  /*
+   * Încărcăm cererile utilizatorului.
+   *
+   * Variabila cancelled împiedică actualizarea state-ului
+   * după ce utilizatorul a părăsit pagina.
+   */
   useEffect(() => {
+    let cancelled = false;
+
     const loadRequests = async () => {
       try {
-        const { data: authData } = await supabase.auth.getUser();
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (authError) {
+          throw authError;
+        }
 
         if (!authData.user) {
-          router.push("/login");
+          /*
+           * Redirect automat de autentificare.
+           * Nu trece prin useSafeNavigation.
+           */
+          router.replace("/login");
           return;
         }
 
         const data = await getOwnRepairRequests(authData.user.id);
 
-        setDebugUser({
-          id: authData.user.id,
-          email: authData.user.email ?? null,
-          requestCount: data.length,
-        });
+        if (cancelled) {
+          return;
+        }
 
         setRequests(data);
-
-        const requestIds = data.map((request) => request.id);
-
-        if (requestIds.length > 0) {
-          const { data: offersData } = await supabase
-            .from("repair_offers")
-            .select("request_id")
-            .in("request_id", requestIds);
-
-          const counts: Record<string, number> = {};
-
-          offersData?.forEach((offer) => {
-            counts[offer.request_id] = (counts[offer.request_id] || 0) + 1;
-          });
-
-          setOfferCounts(counts);
-        }
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
         console.error("Failed to load requests:", error);
-        alert("Nu am putut încărca daunele tale.");
+        window.alert("Nu am putut încărca daunele tale.");
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    loadRequests();
+    void loadRequests();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
+  /*
+   * getOwnRepairRequests() calculează deja offers_count.
+   * Nu mai executăm încă o interogare separată în această pagină.
+   */
   const waitingRequests = requests.filter((request) => {
-    const count = offerCounts[request.id] || 0;
+    const offersCount = request.offers_count ?? 0;
 
     return (
-      request.status === "open" && !request.accepted_offer_id && count === 0
+      request.status === "open" &&
+      !request.accepted_offer_id &&
+      offersCount === 0
     );
   });
 
   const withOfferRequests = requests.filter((request) => {
-    const count = offerCounts[request.id] || 0;
+    const offersCount = request.offers_count ?? 0;
 
-    return request.status === "open" && !request.accepted_offer_id && count > 0;
+    return (
+      request.status === "open" && !request.accepted_offer_id && offersCount > 0
+    );
   });
 
   const archiveRequests = requests.filter((request) => {
@@ -113,36 +143,40 @@ export default function MyRequestsPage() {
     sessionStorage.setItem("my-requests-active-tab", tab);
   };
 
+  const goToPostChoice = () => {
+    navigate("/post-choice");
+  };
+
+  const goToRequest = (requestId: string) => {
+    navigate(`/customer/my-requests/${requestId}`);
+  };
+
+  const handleViewRequest = (requestId: string) => {
+    if (activeTab === "with_offer") {
+      navigate("/offers");
+      return;
+    }
+
+    navigate(`/customer/my-requests/${requestId}`);
+  };
+
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
-        {debugUser && (
-          <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-white">
-            <p>
-              <strong>Cont:</strong> {debugUser.email || "fără email"}
-            </p>
-
-            <p className="mt-1 break-all">
-              <strong>User ID:</strong> {debugUser.id}
-            </p>
-
-            <p className="mt-1">
-              <strong>Cereri returnate:</strong> {debugUser.requestCount}
-            </p>
-          </div>
-        )}
-
         <div className="mb-5 flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
               Client
             </p>
+
             <h1 className="mt-1 text-2xl font-bold">Cererile mele</h1>
           </div>
 
           <button
-            onClick={() => router.push("/post-choice")}
-            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black"
+            type="button"
+            onClick={goToPostChoice}
+            disabled={isNavigating}
+            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             + Postează
           </button>
@@ -150,6 +184,7 @@ export default function MyRequestsPage() {
 
         <div className="mb-5 flex gap-2 overflow-x-auto">
           <button
+            type="button"
             onClick={() => changeTab("waiting")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "waiting"
@@ -161,6 +196,7 @@ export default function MyRequestsPage() {
           </button>
 
           <button
+            type="button"
             onClick={() => changeTab("with_offer")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "with_offer"
@@ -172,6 +208,7 @@ export default function MyRequestsPage() {
           </button>
 
           <button
+            type="button"
             onClick={() => changeTab("archive")}
             className={`rounded-full px-4 py-2 text-sm font-bold ${
               activeTab === "archive"
@@ -202,8 +239,10 @@ export default function MyRequestsPage() {
             </p>
 
             <button
-              onClick={() => router.push("/post-choice")}
-              className="mt-5 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white"
+              type="button"
+              onClick={goToPostChoice}
+              disabled={isNavigating}
+              className="mt-5 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               Postează daună
             </button>
@@ -214,17 +253,8 @@ export default function MyRequestsPage() {
               <RepairRequestCard
                 key={request.id}
                 request={request}
-                onEdit={() =>
-                  router.push(`/customer/my-requests/${request.id}`)
-                }
-                onView={() => {
-                  if (activeTab === "with_offer") {
-                    router.push("/offers");
-                    return;
-                  }
-
-                  router.push(`/customer/my-requests/${request.id}`);
-                }}
+                onEdit={() => goToRequest(request.id)}
+                onView={() => handleViewRequest(request.id)}
               />
             ))}
           </div>
