@@ -10,6 +10,7 @@ import {
 } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
+import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 
 type WorkshopRequest = {
   id: string;
@@ -20,11 +21,14 @@ type WorkshopRequest = {
   licensePlate: string | null;
   damageType: string;
   description: string;
+  serviceDetails: RepairRequestRow["service_details"];
+
   images: {
     name: string;
     url?: string;
     dataUrl?: string;
   }[];
+
   status: string;
   postedAt: string;
 };
@@ -183,6 +187,7 @@ export default function WorkshopsPage() {
           licensePlate: req.license_plate,
           damageType: req.damage_type || "other",
           description: req.description || "No description provided.",
+          serviceDetails: req.service_details,
           images: Array.isArray(req.images) ? req.images : [],
           status: req.status || "open",
           postedAt: formatPostedAt(req.created_at),
@@ -298,11 +303,22 @@ export default function WorkshopsPage() {
               const isAcceptata = request.status === "matched";
               const service = getServiceMeta(request.damageType);
 
+              const affectedPartLabels = getAffectedPartLabels(
+                request.serviceDetails,
+              );
+
+              const damageTypeLabels = getDamageTypeLabels(
+                request.serviceDetails,
+              );
+
               return (
                 <div
                   key={request.id}
                   className="w-full overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
+                  const selectedParts = request.serviceDetails?.carDamage?.parts
+                  ?? []; const selectedDamages =
+                  request.serviceDetails?.carDamage?.damages ?? [];
                   <CarHeader
                     images={request.images}
                     plate={request.licensePlate}
@@ -312,6 +328,8 @@ export default function WorkshopsPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    affectedParts={affectedPartLabels}
+                    damageTypes={damageTypeLabels}
                     details={[
                       {
                         text: isAcceptata ? "Acceptată" : "Deschisă",
@@ -327,7 +345,6 @@ export default function WorkshopsPage() {
                       },
                     ]}
                   />
-
                   <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
                     <p className="mb-2 text-xs font-semibold text-black/45">
                       📝 Descriere
@@ -337,7 +354,6 @@ export default function WorkshopsPage() {
                       {request.description || "Nu există descriere."}
                     </p>
                   </div>
-
                   <button
                     type="button"
                     onClick={() => router.push(`/workshops/${request.id}`)}

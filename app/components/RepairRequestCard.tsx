@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  getAffectedPartLabels,
+  getDamageTypeLabels,
+} from "@/lib/car-damage";
 import CarHeader from "@/app/components/CarHeader";
 import type {
   RepairRequestRow,
@@ -36,14 +40,8 @@ export default function RepairRequestCard({
   const isOpen = request.status === "open" && !request.accepted_offer_id;
   const isWorkshop = variant === "workshop";
 
-  const structuredDetails = Array.isArray(request.service_details)
-    ? null
-    : (request.service_details as StructuredServiceDetails | undefined);
-
-  const selectedParts = structuredDetails?.carDamage.parts ?? [];
-  const selectedDamages = structuredDetails?.carDamage.damages ?? [];
-  const affectedPartLabels = selectedParts.map(formatCarPartLabel);
-  const damageTypeLabels = selectedDamages.map(formatDamageLabel);
+  const affectedPartLabels = getAffectedPartLabels(request.service_details);
+const damageTypeLabels = getDamageTypeLabels(request.service_details);
 
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"
@@ -174,45 +172,4 @@ function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
     default:
       return status || "-";
   }
-}
-
-function formatCarPartLabel(value: string) {
-  const labels: Record<string, string> = {
-    hood: "Capotă",
-    front_bumper: "Bară față",
-    rear_bumper: "Bară spate",
-    left_front_fender: "Aripă față stânga",
-    right_front_fender: "Aripă față dreapta",
-    left_rear_quarter: "Aripă spate stânga",
-    right_rear_quarter: "Aripă spate dreapta",
-    left_front_door: "Ușă față stânga",
-    right_front_door: "Ușă față dreapta",
-    left_rear_door: "Ușă spate stânga",
-    right_rear_door: "Ușă spate dreapta",
-    left_sill: "Prag stânga",
-    right_sill: "Prag dreapta",
-    windscreen: "Parbriz",
-    rear_window: "Lunetă",
-    panoramic_roof: "Plafon panoramic",
-    front_light_left: "Far față stânga",
-    front_light_right: "Far față dreapta",
-    rear_lights: "Stopuri spate",
-  };
-
-  return labels[value] ?? value.replaceAll("_", " ");
-}
-
-function formatDamageLabel(value: string) {
-  const labels: Record<string, string> = {
-    scratch: "Zgârietură",
-    dent: "Îndoitură",
-    cracked: "Crăpătură",
-    broken: "Element spart",
-    deformed: "Element deformat",
-    painting: "Necesită vopsire",
-    paint_damage: "Vopsea deteriorată",
-    paint_peeling: "Vopsea exfoliată",
-  };
-
-  return labels[value] ?? value.replaceAll("_", " ");
 }

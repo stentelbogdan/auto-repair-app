@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
+import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 
 type RepairImage = {
   name?: string;
@@ -26,6 +28,7 @@ type RepairRequestRow = {
   city: string;
   license_plate: string | null;
   damage_type: string;
+  service_details: RepairServiceDetails | null;
   description: string | null;
   images: RepairImage[];
   status: string;
@@ -100,7 +103,7 @@ export default function WorkshopRequestDetailsPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status",
+            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, description, images, status",
           )
           .eq("id", id)
           .single<RepairRequestRow>();
@@ -202,6 +205,10 @@ export default function WorkshopRequestDetailsPage() {
 
   const isClosed = request.status === "completed";
 
+  const affectedPartLabels = getAffectedPartLabels(request.service_details);
+
+  const damageTypeLabels = getDamageTypeLabels(request.service_details);
+
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
       <div className="mx-auto max-w-md">
@@ -236,6 +243,8 @@ export default function WorkshopRequestDetailsPage() {
             year={request.car_year}
             city={request.city}
             variant="listLarge"
+            affectedParts={affectedPartLabels}
+            damageTypes={damageTypeLabels}
             details={[
               {
                 text: isClosed ? "Închisă" : "Deschisă",
