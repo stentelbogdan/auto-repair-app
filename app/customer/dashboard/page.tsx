@@ -151,7 +151,7 @@ function CustomerDashboardContent() {
   }
 
   return (
-    <main className="relative h-[calc(100svh-236px)] overflow-hidden bg-black px-4 pb-4 pt-3 text-white">
+    <main className="relative min-h-[calc(100svh-236px)] overflow-x-hidden bg-black px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-3 text-white">
       {(showAppointmentToast || showSuccessToast) && (
         <div className="pointer-events-none absolute left-4 right-4 top-3 z-50 mx-auto max-w-md md:max-w-5xl">
           {showAppointmentToast && (
@@ -180,7 +180,7 @@ function CustomerDashboardContent() {
         </div>
       )}
 
-      <div className="mx-auto flex h-full max-w-md flex-col md:max-w-5xl">
+      <div className="mx-auto flex min-h-full max-w-md flex-col md:max-w-5xl">
         <section className="shrink-0 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
             PANOU CLIENT
