@@ -84,8 +84,49 @@ export default function CarHeader({
         </div>
 
         {platePosition === "bottom" && (
-          <div className="mt-2 flex justify-center pr-0">
-            <LicensePlate plate={plate} className="scale-90" />
+          <div className="mt-2">
+            <div className="flex justify-center">
+              <LicensePlate plate={plate} className="scale-90" />
+            </div>
+
+            {details.length > 0 && (
+              <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1.5">
+                {details.map((detail) => {
+                  const Icon = detail.icon;
+
+                  return (
+                    <div
+                      key={detail.text}
+                      className="flex items-center justify-center gap-1.5 rounded-full bg-black/[0.04] px-2.5 py-1"
+                    >
+                      {detail.showDot !== false && !Icon && (
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${getDotColor(
+                            detail.color,
+                          )}`}
+                        />
+                      )}
+
+                      {Icon && (
+                        <Icon
+                          size={14}
+                          strokeWidth={2.4}
+                          className={getIconColor(detail.color)}
+                        />
+                      )}
+
+                      <span
+                        className={`text-xs font-bold ${getTextColor(
+                          detail.color,
+                        )}`}
+                      >
+                        {detail.text}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -109,7 +150,7 @@ export default function CarHeader({
           {year || "-"} • {city || "-"}
         </p>
 
-        {details.length > 0 && (
+        {platePosition === "top" && details.length > 0 && (
           <div className="mt-4 space-y-2">
             {details.map((detail) => {
               const Icon = detail.icon;
