@@ -27,6 +27,22 @@ function CustomerDashboardContent() {
   const [isWorkshop, setIsWorkshop] = useState<boolean | null>(null);
   const [receivedOffersCount, setReceivedOffersCount] = useState(0);
   const [appointmentsCount, setAppointmentsCount] = useState(0);
+  const [is3DReady, setIs3DReady] = useState(false);
+
+  useEffect(() => {
+    if (isWorkshop !== false) {
+      setIs3DReady(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIs3DReady(true);
+    }, 600);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isWorkshop]);
 
   useEffect(() => {
     if (!showAppointmentToast) return;
@@ -40,54 +56,60 @@ function CustomerDashboardContent() {
 
   useEffect(() => {
     const loadRole = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (!session) {
-        router.replace("/login");
-        return;
+        if (!session) {
+          router.replace("/login");
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single<ProfileRow>();
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+        const savedRole = localStorage.getItem("activeRole");
+
+        if (savedRole === "workshop" && roles.includes("workshop")) {
+          router.replace("/workshops/dashboard");
+          return;
+        }
+
+        const userId = session.user.id;
+
+        const { count: offersCount } = await supabase
+          .from("repair_offers")
+          .select("*, repair_requests!inner(user_id)", {
+            count: "exact",
+            head: true,
+          })
+          .eq("repair_requests.user_id", userId)
+          .eq("status", "pending");
+
+        const { count: jobsCount } = await supabase
+          .from("repair_requests")
+          .select("*", {
+            count: "exact",
+            head: true,
+          })
+          .eq("user_id", userId)
+          .in("status", ["matched", "in_progress"]);
+
+        setReceivedOffersCount(offersCount || 0);
+        setAppointmentsCount(jobsCount || 0);
+
+        setIsWorkshop(savedRole === "workshop" && roles.includes("workshop"));
+      } catch (error) {
+        console.error("Failed to load customer dashboard:", error);
+
+        setIsWorkshop(false);
       }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single<ProfileRow>();
-
-      const roles = Array.isArray(profile?.role) ? profile.role : [];
-
-      const savedRole = localStorage.getItem("activeRole");
-
-      if (savedRole === "workshop" && roles.includes("workshop")) {
-        router.replace("/workshops/dashboard");
-        return;
-      }
-
-      const userId = session.user.id;
-
-      const { count: offersCount } = await supabase
-        .from("repair_offers")
-        .select("*, repair_requests!inner(user_id)", {
-          count: "exact",
-          head: true,
-        })
-        .eq("repair_requests.user_id", userId)
-        .eq("status", "pending");
-
-      const { count: jobsCount } = await supabase
-        .from("repair_requests")
-        .select("*", {
-          count: "exact",
-          head: true,
-        })
-        .eq("user_id", userId)
-        .in("status", ["matched", "in_progress"]);
-
-      setReceivedOffersCount(offersCount || 0);
-      setAppointmentsCount(jobsCount || 0);
-
-      setIsWorkshop(savedRole === "workshop" && roles.includes("workshop"));
     };
 
     loadRole();
@@ -170,10 +192,14 @@ function CustomerDashboardContent() {
             <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
               <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
 
-              <Car3DViewer
-                mode="preview"
-                heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
-              />
+              {is3DReady ? (
+                <Car3DViewer
+                  mode="preview"
+                  heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
+                />
+              ) : (
+                <div className="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]" />
+              )}
             </section>
 
             <section className="relative z-10 mt-11 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">

@@ -255,9 +255,10 @@ export default function Car3DViewer({
             far: 100,
           }}
           gl={{
-            antialias: true,
+            antialias: false,
             alpha: true,
-            powerPreference: "high-performance",
+            powerPreference: "default",
+            preserveDrawingBuffer: false,
           }}
           onCreated={({ gl }) => {
             gl.toneMappingExposure = 1.18;
