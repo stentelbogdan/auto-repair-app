@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  getAffectedPartLabels,
-  getDamageTypeLabels,
-} from "@/lib/car-damage";
+import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import CarHeader from "@/app/components/CarHeader";
-import type {
-  RepairRequestRow,
-  StructuredServiceDetails,
-} from "@/lib/supabase/repair-requests";
+import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 
 type RepairRequestCardProps = {
   request: RepairRequestRow;
@@ -41,7 +35,8 @@ export default function RepairRequestCard({
   const isWorkshop = variant === "workshop";
 
   const affectedPartLabels = getAffectedPartLabels(request.service_details);
-const damageTypeLabels = getDamageTypeLabels(request.service_details);
+
+  const damageTypeLabels = getDamageTypeLabels(request.service_details);
 
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"

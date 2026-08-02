@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import {
   MessageCircle,
   Wrench,
@@ -18,6 +19,10 @@ type Role = "customer" | "workshop";
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
+
+  const { navigate, replace, runLocked, isNavigating } = useSafeNavigation({
+    timeoutMs: 2500,
+  });
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   useEffect(() => {
@@ -600,14 +605,18 @@ export default function AppNavbar() {
     window.location.href = "/login";
   };
 
-  const getFreshRoles = async () => {
+  const getFreshRoles = async (): Promise<string[] | null> => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
     if (!user) {
+      /*
+       * Redirect automat de autentificare.
+       * Rămâne separat de navigările provocate de utilizator.
+       */
       router.push("/login");
-      return [];
+      return null;
     }
 
     const { data: profile } = await supabase
@@ -617,46 +626,68 @@ export default function AppNavbar() {
       .single();
 
     const freshRoles = Array.isArray(profile?.role) ? profile.role : [];
+
     setUserRoles(freshRoles);
 
     return freshRoles;
   };
 
-  const goClient = async () => {
-    const freshRoles = await getFreshRoles();
+  const goClient = () => {
+    void runLocked(async ({ navigate }) => {
+      const freshRoles = await getFreshRoles();
 
-    if (!freshRoles.includes("customer")) {
-      router.push("/account?role=customer");
-      return;
-    }
+      /*
+       * Utilizatorul nu mai este autentificat.
+       * getFreshRoles a pornit deja redirectul automat.
+       */
+      if (freshRoles === null) {
+        return;
+      }
 
-    localStorage.setItem("activeRole", "customer");
-    setActiveRole("customer");
-    router.push("/customer/dashboard");
+      if (!freshRoles.includes("customer")) {
+        navigate("/account?role=customer");
+        return;
+      }
+
+      localStorage.setItem("activeRole", "customer");
+      setActiveRole("customer");
+
+      navigate("/customer/dashboard");
+    });
   };
 
-  const goWorkshop = async () => {
-    const freshRoles = await getFreshRoles();
+  const goWorkshop = () => {
+    void runLocked(async ({ navigate }) => {
+      const freshRoles = await getFreshRoles();
 
-    if (!freshRoles.includes("workshop")) {
-      router.push("/account?role=workshop");
-      return;
-    }
+      /*
+       * Redirectul automat către login este deja pornit.
+       */
+      if (freshRoles === null) {
+        return;
+      }
 
-    localStorage.setItem("activeRole", "workshop");
-    setActiveRole("workshop");
-    router.push("/workshops/dashboard");
+      if (!freshRoles.includes("workshop")) {
+        navigate("/account?role=workshop");
+        return;
+      }
+
+      localStorage.setItem("activeRole", "workshop");
+      setActiveRole("workshop");
+
+      navigate("/workshops/dashboard");
+    });
   };
 
   const goMessages = () => {
     if (isWorkshopMode) {
       localStorage.setItem("activeRole", "workshop");
-      window.location.href = "/workshops/messages";
+      navigate("/workshops/messages");
       return;
     }
 
     localStorage.setItem("activeRole", "customer");
-    window.location.href = "/customer/messages";
+    navigate("/customer/messages");
   };
 
   return (
@@ -684,7 +715,8 @@ export default function AppNavbar() {
               <button
                 type="button"
                 onClick={goClient}
-                className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition ${
+                disabled={isNavigating}
+                className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   isClientMode
                     ? "bg-white text-black shadow"
                     : "text-white/45 hover:text-white"
@@ -696,7 +728,8 @@ export default function AppNavbar() {
               <button
                 type="button"
                 onClick={goWorkshop}
-                className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition ${
+                disabled={isNavigating}
+                className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   isWorkshopMode
                     ? "bg-orange-400 text-black shadow"
                     : "text-white/45 hover:text-white"
@@ -840,8 +873,9 @@ export default function AppNavbar() {
             {isAdmin && (
               <button
                 type="button"
-                onClick={() => router.push("/admin")}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-orange-400/40 text-orange-300 transition hover:bg-orange-400/10"
+                onClick={() => navigate("/admin")}
+                disabled={isNavigating}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-orange-400/40 text-orange-300 transition hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label="Admin Dashboard"
                 title="Admin Dashboard"
               >
@@ -854,14 +888,15 @@ export default function AppNavbar() {
               onClick={() => {
                 if (isWorkshopMode) {
                   localStorage.setItem("activeRole", "workshop");
-                  router.push("/account?role=workshop");
+                  navigate("/account?role=workshop");
                   return;
                 }
 
                 localStorage.setItem("activeRole", "customer");
-                router.push("/account?role=customer");
+                navigate("/account?role=customer");
               }}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              disabled={isNavigating}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10 disabled:opacity-40"
               aria-label="Setări"
             >
               <Settings size={17} strokeWidth={2.25} />
