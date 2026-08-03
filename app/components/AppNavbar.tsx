@@ -12,7 +12,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
-import { useGLTF } from "@react-three/drei";
 
 type Role = "customer" | "workshop";
 
@@ -20,14 +19,11 @@ export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const { navigate, replace, runLocked, isNavigating } = useSafeNavigation({
+  const { navigate, runLocked, isNavigating } = useSafeNavigation({
     timeoutMs: 2500,
   });
 
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  useEffect(() => {
-    useGLTF.preload("/models/autorepair-car.glb");
-  }, []);
+  const [, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -690,6 +686,88 @@ export default function AppNavbar() {
     navigate("/customer/messages");
   };
 
+  const goOffers = () => {
+    void runLocked(async ({ navigate }) => {
+      if (userId && appointmentProposalUnreadCount > 0) {
+        const { error } = await supabase
+          .from("notifications")
+          .update({
+            read_at: new Date().toISOString(),
+          })
+          .eq("recipient_id", userId)
+          .is("read_at", null)
+          .in("type", [
+            "customer_proposed_appointment",
+            "workshop_proposed_appointment",
+          ]);
+
+        if (error) {
+          console.error(
+            "Failed to mark appointment notifications as read:",
+            error,
+          );
+        } else {
+          setAppointmentProposalUnreadCount(0);
+        }
+      }
+
+      if (isWorkshopMode) {
+        localStorage.setItem("activeRole", "workshop");
+        navigate("/workshops/my-offers");
+        return;
+      }
+
+      localStorage.setItem("activeRole", "customer");
+      navigate("/offers");
+    });
+  };
+
+  const goJobs = () => {
+    void runLocked(async ({ navigate }) => {
+      if (userId && appointmentConfirmedUnreadCount > 0) {
+        const { error } = await supabase
+          .from("notifications")
+          .update({
+            read_at: new Date().toISOString(),
+          })
+          .eq("recipient_id", userId)
+          .is("read_at", null)
+          .in("type", [
+            "customer_confirmed_appointment",
+            "workshop_confirmed_appointment",
+          ]);
+
+        if (error) {
+          console.error(
+            "Failed to mark confirmed appointments as read:",
+            error,
+          );
+        } else {
+          setAppointmentConfirmedUnreadCount(0);
+        }
+      }
+
+      if (isWorkshopMode) {
+        localStorage.setItem("activeRole", "workshop");
+        navigate("/workshops/won-jobs?tab=appointments");
+        return;
+      }
+
+      localStorage.setItem("activeRole", "customer");
+      navigate("/customer/my-jobs");
+    });
+  };
+
+  const openAppointmentToast = () => {
+    const targetUrl = appointmentToast?.targetUrl;
+
+    setAppointmentToast(null);
+
+    if (targetUrl) {
+      navigate(targetUrl);
+    }
+  };
+
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 py-3">
@@ -744,7 +822,8 @@ export default function AppNavbar() {
             <button
               type="button"
               onClick={goMessages}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              disabled={isNavigating}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Mesaje"
             >
               <MessageCircle size={17} strokeWidth={2.25} />
@@ -757,40 +836,9 @@ export default function AppNavbar() {
 
             <button
               type="button"
-              onClick={async () => {
-                if (userId && appointmentProposalUnreadCount > 0) {
-                  const { error } = await supabase
-                    .from("notifications")
-                    .update({
-                      read_at: new Date().toISOString(),
-                    })
-                    .eq("recipient_id", userId)
-                    .is("read_at", null)
-                    .in("type", [
-                      "customer_proposed_appointment",
-                      "workshop_proposed_appointment",
-                    ]);
-
-                  if (error) {
-                    console.error(
-                      "Failed to mark appointment notifications as read:",
-                      error,
-                    );
-                  } else {
-                    setAppointmentProposalUnreadCount(0);
-                  }
-                }
-
-                if (isWorkshopMode) {
-                  localStorage.setItem("activeRole", "workshop");
-                  router.push("/workshops/my-offers");
-                  return;
-                }
-
-                localStorage.setItem("activeRole", "customer");
-                router.push("/offers");
-              }}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              onClick={goOffers}
+              disabled={isNavigating}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label={isWorkshopMode ? "Ofertele tale" : "Oferte primite"}
             >
               <BadgeEuro size={18} strokeWidth={2.25} />
@@ -812,38 +860,14 @@ export default function AppNavbar() {
 
             <button
               type="button"
-              onClick={async () => {
-                if (userId && appointmentConfirmedUnreadCount > 0) {
-                  const { error } = await supabase
-                    .from("notifications")
-                    .update({
-                      read_at: new Date().toISOString(),
-                    })
-                    .eq("recipient_id", userId)
-                    .is("read_at", null)
-                    .in("type", [
-                      "customer_confirmed_appointment",
-                      "workshop_confirmed_appointment",
-                    ]);
-
-                  if (error) {
-                    console.error(
-                      "Failed to mark confirmed appointments as read:",
-                      error,
-                    );
-                  } else {
-                    setAppointmentConfirmedUnreadCount(0);
-                  }
-                }
-
-                if (isWorkshopMode) {
-                  router.push("/workshops/won-jobs?tab=appointments");
-                  return;
-                }
-
-                router.push("/customer/my-jobs");
-              }}
-              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10"
+              onClick={goJobs}
+              disabled={isNavigating}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label={
+                isWorkshopMode
+                  ? "Lucrări câștigate și programări"
+                  : "Lucrările și programările mele"
+              }
             >
               <Wrench size={17} strokeWidth={2.25} />
 
@@ -929,16 +953,9 @@ export default function AppNavbar() {
       {appointmentToast && (
         <button
           type="button"
-          onClick={() => {
-            const targetUrl = appointmentToast.targetUrl;
-
-            setAppointmentToast(null);
-
-            if (targetUrl) {
-              router.push(targetUrl);
-            }
-          }}
-          className="fixed left-1/2 top-24 z-[999] w-[92%] max-w-sm -translate-x-1/2 rounded-3xl border border-orange-500/25 bg-black/95 px-4 py-3 text-left text-white shadow-2xl backdrop-blur-xl"
+          onClick={openAppointmentToast}
+          disabled={isNavigating}
+          className="fixed left-1/2 top-24 z-[999] w-[92%] max-w-sm -translate-x-1/2 rounded-3xl border border-orange-500/25 bg-black/95 px-4 py-3 text-left text-white shadow-2xl backdrop-blur-xl disabled:cursor-not-allowed disabled:opacity-60"
         >
           <p className="text-sm font-bold text-orange-300">
             📅 {appointmentToast.title}
