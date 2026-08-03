@@ -161,7 +161,7 @@ export default function MyRequestsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
+    <main className="min-h-[calc(100svh-236px)] bg-[#111111] px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-5 text-white">
       <div className="mx-auto max-w-5xl">
         <div className="mb-5 flex items-center justify-between">
           <div>
@@ -186,7 +186,8 @@ export default function MyRequestsPage() {
           <button
             type="button"
             onClick={() => changeTab("waiting")}
-            className={`rounded-full px-4 py-2 text-sm font-bold ${
+            disabled={isNavigating}
+            className={`rounded-full px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
               activeTab === "waiting"
                 ? "bg-orange-500 text-black"
                 : "bg-white/10 text-white"
@@ -198,7 +199,8 @@ export default function MyRequestsPage() {
           <button
             type="button"
             onClick={() => changeTab("with_offer")}
-            className={`rounded-full px-4 py-2 text-sm font-bold ${
+            disabled={isNavigating}
+            className={`rounded-full px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
               activeTab === "with_offer"
                 ? "bg-orange-500 text-black"
                 : "bg-white/10 text-white"
@@ -210,7 +212,8 @@ export default function MyRequestsPage() {
           <button
             type="button"
             onClick={() => changeTab("archive")}
-            className={`rounded-full px-4 py-2 text-sm font-bold ${
+            disabled={isNavigating}
+            className={`rounded-full px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
               activeTab === "archive"
                 ? "bg-orange-500 text-black"
                 : "bg-white/10 text-white"
