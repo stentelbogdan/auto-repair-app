@@ -192,14 +192,9 @@ function CustomerDashboardContent() {
             <section className="relative mt-2 shrink-0 overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
               <div className="pointer-events-none absolute inset-x-[12%] top-[18%] h-[55%] rounded-full bg-white/[0.045] blur-3xl" />
 
-              {is3DReady ? (
-                <Car3DViewer
-                  mode="preview"
-                  heightClassName="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]"
-                />
-              ) : (
-                <div className="h-[125px] [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]" />
-              )}
+              <div className="flex h-[125px] items-center justify-center [@media(min-height:700px)]:h-[clamp(200px,27svh,280px)]">
+                <p className="text-sm text-white/40">AutoRepair Marketplace</p>
+              </div>
             </section>
 
             <section className="relative z-10 mt-11 grid shrink-0 grid-cols-2 gap-3 md:mx-auto md:w-full md:max-w-3xl md:gap-6">
