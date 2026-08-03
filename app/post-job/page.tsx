@@ -500,7 +500,7 @@ function PostJobContent() {
                         onRemove={() => removeSelectedService(serviceType)}
                       />
 
-                      {hasCarPartSelector && (
+                      {hasCarPartSelector && isExpanded && (
                         <div
                           aria-hidden={!isExpanded}
                           className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-out ${
