@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Suspense, useCallback, useRef, useState } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { ContactShadows, Environment, OrbitControls } from "@react-three/drei";
 import { PerspectiveCamera } from "three";
 import type { Mesh } from "three";
@@ -31,27 +31,6 @@ type PreviewCameraIntroProps = {
   controlsRef: React.RefObject<OrbitControlsImpl | null>;
   onComplete: () => void;
 };
-
-function WebGLCleanup() {
-  const { gl } = useThree();
-
-  useEffect(() => {
-    return () => {
-      /*
-       * Eliberăm imediat resursele rendererului când Canvas-ul
-       * este demontat la schimbarea paginii.
-       *
-       * Este important mai ales pe iOS, unde mai multe contexte
-       * WebGL create rapid pot rămâne temporar în memorie.
-       */
-      gl.renderLists.dispose();
-      gl.dispose();
-      gl.forceContextLoss();
-    };
-  }, [gl]);
-
-  return null;
-}
 
 function PreviewCameraIntro({
   active,
@@ -285,8 +264,6 @@ export default function Car3DViewer({
             gl.toneMappingExposure = 1.18;
           }}
         >
-          <WebGLCleanup />
-
           <ambientLight intensity={0.22} />
 
           <hemisphereLight args={["#e8edf5", "#111318", 0.38]} />
