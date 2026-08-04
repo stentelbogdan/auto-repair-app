@@ -5,48 +5,42 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import LicensePlate from "@/app/components/LicensePlate";
 import ImageGallery from "@/app/components/ImageGallery";
-import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
 import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import { SERVICES } from "@/lib/data/services";
 import type { StructuredServiceDetails } from "@/lib/supabase/repair-requests";
-
-type RepairImage = {
-  name?: string;
-  url?: string;
-  thumbUrl?: string;
-  dataUrl?: string;
-};
-
-type RepairRequest = {
-  id: string;
-  user_id: string;
-  car_brand: string;
-  car_model: string;
-  car_year: string;
-  city: string;
-  license_plate: string | null;
-  damage_type: string;
-  service_details: StructuredServiceDetails | null;
-  description: string | null;
-  images: RepairImage[] | null;
-  status: string;
-  accepted_offer_id: string | null;
-};
+import {
+  deleteEditableRepairRequest,
+  getEditableRepairRequest,
+  updateEditableRepairRequest,
+  uploadEditableRepairImages,
+  type EditableRepairImage,
+  type EditableRepairRequest,
+} from "@/lib/supabase/edit-repair-request";
+import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 
 export default function EditMyRequestPage() {
+  /*
+   * Routerul rămâne numai pentru redirecturile automate:
+   * autentificare și cerere inexistentă.
+   */
   const router = useRouter();
+
   const params = useParams();
   const searchParams = useSearchParams();
+
+  const { navigate, isNavigating } = useSafeNavigation({
+    timeoutMs: 2500,
+  });
 
   const from = searchParams.get("from") || "open";
   const requestId = params.id as string;
 
-  const [request, setRequest] = useState<RepairRequest | null>(null);
+  const [request, setRequest] = useState<EditableRepairRequest | null>(null);
   const [description, setDescription] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
-  const [images, setImages] = useState<RepairImage[]>([]);
+  const [images, setImages] = useState<EditableRepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -100,101 +94,103 @@ export default function EditMyRequestPage() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadRequest = async () => {
       try {
-        const { data: authData } = await supabase.auth.getUser();
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (authError) {
+          throw authError;
+        }
 
         if (!authData.user) {
-          router.push("/login");
+          /*
+           * Redirect automat de autentificare.
+           * Nu trece prin useSafeNavigation.
+           */
+          router.replace("/login");
           return;
         }
 
-        const { data, error } = await supabase
-          .from("repair_requests")
-          .select(
-            "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, description, images, status, accepted_offer_id",
-          )
-          .eq("id", requestId)
-          .eq("user_id", authData.user.id)
-          .maybeSingle<RepairRequest>();
+        const result = await getEditableRepairRequest(
+          requestId,
+          authData.user.id,
+        );
 
-        if (error) throw error;
-
-        if (!data) {
-          alert("Cererea nu a fost găsită.");
-          router.push("/customer/my-requests");
+        if (cancelled) {
           return;
         }
 
-        setRequest(data);
-        setDescription(data.description || "");
-        setLicensePlate(data.license_plate || "");
-        setImages(Array.isArray(data.images) ? data.images : []);
+        if (!result) {
+          window.alert("Cererea nu a fost găsită.");
 
-        const structuredDetails = data.service_details;
+          /*
+           * Redirect automat după un rezultat invalid.
+           */
+          router.replace("/customer/my-requests");
+          return;
+        }
 
-        if (structuredDetails) {
-          setServiceDetails([
-            ...structuredDetails.carDamage.parts.map((part) => `part:${part}`),
-            ...structuredDetails.carDamage.damages.map(
-              (damage) => `damage:${damage}`,
-            ),
-            ...structuredDetails.options,
-          ]);
-        } else {
+        const loadedRequest = result.request;
+
+        setRequest(loadedRequest);
+        setOffersCount(result.offersCount);
+
+        setDescription(loadedRequest.description || "");
+        setLicensePlate(loadedRequest.license_plate || "");
+
+        setImages(
+          Array.isArray(loadedRequest.images) ? loadedRequest.images : [],
+        );
+
+        const structuredDetails = loadedRequest.service_details;
+
+        if (!structuredDetails) {
           setServiceDetails([]);
+          return;
         }
 
-        const { count, error: offersCountError } = await supabase
-          .from("repair_offers")
-          .select("id", { count: "exact", head: true })
-          .eq("request_id", requestId);
+        setServiceDetails([
+          ...structuredDetails.carDamage.parts.map((part) => `part:${part}`),
 
-        if (offersCountError) throw offersCountError;
+          ...structuredDetails.carDamage.damages.map(
+            (damage) => `damage:${damage}`,
+          ),
 
-        setOffersCount(count ?? 0);
+          ...structuredDetails.options,
+        ]);
       } catch (error) {
-        console.error(error);
-        alert("Nu am putut încărca cererea.");
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Failed to load editable request:", error);
+        window.alert("Nu am putut încărca cererea.");
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
-    if (requestId) loadRequest();
+    if (requestId) {
+      void loadRequest();
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, [requestId, router]);
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     setNewFiles(Array.from(e.target.files));
-  };
-
-  const uploadImages = async (userId: string) => {
-    const uploaded: RepairImage[] = [];
-
-    for (const file of newFiles) {
-      const fileExt = file.name.split(".").pop() || "jpg";
-      const fileName = `${userId}/${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2)}.${fileExt}`;
-
-      const { error } = await supabase.storage
-        .from("repair-images")
-        .upload(fileName, file);
-
-      if (error) throw error;
-
-      const { data } = supabase.storage
-        .from("repair-images")
-        .getPublicUrl(fileName);
-
-      uploaded.push({
-        name: file.name,
-        url: data.publicUrl,
-      });
-    }
-
-    return uploaded;
   };
 
   const handleSave = async () => {
@@ -203,7 +199,10 @@ export default function EditMyRequestPage() {
     try {
       setSaving(true);
 
-      const uploadedImages = await uploadImages(request.user_id);
+      const uploadedImages = await uploadEditableRepairImages(
+        newFiles,
+        request.user_id,
+      );
       const nextImages = [...images, ...uploadedImages];
 
       const selectedDamageTypes = serviceDetails
@@ -229,18 +228,14 @@ export default function EditMyRequestPage() {
         options: otherServiceOptions,
       };
 
-      const { error } = await supabase
-        .from("repair_requests")
-        .update({
-          license_plate: formatLicensePlateForDb(licensePlate),
-          service_details: nextServiceDetails,
-          description,
-          images: nextImages,
-        })
-        .eq("id", request.id)
-        .eq("user_id", request.user_id);
-
-      if (error) throw error;
+      await updateEditableRepairRequest({
+        requestId: request.id,
+        userId: request.user_id,
+        licensePlate,
+        serviceDetails: nextServiceDetails,
+        description,
+        images: nextImages,
+      });
 
       setImages(nextImages);
       setNewFiles([]);
@@ -280,28 +275,13 @@ export default function EditMyRequestPage() {
     try {
       setDeleting(true);
 
-      if (hasOffers) {
-        const { error } = await supabase
-          .from("repair_requests")
-          .update({ status: "closed" })
-          .eq("id", request.id)
-          .eq("user_id", request.user_id)
-          .eq("status", "open");
+      await deleteEditableRepairRequest({
+        requestId: request.id,
+        userId: request.user_id,
+        hasOffers,
+      });
 
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("repair_requests")
-          .delete()
-          .eq("id", request.id)
-          .eq("user_id", request.user_id)
-          .eq("status", "open");
-
-        if (error) throw error;
-      }
-
-      router.refresh();
-      router.push("/customer/my-requests");
+      navigate("/customer/my-requests");
     } catch (error) {
       console.error(error);
       alert(
@@ -333,8 +313,10 @@ export default function EditMyRequestPage() {
     <main className="min-h-screen bg-black px-4 pb-40 pt-6 text-white">
       <div className="mx-auto max-w-md">
         <button
-          onClick={() => router.push(`/customer/my-requests?tab=${from}`)}
-          className="mb-6 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80"
+          type="button"
+          onClick={() => navigate(`/customer/my-requests?tab=${from}`)}
+          disabled={isNavigating}
+          className="mb-6 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 transition disabled:cursor-not-allowed disabled:opacity-50"
         >
           ← Înapoi la daunele mele
         </button>
