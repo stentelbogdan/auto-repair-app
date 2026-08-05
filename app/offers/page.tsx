@@ -10,6 +10,7 @@ import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import { markNotificationsAsRead } from "@/lib/notifications";
+import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 
 type RepairRequest = {
   id: string;
@@ -83,7 +84,18 @@ type ProfileRow = {
 };
 
 export default function OffersPage() {
+  /*
+   * Routerul rămâne doar pentru redirecturile automate:
+   * login și acces pe rolul greșit.
+   */
   const router = useRouter();
+
+  /*
+   * Navigările provocate de utilizator trec prin hook-ul comun.
+   */
+  const { navigate, runLocked, isNavigating } = useSafeNavigation({
+    timeoutMs: 2500,
+  });
 
   const [items, setItems] = useState<OfferWithRequest[]>([]);
   const [authorized, setAuthorized] = useState(false);
@@ -111,51 +123,90 @@ export default function OffersPage() {
   }, []);
 
   useEffect(() => {
-  if (!authorized) return;
+    if (!authorized) {
+      return;
+    }
 
-  markNotificationsAsRead({
-    recipientRole: "customer",
-    types: [
-      "workshop_proposed_appointment",
-      "offer_received",
-      "appointment_confirmed",
-    ],
-  });
-}, [authorized]);
+    void markNotificationsAsRead({
+      recipientRole: "customer",
+      types: [
+        "workshop_proposed_appointment",
+        "offer_received",
+        "appointment_confirmed",
+      ],
+    });
+  }, [authorized]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const checkUserAndLoad = async () => {
       try {
-        const { data: authData } = await supabase.auth.getUser();
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
 
-        if (!authData.user) {
-          router.push("/login");
+        if (cancelled) {
           return;
         }
 
-        const { data: profile } = await supabase
+        if (authError) {
+          throw authError;
+        }
+
+        if (!authData.user) {
+          /*
+           * Redirect automat de autentificare.
+           */
+          router.replace("/login");
+          return;
+        }
+
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
           .eq("id", authData.user.id)
           .single<ProfileRow>();
 
+        if (cancelled) {
+          return;
+        }
+
+        if (profileError) {
+          throw profileError;
+        }
+
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 
         if (!roles.includes("customer")) {
-          router.push("/workshops/my-offers");
+          /*
+           * Redirect automat după verificarea rolului.
+           */
+          router.replace("/workshops/my-offers");
           return;
         }
 
         setAuthorized(true);
+
         await loadData(authData.user.id);
-      } catch {
-        router.push("/login");
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Failed to check offers access:", error);
+        router.replace("/login");
       } finally {
-        setCheckingAccess(false);
+        if (!cancelled) {
+          setCheckingAccess(false);
+        }
       }
     };
 
-    checkUserAndLoad();
+    void checkUserAndLoad();
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   const loadData = async (userId?: string) => {
@@ -444,86 +495,100 @@ export default function OffersPage() {
     }
   };
 
-  const handleConfirmAppointment = async (offerId: string) => {
-    if (acceptingOfferId) return;
-
-    try {
-      setAcceptingOfferId(offerId);
-
-      const selectedItem = items.find((item) => item.offer.id === offerId);
-
-      if (!selectedItem) {
-        throw new Error("Oferta nu a fost găsită în lista curentă.");
-      }
-
-      const { offer, request, appointment } = selectedItem;
-
-      if (!appointment?.id) {
-        throw new Error(
-          "Programarea asociată acestei oferte nu a fost găsită.",
-        );
-      }
-
-      if (
-        appointment.status !== "workshop_proposed" &&
-        appointment.status !== "requested"
-      ) {
-        throw new Error(
-          "Această programare nu mai poate fi confirmată de client.",
-        );
-      }
-
-      const confirmedDate =
-        appointment.proposedDate ||
-        appointment.appointmentDate ||
-        offer.availableDate;
-
-      const confirmedTime =
-        appointment.proposedTime ||
-        appointment.appointmentTime ||
-        offer.availableTime;
-
-      if (!confirmedDate || !confirmedTime) {
-        throw new Error("Programarea nu are o dată și o oră valide.");
-      }
-
-      const { error: appointmentError } = await supabase
-        .from("repair_appointments")
-        .update({
-          status: "confirmed",
-          appointment_date: confirmedDate,
-          appointment_time: confirmedTime,
-          proposed_date: null,
-          proposed_time: null,
-        })
-        .eq("id", appointment.id)
-        .eq("offer_id", offer.id);
-
-      if (appointmentError) {
-        throw appointmentError;
-      }
-
-      await acceptRepairOffer({
-        offerId: offer.id,
-        requestId: request.id,
-      });
-
-      window.dispatchEvent(new Event("appointments-updated"));
-      window.dispatchEvent(new Event("offers-read-updated"));
-
-      router.push("/customer/dashboard");
-    } catch (error) {
-      console.error("Failed to confirm appointment:", error);
-
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Nu am putut confirma programarea.";
-
-      alert(message);
-    } finally {
-      setAcceptingOfferId(null);
+  const openWorkshopProfile = (workshopSlug: string | null) => {
+    if (!workshopSlug) {
+      window.alert("Profilul service-ului nu este disponibil.");
+      return;
     }
+
+    navigate(`/workshops/profile/${workshopSlug}`);
+  };
+
+  const handleConfirmAppointment = (offerId: string) => {
+    if (acceptingOfferId || isNavigating) {
+      return;
+    }
+
+    void runLocked(async ({ navigate }) => {
+      try {
+        setAcceptingOfferId(offerId);
+
+        const selectedItem = items.find((item) => item.offer.id === offerId);
+
+        if (!selectedItem) {
+          throw new Error("Oferta nu a fost găsită în lista curentă.");
+        }
+
+        const { offer, request, appointment } = selectedItem;
+
+        if (!appointment?.id) {
+          throw new Error(
+            "Programarea asociată acestei oferte nu a fost găsită.",
+          );
+        }
+
+        if (
+          appointment.status !== "workshop_proposed" &&
+          appointment.status !== "requested"
+        ) {
+          throw new Error(
+            "Această programare nu mai poate fi confirmată de client.",
+          );
+        }
+
+        const confirmedDate =
+          appointment.proposedDate ||
+          appointment.appointmentDate ||
+          offer.availableDate;
+
+        const confirmedTime =
+          appointment.proposedTime ||
+          appointment.appointmentTime ||
+          offer.availableTime;
+
+        if (!confirmedDate || !confirmedTime) {
+          throw new Error("Programarea nu are o dată și o oră valide.");
+        }
+
+        const { error: appointmentError } = await supabase
+          .from("repair_appointments")
+          .update({
+            status: "confirmed",
+            appointment_date: confirmedDate,
+            appointment_time: confirmedTime,
+            proposed_date: null,
+            proposed_time: null,
+          })
+          .eq("id", appointment.id)
+          .eq("offer_id", offer.id);
+
+        if (appointmentError) {
+          throw appointmentError;
+        }
+
+        await acceptRepairOffer({
+          offerId: offer.id,
+          requestId: request.id,
+        });
+
+        window.dispatchEvent(new Event("appointments-updated"));
+
+        window.dispatchEvent(new Event("offers-read-updated"));
+
+        navigate("/customer/dashboard");
+      } catch (error) {
+        console.error("Failed to confirm appointment:", error);
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Nu am putut confirma programarea.";
+
+        window.alert(message);
+      } finally {
+        setAcceptingOfferId(null);
+      }
+    });
   };
 
   const formatDamageType = (value?: string) => {
@@ -660,14 +725,7 @@ export default function OffersPage() {
                     workshopName={offer.workshopName}
                     workshopLogoUrl={offer.workshopLogoUrl}
                     workshopSlug={offer.workshopSlug}
-                    onClick={() => {
-                      if (!offer.workshopSlug) {
-                        alert("Profilul service-ului nu este disponibil.");
-                        return;
-                      }
-
-                      router.push(`/workshops/profile/${offer.workshopSlug}`);
-                    }}
+                    onClick={() => openWorkshopProfile(offer.workshopSlug)}
                   />
 
                   <OfferSummaryCard
@@ -699,16 +757,16 @@ export default function OffersPage() {
                   <AppointmentActions
                     showConfirm={!isCustomerProposed}
                     confirming={acceptingOfferId === offer.id}
-                    confirmDisabled={acceptingOfferId === offer.id}
+                    confirmDisabled={acceptingOfferId !== null || isNavigating}
                     onConfirm={() => handleConfirmAppointment(offer.id)}
-                    onChat={() => {
-                      router.push(`/chat/${request.id}?offerId=${offer.id}`);
-                    }}
-                    onChangeDate={() => {
-                      router.push(
+                    onChat={() =>
+                      navigate(`/chat/${request.id}?offerId=${offer.id}`)
+                    }
+                    onChangeDate={() =>
+                      navigate(
                         `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=customer`,
-                      );
-                    }}
+                      )
+                    }
                   />
                 </div>
               );
