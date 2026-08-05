@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
@@ -12,6 +11,7 @@ import { markNotificationsAsRead } from "@/lib/notifications";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import type { CustomerOfferItem } from "@/lib/services/offers/customer-offers.types";
 import { loadCustomerOffers } from "@/lib/services/offers/customer-offers.service";
+import { confirmCustomerAppointment } from "@/lib/services/offers/customer-appointments.service";
 
 type ProfileRow = {
   role: string[] | null;
@@ -177,59 +177,14 @@ export default function OffersPage() {
           throw new Error("Oferta nu a fost găsită în lista curentă.");
         }
 
-        const { offer, request, appointment } = selectedItem;
-
-        if (!appointment?.id) {
-          throw new Error(
-            "Programarea asociată acestei oferte nu a fost găsită.",
-          );
-        }
-
-        if (
-          appointment.status !== "workshop_proposed" &&
-          appointment.status !== "requested"
-        ) {
-          throw new Error(
-            "Această programare nu mai poate fi confirmată de client.",
-          );
-        }
-
-        const confirmedDate =
-          appointment.proposedDate ||
-          appointment.appointmentDate ||
-          offer.availableDate;
-
-        const confirmedTime =
-          appointment.proposedTime ||
-          appointment.appointmentTime ||
-          offer.availableTime;
-
-        if (!confirmedDate || !confirmedTime) {
-          throw new Error("Programarea nu are o dată și o oră valide.");
-        }
-
-        const { error: appointmentError } = await supabase
-          .from("repair_appointments")
-          .update({
-            status: "confirmed",
-            appointment_date: confirmedDate,
-            appointment_time: confirmedTime,
-            proposed_date: null,
-            proposed_time: null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", appointment.id)
-          .eq("offer_id", offer.id);
-
-        if (appointmentError) {
-          throw appointmentError;
-        }
-
-        await acceptRepairOffer({
-          offerId: offer.id,
-          requestId: request.id,
+        await confirmCustomerAppointment({
+          item: selectedItem,
         });
 
+        /*
+         * Aceste evenimente țin de UI și rămân în pagină.
+         * Serviciul nu trebuie să depindă de window sau Next.js.
+         */
         window.dispatchEvent(new Event("appointments-updated"));
 
         window.dispatchEvent(new Event("offers-read-updated"));
