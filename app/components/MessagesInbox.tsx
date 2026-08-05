@@ -63,10 +63,14 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
       const userId = authData.user.id;
 
+      /*
+       * Chatul trebuie să fie disponibil atât în perioada negocierii,
+       * cât și după acceptarea ofertei.
+       */
       let offersQuery = supabase
         .from("repair_offers")
         .select("*")
-        .eq("status", "accepted");
+        .in("status", ["pending", "accepted"]);
 
       if (role === "workshop") {
         offersQuery = offersQuery.eq("workshop_user_id", userId);
@@ -267,7 +271,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
             </div>
             <h2 className="text-2xl font-bold">Nu ai conversații încă</h2>
             <p className="mt-2 text-white/55">
-              Când apare o lucrare acceptată, conversația va apărea aici.
+              Conversațiile din oferte și lucrările acceptate vor apărea aici.
             </p>
           </div>
         ) : (

@@ -78,140 +78,213 @@ export default function WorkshopMyOffersPage() {
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
-    let isMounted = true;
 
-    async function loadPage() {
+    let cancelled = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+    const loadWorkshopOffers = async (workshopUserId: string) => {
+      const { data, error } = await supabase
+        .from("repair_offers")
+        .select(
+          `
+          id,
+          request_id,
+          workshop_user_id,
+          workshop_name,
+          price,
+          days,
+          message,
+          status,
+          created_at,
+          available_date,
+          available_time,
+          repair_requests (
+            id,
+            car_brand,
+            car_model,
+            car_year,
+            city,
+            license_plate,
+            damage_type,
+            description,
+            status,
+            accepted_offer_id,
+            images
+          ),
+          repair_appointments (
+            id,
+            offer_id,
+            request_id,
+            appointment_date,
+            appointment_time,
+            proposed_date,
+            proposed_time,
+            status
+          )
+        `,
+        )
+        .eq("workshop_user_id", workshopUserId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      const mapped: RepairOffer[] = (data ?? []).map((row: any) => ({
+        id: String(row.id),
+        request_id: String(row.request_id),
+        workshop_user_id: String(row.workshop_user_id),
+        workshop_name: row.workshop_name || "",
+        price: row.price ?? "",
+        days: row.days ?? "",
+        message: row.message || "",
+        status: row.status || "pending",
+        created_at: String(row.created_at),
+        available_date: row.available_date ?? null,
+        available_time: row.available_time ?? null,
+
+        repair_requests: row.repair_requests
+          ? {
+              id: String(row.repair_requests.id),
+              car_brand: row.repair_requests.car_brand ?? null,
+              car_model: row.repair_requests.car_model ?? null,
+              car_year: row.repair_requests.car_year ?? null,
+              city: row.repair_requests.city ?? null,
+              license_plate: row.repair_requests.license_plate ?? null,
+              damage_type: row.repair_requests.damage_type ?? null,
+              description: row.repair_requests.description ?? null,
+              status: row.repair_requests.status ?? null,
+              accepted_offer_id: row.repair_requests.accepted_offer_id ?? null,
+              images: Array.isArray(row.repair_requests.images)
+                ? row.repair_requests.images
+                : [],
+            }
+          : null,
+
+        repair_appointments: Array.isArray(row.repair_appointments)
+          ? row.repair_appointments.map((appointment: any) => ({
+              id: String(appointment.id),
+              offer_id: String(appointment.offer_id),
+              request_id: String(appointment.request_id),
+              appointment_date: appointment.appointment_date ?? null,
+              appointment_time: appointment.appointment_time ?? null,
+              proposed_date: appointment.proposed_date ?? null,
+              proposed_time: appointment.proposed_time ?? null,
+              status: appointment.status ?? null,
+            }))
+          : [],
+      }));
+
+      setOffers(mapped);
+    };
+
+    const loadPage = async () => {
       try {
-        const { data: authData } = await supabase.auth.getUser();
+        const { data: authData, error: authError } =
+          await supabase.auth.getUser();
 
-        if (!authData.user) {
-          router.push("/login");
+        if (cancelled) {
           return;
         }
 
-        const { data: profile } = await supabase
+        if (authError) {
+          throw authError;
+        }
+
+        if (!authData.user) {
+          router.replace("/login");
+          return;
+        }
+
+        const workshopUserId = authData.user.id;
+
+        const { data: profile, error: profileError } = await supabase
           .from("profiles")
           .select("role")
-          .eq("id", authData.user.id)
+          .eq("id", workshopUserId)
           .single<ProfileRow>();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (profileError) {
+          throw profileError;
+        }
 
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 
         if (!roles.includes("workshop")) {
-          router.push("/");
+          router.replace("/");
           return;
         }
 
-        if (!isMounted) return;
         setAuthorized(true);
 
-        const { data, error } = await supabase
-          .from("repair_offers")
-          .select(
-            `
-  id,
-  request_id,
-  workshop_user_id,
-  workshop_name,
-  price,
-  days,
-  message,
-  status,
-  created_at,
-  available_date,
-available_time,
-  repair_requests (
-    id,
-    car_brand,
-    car_model,
-    car_year,
-    city,
-    license_plate,
-    damage_type,
-    description,
-    status,
-    accepted_offer_id,
-    images
-  ),
-  repair_appointments (
-  id,
-  offer_id,
-  request_id,
-  appointment_date,
-  appointment_time,
-  proposed_date,
-  proposed_time,
-  status
-)
-`,
+        await loadWorkshopOffers(workshopUserId);
+
+        if (cancelled) {
+          return;
+        }
+
+        /*
+         * Ascultăm modificările ofertelor acestui service.
+         * Când clientul acceptă, statusul ofertei se schimbă.
+         */
+        realtimeChannel = supabase
+          .channel(`workshop-my-offers-${workshopUserId}`)
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "repair_offers",
+              filter: `workshop_user_id=eq.${workshopUserId}`,
+            },
+            () => {
+              void loadWorkshopOffers(workshopUserId);
+            },
           )
-          .eq("workshop_user_id", authData.user.id)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-
-        if (!isMounted) return;
-
-        const mapped: RepairOffer[] = (data ?? []).map((row: any) => ({
-          id: String(row.id),
-          request_id: String(row.request_id),
-          workshop_user_id: String(row.workshop_user_id),
-          workshop_name: row.workshop_name || "",
-          price: row.price ?? "",
-          days: row.days ?? "",
-          message: row.message || "",
-          status: row.status || "pending",
-          created_at: String(row.created_at),
-          available_date: row.available_date ?? null,
-          available_time: row.available_time ?? null,
-          repair_requests: row.repair_requests
-            ? {
-                id: String(row.repair_requests.id),
-                car_brand: row.repair_requests.car_brand ?? null,
-                car_model: row.repair_requests.car_model ?? null,
-                car_year: row.repair_requests.car_year ?? null,
-                city: row.repair_requests.city ?? null,
-                license_plate: row.repair_requests.license_plate ?? null,
-                damage_type: row.repair_requests.damage_type ?? null,
-                description: row.repair_requests.description ?? null,
-                status: row.repair_requests.status ?? null,
-                accepted_offer_id:
-                  row.repair_requests.accepted_offer_id ?? null,
-                images: Array.isArray(row.repair_requests.images)
-                  ? row.repair_requests.images
-                  : [],
-              }
-            : null,
-          repair_appointments: Array.isArray(row.repair_appointments)
-            ? row.repair_appointments.map((appointment: any) => ({
-                id: String(appointment.id),
-                offer_id: String(appointment.offer_id),
-                request_id: String(appointment.request_id),
-                appointment_date: appointment.appointment_date ?? null,
-                appointment_time: appointment.appointment_time ?? null,
-                proposed_date: appointment.proposed_date ?? null,
-                proposed_time: appointment.proposed_time ?? null,
-                status: appointment.status ?? null,
-              }))
-            : [],
-        }));
-
-        setOffers(mapped);
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "repair_appointments",
+              filter: `workshop_id=eq.${workshopUserId}`,
+            },
+            () => {
+              void loadWorkshopOffers(workshopUserId);
+            },
+          )
+          .subscribe();
       } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
         console.error("Failed to load workshop offers:", error);
         setOffers([]);
       } finally {
-        if (isMounted) {
+        if (!cancelled) {
           setLoading(false);
           setCheckingAccess(false);
         }
       }
-    }
+    };
 
-    loadPage();
+    void loadPage();
 
     return () => {
-      isMounted = false;
+      cancelled = true;
+
+      if (realtimeChannel) {
+        void supabase.removeChannel(realtimeChannel);
+      }
     };
   }, [router]);
 
