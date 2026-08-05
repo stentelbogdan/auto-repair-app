@@ -11,59 +11,12 @@ import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
-
-type RepairRequest = {
-  id: string;
-  licensePlate?: string | null;
-  carBrand: string;
-  carModel: string;
-  carYear: string;
-  city: string;
-  damageType: string;
-  description: string;
-  images: {
-    name: string;
-    url?: string;
-    dataUrl?: string;
-  }[];
-  status?: string;
-  acceptedOfferId?: string | null;
-};
-
-type RepairOffer = {
-  id: string;
-  requestId: string;
-  workshopUserId: string;
-  workshopSlug: string | null;
-  price: string;
-  days: string;
-  message: string;
-  workshopName: string;
-  createdAt: string;
-  status?: string;
-  workshopLogoUrl: string | null;
-  availableDate: string | null;
-  availableTime: string | null;
-};
-
-type AppointmentStatus =
-  | "workshop_proposed"
-  | "customer_proposed"
-  | "requested"
-  | "confirmed"
-  | "declined"
-  | "cancelled";
-
-type RepairAppointment = {
-  id: string;
-  requestId: string;
-  offerId: string | null;
-  status: AppointmentStatus | null;
-  appointmentDate: string | null;
-  appointmentTime: string | null;
-  proposedDate: string | null;
-  proposedTime: string | null;
-};
+import type {
+  CustomerAppointmentStatus,
+  CustomerOfferItem,
+  CustomerOfferRepairRequest,
+  CustomerRepairAppointment,
+} from "@/lib/services/offers/customer-offers.types";
 
 type WorkshopRating = {
   average: number;
@@ -71,12 +24,6 @@ type WorkshopRating = {
   lastReview?: string;
   completedJobs?: number;
   specialties?: string[];
-};
-
-type OfferWithRequest = {
-  offer: RepairOffer;
-  request: RepairRequest;
-  appointment: RepairAppointment | null;
 };
 
 type ProfileRow = {
@@ -97,7 +44,7 @@ export default function OffersPage() {
     timeoutMs: 2500,
   });
 
-  const [items, setItems] = useState<OfferWithRequest[]>([]);
+  const [items, setItems] = useState<CustomerOfferItem[]>([]);
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
@@ -254,7 +201,7 @@ export default function OffersPage() {
 
       const offerIds = (offerRows || []).map((offer) => offer.id);
 
-      let appointmentMap = new Map<string, RepairAppointment>();
+      let appointmentMap = new Map<string, CustomerRepairAppointment>();
 
       if (offerIds.length > 0) {
         const { data: appointmentRows, error: appointmentError } =
@@ -280,7 +227,7 @@ export default function OffersPage() {
             appointmentError,
           );
         } else {
-          appointmentMap = new Map<string, RepairAppointment>();
+          appointmentMap = new Map<string, CustomerRepairAppointment>();
 
           (appointmentRows || []).forEach((appointment) => {
             if (!appointment.offer_id) return;
@@ -290,7 +237,7 @@ export default function OffersPage() {
               requestId: appointment.request_id,
               offerId: appointment.offer_id,
               status: appointment.status
-                ? (appointment.status as AppointmentStatus)
+                ? (appointment.status as CustomerAppointmentStatus)
                 : null,
               appointmentDate: appointment.appointment_date || null,
               appointmentTime: appointment.appointment_time || null,
@@ -435,7 +382,7 @@ export default function OffersPage() {
         );
       }
 
-      const requestMap = new Map<string, RepairRequest>();
+      const requestMap = new Map<string, CustomerOfferRepairRequest>();
 
       activeRequests.forEach((request) => {
         requestMap.set(request.id, {
@@ -453,7 +400,7 @@ export default function OffersPage() {
         });
       });
 
-      const merged: OfferWithRequest[] = [];
+      const merged: CustomerOfferItem[] = [];
 
       (offerRows || []).forEach((offer) => {
         const matchingRequest = requestMap.get(offer.request_id);
