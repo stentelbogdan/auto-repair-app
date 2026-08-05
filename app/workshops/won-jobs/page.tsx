@@ -8,6 +8,7 @@ import CarHeader from "@/app/components/CarHeader";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
 import { markNotificationsAsRead } from "@/lib/notifications";
+import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -127,7 +128,7 @@ export default function WorkshopWonJobsPage() {
         }
 
         setAuthorized(true);
-        
+
         await markNotificationsAsRead({
           recipientRole: "workshop",
           types: ["customer_confirmed_appointment"],
@@ -352,7 +353,17 @@ export default function WorkshopWonJobsPage() {
         };
       });
 
-      setJobs(mapped);
+      mapped.sort((a, b) => {
+        const aDate = a.appointment?.updated_at ?? a.createdAt;
+
+        const bDate = b.appointment?.updated_at ?? b.createdAt;
+
+        return new Date(bDate).getTime() - new Date(aDate).getTime();
+      });
+
+      const sortedJobs = sortJobsByLatestActivity(mapped);
+
+      setJobs(sortedJobs);
     } catch (error) {
       console.error("Failed to load won jobs:", error);
       setJobs([]);

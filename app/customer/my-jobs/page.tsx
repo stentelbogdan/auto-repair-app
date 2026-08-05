@@ -17,6 +17,7 @@ import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import { interactiveButton } from "@/lib/ui";
 import { markNotificationsAsRead } from "@/lib/notifications";
+import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
 
 type RepairAppointment = {
   id: string;
@@ -303,26 +304,16 @@ export default function MyJobsPage() {
     }
   });
 
-  const jobsWithAppointments = jobs
-    .map((job) => {
+  const jobsWithAppointments = sortJobsByLatestActivity(
+    jobs.map((job) => {
       const appointment = latestAppointmentByRequestId.get(job.request.id);
 
       return {
         ...job,
         appointment,
       };
-    })
-    .sort((a, b) => {
-      const aTime = a.appointment?.updated_at
-        ? new Date(a.appointment.updated_at).getTime()
-        : 0;
-
-      const bTime = b.appointment?.updated_at
-        ? new Date(b.appointment.updated_at).getTime()
-        : 0;
-
-      return bTime - aTime;
-    });
+    }),
+  );
 
   const scheduledJobs = jobsWithAppointments.filter(
     ({ request }) => request.status === "matched",
