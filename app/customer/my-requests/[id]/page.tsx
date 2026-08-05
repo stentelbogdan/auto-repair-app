@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import LicensePlate from "@/app/components/LicensePlate";
 import ImageGallery from "@/app/components/ImageGallery";
-import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
+import dynamic from "next/dynamic";
 import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import { SERVICES } from "@/lib/data/services";
 import type { StructuredServiceDetails } from "@/lib/supabase/repair-requests";
@@ -18,6 +18,18 @@ import {
   type EditableRepairRequest,
 } from "@/lib/supabase/edit-repair-request";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
+
+const Car3DViewer = dynamic(
+  () => import("@/app/components/car-3d/Car3DViewer"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[280px] items-center justify-center text-sm text-white/55 [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]">
+        Se încarcă selectorul 3D...
+      </div>
+    ),
+  },
+);
 
 export default function EditMyRequestPage() {
   /*
@@ -33,7 +45,7 @@ export default function EditMyRequestPage() {
     timeoutMs: 2500,
   });
 
-  const from = searchParams.get("from") || "open";
+  const from = searchParams.get("from") || "waiting";
   const requestId = params.id as string;
 
   const [request, setRequest] = useState<EditableRepairRequest | null>(null);
@@ -46,6 +58,7 @@ export default function EditMyRequestPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [offersCount, setOffersCount] = useState(0);
+  const [is3DReady, setIs3DReady] = useState(false);
 
   const selectedCarParts = useMemo(
     () =>
@@ -188,6 +201,21 @@ export default function EditMyRequestPage() {
     };
   }, [requestId, router]);
 
+  useEffect(() => {
+    if (!request) {
+      setIs3DReady(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIs3DReady(true);
+    }, 600);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [request]);
+
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     setNewFiles(Array.from(e.target.files));
@@ -294,6 +322,17 @@ export default function EditMyRequestPage() {
     }
   };
 
+  const goBackToRequests = () => {
+    const targetTab =
+      from === "waiting" || from === "with_offer" || from === "archive"
+        ? from
+        : "waiting";
+
+    sessionStorage.setItem("my-requests-active-tab", targetTab);
+
+    navigate("/customer/my-requests");
+  };
+
   const removeImage = (index: number) => {
     if (!canEdit) return;
     setImages((prev) => prev.filter((_, i) => i !== index));
@@ -314,11 +353,11 @@ export default function EditMyRequestPage() {
       <div className="mx-auto max-w-md">
         <button
           type="button"
-          onClick={() => navigate(`/customer/my-requests?tab=${from}`)}
+          onClick={goBackToRequests}
           disabled={isNavigating}
           className="mb-6 rounded-full border border-white/15 px-4 py-2 text-sm text-white/80 transition disabled:cursor-not-allowed disabled:opacity-50"
         >
-          ← Înapoi la daunele mele
+          ← Înapoi la cererile mele
         </button>
 
         <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
@@ -346,17 +385,23 @@ export default function EditMyRequestPage() {
             </p>
 
             <div className="mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
-              <Car3DViewer
-                mode={canEdit ? "selection" : "preview"}
-                heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
-                selectedPartIds={selectedCarParts}
-                onSelectedPartIdsChange={handleSelectedCarPartsChange}
-                cameraPositionOverride={[8.15, 1.9, 0.35]}
-                cameraTargetOverride={[0.35, 0.4, 0]}
-                cameraFovOverride={46}
-                modelScaleOverride={1.3}
-                modelPositionOverride={[0.35, -0.18, 0]}
-              />
+              {is3DReady ? (
+                <Car3DViewer
+                  mode={canEdit ? "selection" : "preview"}
+                  heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
+                  selectedPartIds={selectedCarParts}
+                  onSelectedPartIdsChange={handleSelectedCarPartsChange}
+                  cameraPositionOverride={[8.15, 1.9, 0.35]}
+                  cameraTargetOverride={[0.35, 0.4, 0]}
+                  cameraFovOverride={46}
+                  modelScaleOverride={1.3}
+                  modelPositionOverride={[0.35, -0.18, 0]}
+                />
+              ) : (
+                <div className="flex h-[280px] items-center justify-center text-sm text-white/55 [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]">
+                  Se încarcă selectorul 3D...
+                </div>
+              )}
             </div>
           </div>
 
