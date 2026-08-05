@@ -4,27 +4,14 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
-import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
-import type {
-  CustomerAppointmentStatus,
-  CustomerOfferItem,
-  CustomerOfferRepairRequest,
-  CustomerRepairAppointment,
-} from "@/lib/services/offers/customer-offers.types";
-
-type WorkshopRating = {
-  average: number;
-  count: number;
-  lastReview?: string;
-  completedJobs?: number;
-  specialties?: string[];
-};
+import type { CustomerOfferItem } from "@/lib/services/offers/customer-offers.types";
+import { loadCustomerOffers } from "@/lib/services/offers/customer-offers.service";
 
 type ProfileRow = {
   role: string[] | null;
@@ -49,7 +36,6 @@ export default function OffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
-  const [, setWorkshopRatings] = useState<Record<string, WorkshopRating>>({});
 
   useEffect(() => {
     const resetScroll = () => {
@@ -101,9 +87,6 @@ export default function OffersPage() {
         }
 
         if (!authData.user) {
-          /*
-           * Redirect automat de autentificare.
-           */
           router.replace("/login");
           return;
         }
@@ -125,25 +108,39 @@ export default function OffersPage() {
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 
         if (!roles.includes("customer")) {
-          /*
-           * Redirect automat după verificarea rolului.
-           */
           router.replace("/workshops/my-offers");
           return;
         }
 
         setAuthorized(true);
+        setLoadingOffers(true);
 
-        await loadData(authData.user.id);
+        const result = await loadCustomerOffers(authData.user.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        setItems(result.items);
+
+        if (result.markedOffersAsRead) {
+          window.dispatchEvent(new Event("offers-read-updated"));
+        }
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        console.error("Failed to check offers access:", error);
-        router.replace("/login");
+        console.error("Failed to check or load customer offers:", error);
+
+        /*
+         * Dacă sesiunea există, dar încărcarea ofertelor eșuează,
+         * nu trimitem automat utilizatorul la login.
+         */
+        setItems([]);
       } finally {
         if (!cancelled) {
+          setLoadingOffers(false);
           setCheckingAccess(false);
         }
       }
@@ -155,292 +152,6 @@ export default function OffersPage() {
       cancelled = true;
     };
   }, [router]);
-
-  const loadData = async (userId?: string) => {
-    setLoadingOffers(true);
-
-    try {
-      let currentUserId = userId;
-
-      if (!currentUserId) {
-        const { data: authData } = await supabase.auth.getUser();
-        currentUserId = authData.user?.id;
-
-        if (!currentUserId) {
-          setItems([]);
-          return;
-        }
-      }
-
-      const requestRows = await getOwnRepairRequests(currentUserId);
-
-      const activeRequests = requestRows.filter((request) => {
-        const status = request.status || "open";
-        return status !== "completed";
-      });
-
-      const requestIds = activeRequests.map((request) => request.id);
-
-      if (requestIds.length === 0) {
-        setItems([]);
-        return;
-      }
-
-      const { data: offerRows, error } = await supabase
-        .from("repair_offers")
-        .select("*")
-        .in("request_id", requestIds)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Failed to load offers:", error);
-        setItems([]);
-        return;
-      }
-
-      const offerIds = (offerRows || []).map((offer) => offer.id);
-
-      let appointmentMap = new Map<string, CustomerRepairAppointment>();
-
-      if (offerIds.length > 0) {
-        const { data: appointmentRows, error: appointmentError } =
-          await supabase
-            .from("repair_appointments")
-            .select(
-              `
-      id,
-      request_id,
-      offer_id,
-      status,
-      appointment_date,
-      appointment_time,
-      proposed_date,
-      proposed_time
-    `,
-            )
-            .in("offer_id", offerIds);
-
-        if (appointmentError) {
-          console.error(
-            "Failed to load repair appointments:",
-            appointmentError,
-          );
-        } else {
-          appointmentMap = new Map<string, CustomerRepairAppointment>();
-
-          (appointmentRows || []).forEach((appointment) => {
-            if (!appointment.offer_id) return;
-
-            appointmentMap.set(appointment.offer_id, {
-              id: appointment.id,
-              requestId: appointment.request_id,
-              offerId: appointment.offer_id,
-              status: appointment.status
-                ? (appointment.status as CustomerAppointmentStatus)
-                : null,
-              appointmentDate: appointment.appointment_date || null,
-              appointmentTime: appointment.appointment_time || null,
-              proposedDate: appointment.proposed_date || null,
-              proposedTime: appointment.proposed_time || null,
-            });
-          });
-        }
-      }
-
-      const unreadOfferIds = (offerRows || [])
-        .filter((offer) => !offer.customer_read_at)
-        .map((offer) => offer.id);
-
-      if (unreadOfferIds.length > 0) {
-        await supabase
-          .from("repair_offers")
-          .update({ customer_read_at: new Date().toISOString() })
-          .in("id", unreadOfferIds);
-
-        window.dispatchEvent(new Event("offers-read-updated"));
-      }
-
-      const workshopUserIds = Array.from(
-        new Set(
-          (offerRows || [])
-            .map((offer) => offer.workshop_user_id)
-            .filter(Boolean),
-        ),
-      );
-
-      const ratingsMap: Record<string, WorkshopRating> = {};
-
-      if (workshopUserIds.length > 0) {
-        const { data: reviewsData } = await supabase
-          .from("reviews")
-          .select("workshop_user_id, rating, comment, created_at")
-          .in("workshop_user_id", workshopUserIds);
-
-        (reviewsData || []).forEach((review: any) => {
-          const workshopId = review.workshop_user_id;
-          const ratingValue = Number(review.rating || 0);
-
-          if (!workshopId || ratingValue <= 0) return;
-
-          if (!ratingsMap[workshopId]) {
-            ratingsMap[workshopId] = {
-              average: 0,
-              count: 0,
-              lastReview: "",
-              completedJobs: 0,
-              specialties: [],
-            };
-          }
-
-          ratingsMap[workshopId].average += ratingValue;
-          ratingsMap[workshopId].count += 1;
-
-          if (!ratingsMap[workshopId].lastReview && review.comment) {
-            ratingsMap[workshopId].lastReview = review.comment;
-          }
-        });
-
-        Object.keys(ratingsMap).forEach((workshopId) => {
-          ratingsMap[workshopId].average =
-            ratingsMap[workshopId].average / ratingsMap[workshopId].count;
-        });
-      }
-
-      const { data: completedRequests } = await supabase
-        .from("repair_requests")
-        .select("accepted_offer_id, damage_type, service_type")
-        .eq("status", "completed")
-        .not("accepted_offer_id", "is", null);
-
-      const completedOfferIds = (completedRequests || [])
-        .map((request) => request.accepted_offer_id)
-        .filter(Boolean);
-
-      if (completedOfferIds.length > 0) {
-        const { data: completedOffers } = await supabase
-          .from("repair_offers")
-          .select("id, workshop_user_id")
-          .in("id", completedOfferIds);
-
-        (completedOffers || []).forEach((offer) => {
-          const completedRequest = (completedRequests || []).find(
-            (request) => request.accepted_offer_id === offer.id,
-          );
-          const workshopId = offer.workshop_user_id;
-          if (!workshopId) return;
-
-          if (!ratingsMap[workshopId]) {
-            ratingsMap[workshopId] = {
-              average: 0,
-              count: 0,
-              lastReview: "",
-              completedJobs: 0,
-              specialties: [],
-            };
-          }
-
-          ratingsMap[workshopId].completedJobs =
-            (ratingsMap[workshopId].completedJobs || 0) + 1;
-
-          const specialty =
-            completedRequest?.damage_type || completedRequest?.service_type;
-
-          if (
-            specialty &&
-            !ratingsMap[workshopId].specialties?.includes(specialty)
-          ) {
-            ratingsMap[workshopId].specialties?.push(specialty);
-          }
-        });
-      }
-
-      let workshopProfileMap = new Map<
-        string,
-        {
-          workshop_slug: string | null;
-          workshop_name: string | null;
-          workshop_logo_url: string | null;
-        }
-      >();
-
-      if (workshopUserIds.length > 0) {
-        const { data: workshopProfiles } = await supabase
-          .from("profiles")
-          .select("id, workshop_slug, workshop_name, workshop_logo_url")
-          .in("id", workshopUserIds);
-
-        workshopProfileMap = new Map(
-          (workshopProfiles || []).map((profile) => [
-            profile.id,
-            {
-              workshop_slug: profile.workshop_slug || null,
-              workshop_name: profile.workshop_name || null,
-              workshop_logo_url: profile.workshop_logo_url || null,
-            },
-          ]),
-        );
-      }
-
-      const requestMap = new Map<string, CustomerOfferRepairRequest>();
-
-      activeRequests.forEach((request) => {
-        requestMap.set(request.id, {
-          id: request.id,
-          licensePlate: request.license_plate,
-          carBrand: request.car_brand,
-          carModel: request.car_model,
-          carYear: request.car_year,
-          city: request.city,
-          damageType: request.damage_type,
-          description: request.description || "",
-          images: Array.isArray(request.images) ? request.images : [],
-          status: request.status,
-          acceptedOfferId: request.accepted_offer_id,
-        });
-      });
-
-      const merged: CustomerOfferItem[] = [];
-
-      (offerRows || []).forEach((offer) => {
-        const matchingRequest = requestMap.get(offer.request_id);
-        if (!matchingRequest) return;
-
-        const workshopProfile = workshopProfileMap.get(offer.workshop_user_id);
-
-        merged.push({
-          offer: {
-            id: offer.id,
-            requestId: offer.request_id,
-            workshopUserId: offer.workshop_user_id,
-            workshopSlug: workshopProfile?.workshop_slug || null,
-            price: String(offer.price),
-            days: String(offer.days),
-            message: offer.message || "",
-            workshopName:
-              workshopProfile?.workshop_name ||
-              offer.workshop_name ||
-              "Service",
-            createdAt: offer.created_at,
-            status: offer.status,
-            workshopLogoUrl: workshopProfile?.workshop_logo_url || null,
-            availableDate: offer.available_date || null,
-            availableTime: offer.available_time || null,
-          },
-          request: matchingRequest,
-          appointment: appointmentMap.get(offer.id) || null,
-        });
-      });
-
-      setWorkshopRatings(ratingsMap);
-      setItems(merged);
-    } catch (error) {
-      console.error("Failed to load customer offers:", error);
-      setItems([]);
-    } finally {
-      setLoadingOffers(false);
-    }
-  };
 
   const openWorkshopProfile = (workshopSlug: string | null) => {
     if (!workshopSlug) {
