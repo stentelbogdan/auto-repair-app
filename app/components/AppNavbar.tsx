@@ -183,15 +183,23 @@ export default function AppNavbar() {
           .select("id")
           .eq("target_workshop_id", currentUserId);
 
-        const { data: wonOffers } = await supabase
-          .from("repair_offers")
-          .select("request_id")
-          .eq("workshop_user_id", currentUserId)
-          .eq("status", "accepted");
+        const { data: workshopOffers, error: workshopOffersError } =
+          await supabase
+            .from("repair_offers")
+            .select("request_id")
+            .eq("workshop_user_id", currentUserId)
+            .in("status", ["pending", "accepted"]);
+
+        if (workshopOffersError) {
+          console.error(
+            "Failed to load workshop conversations:",
+            workshopOffersError,
+          );
+        }
 
         requestIds = [
           ...(directRequests || []).map((request) => request.id),
-          ...(wonOffers || []).map((offer) => offer.request_id),
+          ...(workshopOffers || []).map((offer) => offer.request_id),
         ];
       } else {
         const { data: customerRequests } = await supabase

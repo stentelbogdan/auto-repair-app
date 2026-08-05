@@ -303,14 +303,26 @@ export default function MyJobsPage() {
     }
   });
 
-  const jobsWithAppointments = jobs.map((job) => {
-    const appointment = latestAppointmentByRequestId.get(job.request.id);
+  const jobsWithAppointments = jobs
+    .map((job) => {
+      const appointment = latestAppointmentByRequestId.get(job.request.id);
 
-    return {
-      ...job,
-      appointment,
-    };
-  });
+      return {
+        ...job,
+        appointment,
+      };
+    })
+    .sort((a, b) => {
+      const aTime = a.appointment?.updated_at
+        ? new Date(a.appointment.updated_at).getTime()
+        : 0;
+
+      const bTime = b.appointment?.updated_at
+        ? new Date(b.appointment.updated_at).getTime()
+        : 0;
+
+      return bTime - aTime;
+    });
 
   const scheduledJobs = jobsWithAppointments.filter(
     ({ request }) => request.status === "matched",

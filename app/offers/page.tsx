@@ -216,6 +216,7 @@ export default function OffersPage() {
             appointment_time: confirmedTime,
             proposed_date: null,
             proposed_time: null,
+            updated_at: new Date().toISOString(),
           })
           .eq("id", appointment.id)
           .eq("offer_id", offer.id);
