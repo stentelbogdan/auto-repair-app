@@ -61,9 +61,11 @@ export default function CarHeader({
     ? "block h-[150px] w-[150px] overflow-hidden rounded-2xl"
     : "block h-20 w-20 overflow-hidden rounded-2xl";
 
+  const mediaColumnClassName = isLarge ? "w-[150px]" : "w-20";
+
   return (
     <div className="flex gap-4">
-      <div className="shrink-0">
+      <div className={`${mediaColumnClassName} shrink-0`}>
         <div
           className={`${imageClassName} overflow-hidden ${
             isLarge ? "rounded-[22px]" : "rounded-2xl"
@@ -97,11 +99,11 @@ export default function CarHeader({
                   return (
                     <div
                       key={detail.text}
-                      className="flex items-center justify-center gap-1.5 rounded-full bg-black/[0.04] px-2.5 py-1"
+                      className="flex max-w-full items-center justify-center gap-1.5 rounded-2xl bg-black/[0.04] px-2.5 py-1"
                     >
                       {detail.showDot !== false && !Icon && (
                         <span
-                          className={`h-2.5 w-2.5 rounded-full ${getDotColor(
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${getDotColor(
                             detail.color,
                           )}`}
                         />
@@ -111,12 +113,12 @@ export default function CarHeader({
                         <Icon
                           size={14}
                           strokeWidth={2.4}
-                          className={getIconColor(detail.color)}
+                          className={`shrink-0 ${getIconColor(detail.color)}`}
                         />
                       )}
 
                       <span
-                        className={`text-xs font-bold ${getTextColor(
+                        className={`min-w-0 text-center text-xs font-bold leading-tight ${getTextColor(
                           detail.color,
                         )}`}
                       >
