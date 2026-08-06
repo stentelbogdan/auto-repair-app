@@ -67,12 +67,6 @@ export default function MyRequestsPage() {
 
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    /*
-     * Păstrăm ID-urile cererilor clientului pentru a ignora
-     * evenimentele repair_offers care aparțin altor utilizatori.
-     */
-    let ownRequestIds = new Set<string>();
-
     const fetchRequests = async (userId: string): Promise<void> => {
       const data = await getOwnRepairRequests(userId);
 
@@ -80,18 +74,9 @@ export default function MyRequestsPage() {
         return;
       }
 
-      ownRequestIds = new Set(data.map((request) => request.id));
-
       setRequests(data);
     };
 
-    /*
-     * Dacă sosesc două sau trei evenimente Realtime foarte repede,
-     * nu pornim mai multe query-uri simultan.
-     *
-     * Reținem că mai este necesară o reîncărcare și o executăm
-     * imediat după finalizarea celei curente.
-     */
     const refreshRequests = async (userId: string): Promise<void> => {
       if (refreshInProgressRef.current) {
         refreshQueuedRef.current = true;
@@ -131,10 +116,6 @@ export default function MyRequestsPage() {
         }
 
         if (!authData.user) {
-          /*
-           * Redirect automat de autentificare.
-           * Nu trece prin useSafeNavigation.
-           */
           router.replace("/login");
           return;
         }
@@ -150,30 +131,25 @@ export default function MyRequestsPage() {
         realtimeChannel = supabase
           .channel(`customer-my-requests-${userId}`)
 
-          /*
-           * Când un service creează, actualizează sau șterge
-           * o ofertă pentru una dintre cererile clientului,
-           * recalculăm offers_count.
-           */
           .on(
             "postgres_changes",
             {
-              event: "*",
+              event: "INSERT",
               schema: "public",
-              table: "repair_offers",
+              table: "notifications",
+              filter: `recipient_id=eq.${userId}`,
             },
             (payload) => {
-              const changedRow = (
-                payload.new && Object.keys(payload.new).length > 0
-                  ? payload.new
-                  : payload.old
-              ) as {
-                request_id?: string;
+              const notification = payload.new as {
+                type?: string;
+                recipient_role?: string;
+                request_id?: string | null;
               };
 
-              const changedRequestId = changedRow.request_id;
-
-              if (!changedRequestId || !ownRequestIds.has(changedRequestId)) {
+              if (
+                notification.recipient_role !== "customer" ||
+                notification.type !== "offer_received"
+              ) {
                 return;
               }
 
@@ -181,11 +157,6 @@ export default function MyRequestsPage() {
             },
           )
 
-          /*
-           * Ascultăm și cererea însăși:
-           * accepted_offer_id și status se pot modifica atunci
-           * când oferta este acceptată sau lucrarea avansează.
-           */
           .on(
             "postgres_changes",
             {
@@ -198,7 +169,12 @@ export default function MyRequestsPage() {
               void refreshRequests(userId);
             },
           )
-          .subscribe();
+
+          .subscribe((status) => {
+            if (status === "CHANNEL_ERROR") {
+              console.error("Realtime channel failed for customer requests.");
+            }
+          });
       } catch (error) {
         if (cancelled) {
           return;
@@ -218,7 +194,6 @@ export default function MyRequestsPage() {
 
     return () => {
       cancelled = true;
-
       refreshQueuedRef.current = false;
 
       if (realtimeChannel) {
