@@ -67,6 +67,8 @@ export default function MyRequestsPage() {
 
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
+    let handleCustomerOffersUpdated: (() => void) | null = null;
+
     const fetchRequests = async (userId: string): Promise<void> => {
       const data = await getOwnRepairRequests(userId);
 
@@ -128,74 +130,17 @@ export default function MyRequestsPage() {
           return;
         }
 
+        handleCustomerOffersUpdated = () => {
+          void refreshRequests(userId);
+        };
+
+        window.addEventListener(
+          "customer-offers-updated",
+          handleCustomerOffersUpdated,
+        );
+
         realtimeChannel = supabase
           .channel(`customer-my-requests-${userId}`)
-
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "notifications",
-              filter: `recipient_id=eq.${userId}`,
-            },
-            (payload) => {
-              const notification = payload.new as {
-                type?: string;
-                recipient_role?: string | null;
-                request_id?: string | null;
-              };
-
-              /*
-               * Canalul este deja filtrat după recipient_id,
-               * deci nu mai blocăm evenimentul după recipient_role.
-               */
-              if (notification.type !== "offer_received") {
-                return;
-              }
-
-              const requestId = notification.request_id;
-
-              if (!requestId) {
-                /*
-                 * Dacă notificarea nu conține request_id,
-                 * facem totuși resincronizarea completă.
-                 */
-                window.setTimeout(() => {
-                  void refreshRequests(userId);
-                }, 350);
-
-                return;
-              }
-
-              /*
-               * Actualizare optimistă:
-               * cardul trece imediat în tabul „Cu ofertă”.
-               */
-              setRequests((currentRequests) =>
-                currentRequests.map((request) =>
-                  request.id === requestId
-                    ? {
-                        ...request,
-                        offers_count: Math.max(
-                          1,
-                          (request.offers_count ?? 0) + 1,
-                        ),
-                      }
-                    : request,
-                ),
-              );
-
-              /*
-               * Resincronizăm apoi valoarea exactă din Supabase.
-               * Mica întârziere evită cursa dintre notificare
-               * și finalizarea inserării ofertei.
-               */
-              window.setTimeout(() => {
-                void refreshRequests(userId);
-              }, 350);
-            },
-          )
 
           .on(
             "postgres_changes",
@@ -235,6 +180,13 @@ export default function MyRequestsPage() {
     return () => {
       cancelled = true;
       refreshQueuedRef.current = false;
+
+      if (handleCustomerOffersUpdated) {
+        window.removeEventListener(
+          "customer-offers-updated",
+          handleCustomerOffersUpdated,
+        );
+      }
 
       if (realtimeChannel) {
         void supabase.removeChannel(realtimeChannel);
