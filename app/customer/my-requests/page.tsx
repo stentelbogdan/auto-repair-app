@@ -142,18 +142,58 @@ export default function MyRequestsPage() {
             (payload) => {
               const notification = payload.new as {
                 type?: string;
-                recipient_role?: string;
+                recipient_role?: string | null;
                 request_id?: string | null;
               };
 
-              if (
-                notification.recipient_role !== "customer" ||
-                notification.type !== "offer_received"
-              ) {
+              /*
+               * Canalul este deja filtrat după recipient_id,
+               * deci nu mai blocăm evenimentul după recipient_role.
+               */
+              if (notification.type !== "offer_received") {
                 return;
               }
 
-              void refreshRequests(userId);
+              const requestId = notification.request_id;
+
+              if (!requestId) {
+                /*
+                 * Dacă notificarea nu conține request_id,
+                 * facem totuși resincronizarea completă.
+                 */
+                window.setTimeout(() => {
+                  void refreshRequests(userId);
+                }, 350);
+
+                return;
+              }
+
+              /*
+               * Actualizare optimistă:
+               * cardul trece imediat în tabul „Cu ofertă”.
+               */
+              setRequests((currentRequests) =>
+                currentRequests.map((request) =>
+                  request.id === requestId
+                    ? {
+                        ...request,
+                        offers_count: Math.max(
+                          1,
+                          (request.offers_count ?? 0) + 1,
+                        ),
+                      }
+                    : request,
+                ),
+              );
+
+              /*
+               * Resincronizăm apoi valoarea exactă din Supabase.
+               * Mica întârziere evită cursa dintre notificare
+               * și finalizarea inserării ofertei.
+               */
+              window.setTimeout(() => {
+                void refreshRequests(userId);
+              }, 350);
             },
           )
 
