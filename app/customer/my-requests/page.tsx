@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -32,6 +32,16 @@ export default function MyRequestsPage() {
   const [activeTab, setActiveTab] = useState<MyRequestsTab>("waiting");
 
   /*
+   * Realtime poate trimite mai multe evenimente apropiate:
+   * oferta, programarea și notificarea pot fi create aproape simultan.
+   *
+   * Aceste referințe împiedică mai multe reîncărcări Supabase
+   * să ruleze în paralel.
+   */
+  const refreshInProgressRef = useRef(false);
+  const refreshQueuedRef = useRef(false);
+
+  /*
    * Restaurăm tabul ales anterior de utilizator.
    */
   useEffect(() => {
@@ -55,7 +65,59 @@ export default function MyRequestsPage() {
   useEffect(() => {
     let cancelled = false;
 
-    const loadRequests = async () => {
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+
+    /*
+     * Păstrăm ID-urile cererilor clientului pentru a ignora
+     * evenimentele repair_offers care aparțin altor utilizatori.
+     */
+    let ownRequestIds = new Set<string>();
+
+    const fetchRequests = async (userId: string): Promise<void> => {
+      const data = await getOwnRepairRequests(userId);
+
+      if (cancelled) {
+        return;
+      }
+
+      ownRequestIds = new Set(data.map((request) => request.id));
+
+      setRequests(data);
+    };
+
+    /*
+     * Dacă sosesc două sau trei evenimente Realtime foarte repede,
+     * nu pornim mai multe query-uri simultan.
+     *
+     * Reținem că mai este necesară o reîncărcare și o executăm
+     * imediat după finalizarea celei curente.
+     */
+    const refreshRequests = async (userId: string): Promise<void> => {
+      if (refreshInProgressRef.current) {
+        refreshQueuedRef.current = true;
+        return;
+      }
+
+      refreshInProgressRef.current = true;
+
+      try {
+        do {
+          refreshQueuedRef.current = false;
+
+          try {
+            await fetchRequests(userId);
+          } catch (error) {
+            if (!cancelled) {
+              console.error("Failed to refresh customer requests:", error);
+            }
+          }
+        } while (refreshQueuedRef.current && !cancelled);
+      } finally {
+        refreshInProgressRef.current = false;
+      }
+    };
+
+    const loadPage = async () => {
       try {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
@@ -77,19 +139,73 @@ export default function MyRequestsPage() {
           return;
         }
 
-        const data = await getOwnRepairRequests(authData.user.id);
+        const userId = authData.user.id;
+
+        await fetchRequests(userId);
 
         if (cancelled) {
           return;
         }
 
-        setRequests(data);
+        realtimeChannel = supabase
+          .channel(`customer-my-requests-${userId}`)
+
+          /*
+           * Când un service creează, actualizează sau șterge
+           * o ofertă pentru una dintre cererile clientului,
+           * recalculăm offers_count.
+           */
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "repair_offers",
+            },
+            (payload) => {
+              const changedRow = (
+                payload.new && Object.keys(payload.new).length > 0
+                  ? payload.new
+                  : payload.old
+              ) as {
+                request_id?: string;
+              };
+
+              const changedRequestId = changedRow.request_id;
+
+              if (!changedRequestId || !ownRequestIds.has(changedRequestId)) {
+                return;
+              }
+
+              void refreshRequests(userId);
+            },
+          )
+
+          /*
+           * Ascultăm și cererea însăși:
+           * accepted_offer_id și status se pot modifica atunci
+           * când oferta este acceptată sau lucrarea avansează.
+           */
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "repair_requests",
+              filter: `user_id=eq.${userId}`,
+            },
+            () => {
+              void refreshRequests(userId);
+            },
+          )
+          .subscribe();
       } catch (error) {
         if (cancelled) {
           return;
         }
 
         console.error("Failed to load requests:", error);
+
         window.alert("Nu am putut încărca daunele tale.");
       } finally {
         if (!cancelled) {
@@ -98,10 +214,16 @@ export default function MyRequestsPage() {
       }
     };
 
-    void loadRequests();
+    void loadPage();
 
     return () => {
       cancelled = true;
+
+      refreshQueuedRef.current = false;
+
+      if (realtimeChannel) {
+        void supabase.removeChannel(realtimeChannel);
+      }
     };
   }, [router]);
 
