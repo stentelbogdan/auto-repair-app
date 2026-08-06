@@ -439,12 +439,6 @@ export default function AppNavbar() {
         async () => {
           await loadUnreadOffers();
           await loadUnreadWonJobs();
-
-          /*
-           * Informăm paginile deschise în aceeași aplicație
-           * că lista ofertelor s-a modificat.
-           */
-          window.dispatchEvent(new Event("customer-offers-updated"));
         },
       )
 

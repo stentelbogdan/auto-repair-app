@@ -67,8 +67,6 @@ export default function MyRequestsPage() {
 
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    let handleCustomerOffersUpdated: (() => void) | null = null;
-
     const fetchRequests = async (userId: string): Promise<void> => {
       const data = await getOwnRepairRequests(userId);
 
@@ -130,18 +128,90 @@ export default function MyRequestsPage() {
           return;
         }
 
-        handleCustomerOffersUpdated = () => {
-          void refreshRequests(userId);
-        };
-
-        window.addEventListener(
-          "customer-offers-updated",
-          handleCustomerOffersUpdated,
-        );
-
         realtimeChannel = supabase
           .channel(`customer-my-requests-${userId}`)
 
+          /*
+           * Listener principal:
+           * notificarea este destinată exact clientului curent.
+           */
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "notifications",
+              filter: `recipient_id=eq.${userId}`,
+            },
+            (payload) => {
+              const notification = payload.new as {
+                type?: string | null;
+                recipient_role?: string | null;
+                request_id?: string | null;
+              };
+
+              console.log("MyRequests notification received:", notification);
+
+              /*
+               * Nu presupunem momentan o singură denumire exactă,
+               * deoarece notificarea vizuală funcționează deja,
+               * dar trebuie să confirmăm tipul real salvat în DB.
+               */
+              if (
+                notification.recipient_role &&
+                notification.recipient_role !== "customer"
+              ) {
+                return;
+              }
+
+              /*
+               * Actualizare optimistă dacă notificarea conține request_id.
+               */
+              if (notification.request_id) {
+                setRequests((currentRequests) =>
+                  currentRequests.map((request) =>
+                    request.id === notification.request_id
+                      ? {
+                          ...request,
+                          offers_count: Math.max(1, request.offers_count ?? 0),
+                        }
+                      : request,
+                  ),
+                );
+              }
+
+              /*
+               * Recalculăm imediat valoarea exactă din repair_offers.
+               */
+              void refreshRequests(userId);
+            },
+          )
+
+          /*
+           * Plasă de siguranță:
+           * reacționăm direct și la modificările ofertelor.
+           *
+           * Evenimentul poate aparține și altui client, dar
+           * getOwnRepairRequests() încarcă numai cererile utilizatorului curent.
+           */
+          .on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "repair_offers",
+            },
+            () => {
+              console.log("MyRequests repair_offers change received.");
+
+              void refreshRequests(userId);
+            },
+          )
+
+          /*
+           * Păstrăm listenerul pentru acceptarea ofertei,
+           * închiderea cererii și schimbările de status.
+           */
           .on(
             "postgres_changes",
             {
@@ -151,11 +221,15 @@ export default function MyRequestsPage() {
               filter: `user_id=eq.${userId}`,
             },
             () => {
+              console.log("MyRequests repair_requests change received.");
+
               void refreshRequests(userId);
             },
           )
 
           .subscribe((status) => {
+            console.log("MyRequests realtime status:", status);
+
             if (status === "CHANNEL_ERROR") {
               console.error("Realtime channel failed for customer requests.");
             }
@@ -180,13 +254,6 @@ export default function MyRequestsPage() {
     return () => {
       cancelled = true;
       refreshQueuedRef.current = false;
-
-      if (handleCustomerOffersUpdated) {
-        window.removeEventListener(
-          "customer-offers-updated",
-          handleCustomerOffersUpdated,
-        );
-      }
 
       if (realtimeChannel) {
         void supabase.removeChannel(realtimeChannel);
