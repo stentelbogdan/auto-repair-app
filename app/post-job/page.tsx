@@ -25,8 +25,15 @@ import {
 import ImageGallery from "@/app/components/ImageGallery";
 import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import ServiceCard from "@/app/components/ServiceCard";
-import Car3DViewer from "@/app/components/car-3d/Car3DViewer";
+import dynamic from "next/dynamic";
 import { SERVICES } from "@/lib/data/services";
+
+const Car3DViewer = dynamic(
+  () => import("@/app/components/car-3d/Car3DViewer"),
+  {
+    ssr: false,
+  },
+);
 
 type DamageType =
   | "scratch"
