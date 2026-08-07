@@ -39,7 +39,7 @@ function PreviewCameraIntro({
 }: PreviewCameraIntroProps) {
   const elapsedRef = useRef(0);
   const completedRef = useRef(false);
-``
+  ``;
   // Poziția inițială:
   // camera este mai aproape, iar botul mașinii este mai jos.
   const startPosition: [number, number, number] = [0.35, 2.2, 4.8];
@@ -293,6 +293,7 @@ export default function Car3DViewer({
               blur={3}
               far={4}
               resolution={128}
+              frames={1}
             />
           </Suspense>
 
