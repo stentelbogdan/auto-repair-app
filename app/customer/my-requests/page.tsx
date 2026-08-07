@@ -67,6 +67,8 @@ export default function MyRequestsPage() {
 
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
+    let handleVisibilityChange: (() => void) | null = null;
+
     const fetchRequests = async (userId: string): Promise<void> => {
       const data = await getOwnRepairRequests(userId);
 
@@ -127,6 +129,14 @@ export default function MyRequestsPage() {
         if (cancelled) {
           return;
         }
+
+        handleVisibilityChange = () => {
+          if (document.visibilityState === "visible") {
+            void refreshRequests(userId);
+          }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
         realtimeChannel = supabase
           .channel(`customer-my-requests-${userId}`)
@@ -230,6 +240,16 @@ export default function MyRequestsPage() {
           .subscribe((status) => {
             console.log("MyRequests realtime status:", status);
 
+            if (status === "SUBSCRIBED") {
+              /*
+               * Important pe iOS:
+               * după o reconectare este posibil să fi ratat
+               * evenimente cât timp WebSocket-ul era căzut.
+               */
+              void refreshRequests(userId);
+              return;
+            }
+
             if (status === "CHANNEL_ERROR") {
               console.error("Realtime channel failed for customer requests.");
             }
@@ -254,6 +274,13 @@ export default function MyRequestsPage() {
     return () => {
       cancelled = true;
       refreshQueuedRef.current = false;
+
+      if (handleVisibilityChange) {
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+      }
 
       if (realtimeChannel) {
         void supabase.removeChannel(realtimeChannel);
