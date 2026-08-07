@@ -284,7 +284,12 @@ export default function Car3DViewer({
               onPartMeshesReady={handlePartMeshesReady}
             />
 
-            <Environment preset="city" environmentIntensity={0.85} />
+            {/*
+<Environment
+  preset="city"
+  environmentIntensity={0.85}
+/>
+*/}
 
             <ContactShadows
               position={[0, -0.75, 0]}
