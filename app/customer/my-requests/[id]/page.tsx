@@ -396,7 +396,7 @@ export default function EditMyRequestPage() {
                   cameraPositionOverride={[8.15, 1.9, 0.35]}
                   cameraTargetOverride={[0.35, 0.4, 0]}
                   cameraFovOverride={46}
-                  modelScaleOverride={canEdit ? 1.3 : 0.95}
+                  modelScaleOverride={canEdit ? 1.3 : 0.75}
                   modelPositionOverride={[0.35, -0.18, 0]}
                 />
               ) : (
