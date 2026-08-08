@@ -407,12 +407,19 @@ export default function WorkshopMyOffersPage() {
     } catch (error) {
       console.error("Failed to confirm appointment:", error);
 
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Nu am putut confirma programarea.";
+      const supabaseError = error as {
+        code?: string;
+        message?: string;
+      };
 
-      alert(message);
+      if (supabaseError?.code === "23505") {
+        alert(
+          "Ora propusă nu mai este disponibilă. Alege o altă dată sau oră.",
+        );
+        return;
+      }
+
+      alert(supabaseError?.message || "Nu am putut confirma programarea.");
     } finally {
       setConfirmingOfferId(null);
     }
