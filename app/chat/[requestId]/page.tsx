@@ -118,12 +118,24 @@ export default function ChatPage() {
         (payload) => {
           const insertedMessage = payload.new as Message;
 
+          const belongsToCurrentConversation = offerId
+            ? insertedMessage.offer_id === offerId
+            : insertedMessage.offer_id == null;
+
+          if (!belongsToCurrentConversation) {
+            return;
+          }
+
           setMessages((prev) => {
             if (prev.some((message) => message.id === insertedMessage.id)) {
               return prev;
             }
 
-            return [...prev, insertedMessage];
+            return [...prev, insertedMessage].sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime(),
+            );
           });
         },
       )
@@ -170,6 +182,33 @@ export default function ChatPage() {
       supabase.removeChannel(channel);
     };
   }, [requestId, roleParam]);
+
+  useEffect(() => {
+    const syncMessages = () => {
+      loadMessages();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        syncMessages();
+      }
+    };
+
+    window.addEventListener("focus", syncMessages);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        syncMessages();
+      }
+    }, 5000);
+
+    return () => {
+      window.removeEventListener("focus", syncMessages);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [requestId, offerId]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
