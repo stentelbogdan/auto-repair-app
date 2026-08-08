@@ -380,9 +380,11 @@ export default function EditMyRequestPage() {
               Elemente afectate
             </p>
 
-            <p className="mt-1 text-xs text-black/45">
-              Modifică elementele avariate direct pe modelul 3D.
-            </p>
+            {canEdit && (
+              <p className="mt-1 text-xs text-black/45">
+                Modifică elementele avariate direct pe modelul 3D.
+              </p>
+            )}
 
             <div className="mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
               {is3DReady ? (
@@ -394,7 +396,7 @@ export default function EditMyRequestPage() {
                   cameraPositionOverride={[8.15, 1.9, 0.35]}
                   cameraTargetOverride={[0.35, 0.4, 0]}
                   cameraFovOverride={46}
-                  modelScaleOverride={1.3}
+                  modelScaleOverride={canEdit ? 1.3 : 1.08}
                   modelPositionOverride={[0.35, -0.18, 0]}
                 />
               ) : (
