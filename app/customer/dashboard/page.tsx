@@ -214,6 +214,13 @@ function CustomerDashboardContent() {
     };
   }, []);
 
+  useEffect(() => {
+    router.prefetch("/post-choice");
+    router.prefetch("/customer/my-requests");
+    router.prefetch("/offers");
+    router.prefetch("/customer/my-jobs");
+  }, [router]);
+
   if (loading) {
     return (
       <main className="flex min-h-[calc(100svh-236px)] items-center justify-center bg-black text-white">
@@ -319,7 +326,7 @@ function Card({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="relative min-h-[150px] rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-[180px] md:p-6 md:hover:scale-[1.02] md:hover:shadow-2xl"
+      className="relative min-h-[150px] rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition-transform duration-75 active:scale-[0.995] disabled:cursor-not-allowed md:min-h-[180px] md:p-6 md:hover:scale-[1.02] md:hover:shadow-2xl"
     >
       {typeof value !== "undefined" && Number(value) > 0 && (
         <div className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-black px-2 text-xs font-semibold text-white shadow-md">
