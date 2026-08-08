@@ -403,6 +403,7 @@ export default function ChatPage() {
       JSON.stringify({
         requestId,
         offerId: offerId ?? null,
+        readAt: Date.now(),
       }),
     );
 

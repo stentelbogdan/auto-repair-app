@@ -318,25 +318,31 @@ export default function MessagesInbox({ role }: { role: Role }) {
           const lastRead = JSON.parse(lastReadRaw) as {
             requestId: string;
             offerId: string | null;
+            readAt?: number;
           };
 
-          conversationsToDisplay = mapped.map((conversation) => {
-            const sameRequest = conversation.requestId === lastRead.requestId;
+          const isRecent =
+            !lastRead.readAt || Date.now() - lastRead.readAt < 5000;
 
-            const sameOffer =
-              (conversation.offerId ?? null) === (lastRead.offerId ?? null);
+          if (isRecent) {
+            conversationsToDisplay = mapped.map((conversation) => {
+              const sameRequest = conversation.requestId === lastRead.requestId;
 
-            if (!sameRequest || !sameOffer) {
-              return conversation;
-            }
+              const sameOffer =
+                (conversation.offerId ?? null) === (lastRead.offerId ?? null);
 
-            return {
-              ...conversation,
-              unreadCount: 0,
-            };
-          });
+              if (!sameRequest || !sameOffer) {
+                return conversation;
+              }
 
-          sessionStorage.removeItem("last-read-conversation");
+              return {
+                ...conversation,
+                unreadCount: 0,
+              };
+            });
+          } else {
+            sessionStorage.removeItem("last-read-conversation");
+          }
         } catch {
           sessionStorage.removeItem("last-read-conversation");
         }
@@ -435,6 +441,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
                     JSON.stringify({
                       requestId: conversation.requestId,
                       offerId: conversation.offerId ?? null,
+                      readAt: Date.now(),
                     }),
                   );
 
