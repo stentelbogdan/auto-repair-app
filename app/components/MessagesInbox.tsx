@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -24,35 +24,122 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const currentUserIdRef = useRef<string>("");
 
   useEffect(() => {
     localStorage.setItem("activeRole", role);
-    loadConversations();
+
+    void loadConversations();
 
     const channel = supabase
       .channel(`messages-inbox-${role}`)
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "messages",
         },
-        () => {
-          loadConversations();
+        (payload) => {
+          const newMessage = payload.new as {
+            id: string;
+            request_id: string;
+            offer_id?: string | null;
+            sender_id: string;
+            sender_role: string;
+            message?: string | null;
+            images?: unknown[] | null;
+            created_at: string;
+          };
+
+          const currentUserId = currentUserIdRef.current;
+
+          setConversations((current) => {
+            const conversationIndex = current.findIndex((conversation) => {
+              const sameRequest =
+                conversation.requestId === newMessage.request_id;
+
+              const sameOffer =
+                (conversation.offerId ?? null) ===
+                (newMessage.offer_id ?? null);
+
+              return sameRequest && sameOffer;
+            });
+
+            /*
+             * Conversația nu este încă în Inbox.
+             * Refetch-ul de mai jos o va adăuga.
+             */
+            if (conversationIndex === -1) {
+              return current;
+            }
+
+            const conversation = current[conversationIndex];
+
+            const isIncomingMessage =
+              newMessage.sender_id !== currentUserId &&
+              newMessage.sender_role !== "system";
+
+            const hasImages =
+              Array.isArray(newMessage.images) && newMessage.images.length > 0;
+
+            const updatedConversation: Conversation = {
+              ...conversation,
+
+              lastMessage:
+                newMessage.message?.trim() ||
+                (hasImages ? "📷 Poză" : "Mesaj nou"),
+
+              lastMessageTime: newMessage.created_at,
+
+              unreadCount:
+                conversation.unreadCount + (isIncomingMessage ? 1 : 0),
+            };
+
+            /*
+             * Mesaj nou = conversația urcă instant prima în Inbox.
+             */
+            return [
+              updatedConversation,
+              ...current.filter((_, index) => index !== conversationIndex),
+            ];
+          });
+
+          /*
+           * AppNavbar își actualizează badge-ul general.
+           */
           window.dispatchEvent(new Event("messages-read-updated"));
+
+          /*
+           * Reconciliere cu DB.
+           *
+           * UI-ul s-a actualizat deja instant din payload,
+           * iar acest refetch verifică ulterior starea reală.
+           */
+          window.setTimeout(() => {
+            void loadConversations(false);
+          }, 500);
         },
       )
       .subscribe();
 
+    const refreshInbox = () => {
+      void loadConversations(false);
+    };
+
+    window.addEventListener("focus", refreshInbox);
+
     return () => {
+      window.removeEventListener("focus", refreshInbox);
       supabase.removeChannel(channel);
     };
   }, [role]);
 
-  const loadConversations = async () => {
+  const loadConversations = async (showLoader = true) => {
     try {
-      setLoading(true);
+      if (showLoader) {
+        setLoading(true);
+      }
 
       const { data: authData } = await supabase.auth.getUser();
 
@@ -62,6 +149,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
       }
 
       const userId = authData.user.id;
+      currentUserIdRef.current = userId;
 
       /*
        * Chatul trebuie să fie disponibil atât în perioada negocierii,
@@ -226,7 +314,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
       console.error("Failed to load conversations:", error);
       setConversations([]);
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
   };
 
