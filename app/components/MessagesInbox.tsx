@@ -55,22 +55,19 @@ export default function MessagesInbox({ role }: { role: Role }) {
           const currentUserId = currentUserIdRef.current;
 
           setConversations((current) => {
-            const conversationIndex = current.findIndex((conversation) => {
-              const sameRequest =
-                conversation.requestId === newMessage.request_id;
-
-              const sameOffer =
+            const conversationIndex = current.findIndex(
+              (conversation) =>
+                conversation.requestId === newMessage.request_id &&
                 (conversation.offerId ?? null) ===
-                (newMessage.offer_id ?? null);
+                  (newMessage.offer_id ?? null),
+            );
 
-              return sameRequest && sameOffer;
-            });
-
-            /*
-             * Conversația nu este încă în Inbox.
-             * Refetch-ul de mai jos o va adăuga.
-             */
             if (conversationIndex === -1) {
+              /*
+               * Este o conversație nouă care încă nu există în Inbox.
+               * În cazul acesta facem un singur refresh.
+               */
+              void loadConversations(false);
               return current;
             }
 
@@ -97,7 +94,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
             };
 
             /*
-             * Mesaj nou = conversația urcă instant prima în Inbox.
+             * Conversația cu mesaj nou urcă instant prima.
              */
             return [
               updatedConversation,
@@ -105,32 +102,12 @@ export default function MessagesInbox({ role }: { role: Role }) {
             ];
           });
 
-          /*
-           * AppNavbar își actualizează badge-ul general.
-           */
           window.dispatchEvent(new Event("messages-read-updated"));
-
-          /*
-           * Reconciliere cu DB.
-           *
-           * UI-ul s-a actualizat deja instant din payload,
-           * iar acest refetch verifică ulterior starea reală.
-           */
-          window.setTimeout(() => {
-            void loadConversations(false);
-          }, 500);
         },
       )
       .subscribe();
 
-    const refreshInbox = () => {
-      void loadConversations(false);
-    };
-
-    window.addEventListener("focus", refreshInbox);
-
     return () => {
-      window.removeEventListener("focus", refreshInbox);
       supabase.removeChannel(channel);
     };
   }, [role]);
@@ -309,46 +286,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
           new Date(a.lastMessageTime).getTime(),
       );
 
-      const lastReadRaw = sessionStorage.getItem("last-read-conversation");
-
-      let conversationsToDisplay = mapped;
-
-      if (lastReadRaw) {
-        try {
-          const lastRead = JSON.parse(lastReadRaw) as {
-            requestId: string;
-            offerId: string | null;
-            readAt?: number;
-          };
-
-          const isRecent =
-            !lastRead.readAt || Date.now() - lastRead.readAt < 5000;
-
-          if (isRecent) {
-            conversationsToDisplay = mapped.map((conversation) => {
-              const sameRequest = conversation.requestId === lastRead.requestId;
-
-              const sameOffer =
-                (conversation.offerId ?? null) === (lastRead.offerId ?? null);
-
-              if (!sameRequest || !sameOffer) {
-                return conversation;
-              }
-
-              return {
-                ...conversation,
-                unreadCount: 0,
-              };
-            });
-          } else {
-            sessionStorage.removeItem("last-read-conversation");
-          }
-        } catch {
-          sessionStorage.removeItem("last-read-conversation");
-        }
-      }
-
-      setConversations(conversationsToDisplay);
+      setConversations(mapped);
     } catch (error) {
       console.error("Failed to load conversations:", error);
       setConversations([]);
@@ -412,9 +350,8 @@ export default function MessagesInbox({ role }: { role: Role }) {
                   localStorage.setItem("activeRole", role);
 
                   /*
-                   * Eliminăm badge-ul local înainte să plecăm din Inbox.
-                   * Astfel, dacă Safari/Next păstrează pagina în history,
-                   * la Back nu reapare temporar valoarea veche.
+                   * Din momentul în care utilizatorul deschide conversația,
+                   * Inbox-ul o consideră citită local.
                    */
                   setConversations((current) =>
                     current.map((item) => {
@@ -433,15 +370,6 @@ export default function MessagesInbox({ role }: { role: Role }) {
                         ...item,
                         unreadCount: 0,
                       };
-                    }),
-                  );
-
-                  sessionStorage.setItem(
-                    "last-read-conversation",
-                    JSON.stringify({
-                      requestId: conversation.requestId,
-                      offerId: conversation.offerId ?? null,
-                      readAt: Date.now(),
                     }),
                   );
 
