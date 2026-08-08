@@ -45,7 +45,6 @@ function PostChoiceContent() {
   useEffect(() => {
     router.prefetch(createTargetUrl("/post-job"));
     router.prefetch(createTargetUrl("/post-mechanical"));
-    router.prefetch(createTargetUrl("/post-wheels"));
   }, [router, createTargetUrl]);
 
   const goToBodywork = () => {
