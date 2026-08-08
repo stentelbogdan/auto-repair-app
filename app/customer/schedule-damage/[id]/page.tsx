@@ -201,7 +201,11 @@ export default function ScheduleDamagePage() {
     loadData();
   }, [isWorkshopMode, offerIdFromUrl, requestId]);
 
-  const loadBookedSlots = async (date: string, workshopId: string) => {
+  const loadBookedSlots = async (
+    date: string,
+    workshopId: string,
+    excludeAppointmentId?: string | null,
+  ) => {
     if (!date || !workshopId) {
       setBookedSlots([]);
       return;
@@ -210,7 +214,7 @@ export default function ScheduleDamagePage() {
     try {
       setLoadingSlots(true);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("repair_appointments")
         .select(
           "id, appointment_date, appointment_time, proposed_date, proposed_time, status",
@@ -222,6 +226,12 @@ export default function ScheduleDamagePage() {
           "workshop_proposed",
           "confirmed",
         ]);
+
+      if (excludeAppointmentId) {
+        query = query.neq("id", excludeAppointmentId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Failed to load booked slots:", error);
@@ -243,9 +253,9 @@ export default function ScheduleDamagePage() {
             ? appointment.appointment_time
             : appointment.proposed_time || appointment.appointment_time;
         })
-        .filter(Boolean);
+        .filter((slot): slot is string => Boolean(slot));
 
-      setBookedSlots(slots);
+      setBookedSlots([...new Set(slots)]);
     } finally {
       setLoadingSlots(false);
     }
@@ -257,9 +267,41 @@ export default function ScheduleDamagePage() {
       return;
     }
 
-    setAppointmentTime("");
-    loadBookedSlots(appointmentDate, offer.workshop_user_id);
-  }, [appointmentDate, offer?.workshop_user_id]);
+    const loadSlots = async () => {
+      let currentAppointmentId: string | null = null;
+
+      if (!isInitialOfferMode && offer.id) {
+        const { data: currentAppointment, error } = await supabase
+          .from("repair_appointments")
+          .select("id")
+          .eq("offer_id", offer.id)
+          .eq("request_id", requestId)
+          .maybeSingle();
+
+        if (error) {
+          console.error("Failed to load current appointment:", error);
+        }
+
+        currentAppointmentId = currentAppointment?.id || null;
+      }
+
+      setAppointmentTime("");
+
+      await loadBookedSlots(
+        appointmentDate,
+        offer.workshop_user_id,
+        currentAppointmentId,
+      );
+    };
+
+    void loadSlots();
+  }, [
+    appointmentDate,
+    offer?.workshop_user_id,
+    offer?.id,
+    isInitialOfferMode,
+    requestId,
+  ]);
 
   const submitAppointment = async () => {
     if (!request || !offer) return;
@@ -299,24 +341,22 @@ export default function ScheduleDamagePage() {
 
     let slotQuery = supabase
       .from("repair_appointments")
-      .select("id")
-      .eq("workshop_id", offer.workshop_user_id)
-      .or(
-        `and(appointment_date.eq.${appointmentDate},appointment_time.eq.${appointmentTime}),and(proposed_date.eq.${appointmentDate},proposed_time.eq.${appointmentTime})`,
+      .select(
+        "id, appointment_date, appointment_time, proposed_date, proposed_time, status",
       )
+      .eq("workshop_id", offer.workshop_user_id)
       .in("status", [
         "requested",
         "customer_proposed",
         "workshop_proposed",
         "confirmed",
-      ])
-      .limit(1);
+      ]);
 
     if (currentAppointmentId) {
       slotQuery = slotQuery.neq("id", currentAppointmentId);
     }
 
-    const { data: existingAppointments, error: existingAppointmentsError } =
+    const { data: appointmentsForWorkshop, error: existingAppointmentsError } =
       await slotQuery;
 
     if (existingAppointmentsError) {
@@ -328,9 +368,31 @@ export default function ScheduleDamagePage() {
       return;
     }
 
-    if ((existingAppointments || []).length > 0) {
+    const slotIsOccupied = (appointmentsForWorkshop || []).some(
+      (appointment) => {
+        const activeDate =
+          appointment.status === "confirmed"
+            ? appointment.appointment_date
+            : appointment.proposed_date || appointment.appointment_date;
+
+        const activeTime =
+          appointment.status === "confirmed"
+            ? appointment.appointment_time
+            : appointment.proposed_time || appointment.appointment_time;
+
+        return activeDate === appointmentDate && activeTime === appointmentTime;
+      },
+    );
+
+    if (slotIsOccupied) {
       alert("Acest interval tocmai a fost ocupat. Alege altă oră.");
-      await loadBookedSlots(appointmentDate, offer.workshop_user_id);
+
+      await loadBookedSlots(
+        appointmentDate,
+        offer.workshop_user_id,
+        currentAppointmentId,
+      );
+
       setAppointmentTime("");
       return;
     }
