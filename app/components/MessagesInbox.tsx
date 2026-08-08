@@ -309,7 +309,40 @@ export default function MessagesInbox({ role }: { role: Role }) {
           new Date(a.lastMessageTime).getTime(),
       );
 
-      setConversations(mapped);
+      const lastReadRaw = sessionStorage.getItem("last-read-conversation");
+
+      let conversationsToDisplay = mapped;
+
+      if (lastReadRaw) {
+        try {
+          const lastRead = JSON.parse(lastReadRaw) as {
+            requestId: string;
+            offerId: string | null;
+          };
+
+          conversationsToDisplay = mapped.map((conversation) => {
+            const sameRequest = conversation.requestId === lastRead.requestId;
+
+            const sameOffer =
+              (conversation.offerId ?? null) === (lastRead.offerId ?? null);
+
+            if (!sameRequest || !sameOffer) {
+              return conversation;
+            }
+
+            return {
+              ...conversation,
+              unreadCount: 0,
+            };
+          });
+
+          sessionStorage.removeItem("last-read-conversation");
+        } catch {
+          sessionStorage.removeItem("last-read-conversation");
+        }
+      }
+
+      setConversations(conversationsToDisplay);
     } catch (error) {
       console.error("Failed to load conversations:", error);
       setConversations([]);
@@ -371,6 +404,40 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 key={`${conversation.requestId}-${conversation.offerId}`}
                 onClick={() => {
                   localStorage.setItem("activeRole", role);
+
+                  /*
+                   * Eliminăm badge-ul local înainte să plecăm din Inbox.
+                   * Astfel, dacă Safari/Next păstrează pagina în history,
+                   * la Back nu reapare temporar valoarea veche.
+                   */
+                  setConversations((current) =>
+                    current.map((item) => {
+                      const sameRequest =
+                        item.requestId === conversation.requestId;
+
+                      const sameOffer =
+                        (item.offerId ?? null) ===
+                        (conversation.offerId ?? null);
+
+                      if (!sameRequest || !sameOffer) {
+                        return item;
+                      }
+
+                      return {
+                        ...item,
+                        unreadCount: 0,
+                      };
+                    }),
+                  );
+
+                  sessionStorage.setItem(
+                    "last-read-conversation",
+                    JSON.stringify({
+                      requestId: conversation.requestId,
+                      offerId: conversation.offerId ?? null,
+                    }),
+                  );
+
                   router.push(
                     conversation.offerId
                       ? `/chat/${conversation.requestId}?offerId=${conversation.offerId}&role=${role}`

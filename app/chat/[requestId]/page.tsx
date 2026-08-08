@@ -398,6 +398,14 @@ export default function ChatPage() {
         .in("id", unreadMessageIds);
     }
 
+    sessionStorage.setItem(
+      "last-read-conversation",
+      JSON.stringify({
+        requestId,
+        offerId: offerId ?? null,
+      }),
+    );
+
     window.dispatchEvent(new Event("messages-read-updated"));
   };
 
