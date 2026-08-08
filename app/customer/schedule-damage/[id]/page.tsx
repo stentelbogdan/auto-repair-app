@@ -214,24 +214,11 @@ export default function ScheduleDamagePage() {
     try {
       setLoadingSlots(true);
 
-      let query = supabase
-        .from("repair_appointments")
-        .select(
-          "id, appointment_date, appointment_time, proposed_date, proposed_time, status",
-        )
-        .eq("workshop_id", workshopId)
-        .in("status", [
-          "requested",
-          "customer_proposed",
-          "workshop_proposed",
-          "confirmed",
-        ]);
-
-      if (excludeAppointmentId) {
-        query = query.neq("id", excludeAppointmentId);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await supabase.rpc("get_workshop_booked_slots", {
+        p_workshop_id: workshopId,
+        p_date: date,
+        p_exclude_appointment_id: excludeAppointmentId ?? null,
+      });
 
       if (error) {
         console.error("Failed to load booked slots:", error);
@@ -239,23 +226,12 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      const slots = (data || [])
-        .filter((appointment) => {
-          const activeDate =
-            appointment.status === "confirmed"
-              ? appointment.appointment_date
-              : appointment.proposed_date || appointment.appointment_date;
+      const slots: string[] = (data ?? []).flatMap(
+        (row: { slot_time?: string | null }) =>
+          row.slot_time ? [row.slot_time] : [],
+      );
 
-          return activeDate === date;
-        })
-        .map((appointment) => {
-          return appointment.status === "confirmed"
-            ? appointment.appointment_time
-            : appointment.proposed_time || appointment.appointment_time;
-        })
-        .filter((slot): slot is string => Boolean(slot));
-
-      setBookedSlots([...new Set(slots)]);
+      setBookedSlots(slots);
     } finally {
       setLoadingSlots(false);
     }
@@ -339,53 +315,27 @@ export default function ScheduleDamagePage() {
       currentAppointmentId = currentAppointment?.id || null;
     }
 
-    let slotQuery = supabase
-      .from("repair_appointments")
-      .select(
-        "id, appointment_date, appointment_time, proposed_date, proposed_time, status",
-      )
-      .eq("workshop_id", offer.workshop_user_id)
-      .in("status", [
-        "requested",
-        "customer_proposed",
-        "workshop_proposed",
-        "confirmed",
-      ]);
+    const { data: bookedSlotsData, error: bookedSlotsError } =
+      await supabase.rpc("get_workshop_booked_slots", {
+        p_workshop_id: offer.workshop_user_id,
+        p_date: appointmentDate,
+        p_exclude_appointment_id: currentAppointmentId,
+      });
 
-    if (currentAppointmentId) {
-      slotQuery = slotQuery.neq("id", currentAppointmentId);
-    }
-
-    const { data: appointmentsForWorkshop, error: existingAppointmentsError } =
-      await slotQuery;
-
-    if (existingAppointmentsError) {
-      console.error(
-        "Failed to verify appointment slot:",
-        existingAppointmentsError,
-      );
+    if (bookedSlotsError) {
+      console.error("Failed to verify appointment slot:", bookedSlotsError);
       alert("Nu am putut verifica disponibilitatea intervalului.");
       return;
     }
 
-    const slotIsOccupied = (appointmentsForWorkshop || []).some(
-      (appointment) => {
-        const activeDate =
-          appointment.status === "confirmed"
-            ? appointment.appointment_date
-            : appointment.proposed_date || appointment.appointment_date;
-
-        const activeTime =
-          appointment.status === "confirmed"
-            ? appointment.appointment_time
-            : appointment.proposed_time || appointment.appointment_time;
-
-        return activeDate === appointmentDate && activeTime === appointmentTime;
-      },
+    const slotIsOccupied = (bookedSlotsData ?? []).some(
+      (row: { slot_time?: string | null }) => row.slot_time === appointmentTime,
     );
 
     if (slotIsOccupied) {
-      alert("Acest interval tocmai a fost ocupat. Alege altă oră.");
+      alert(
+        "Ora selectată nu mai este disponibilă. Alege o altă dată sau oră.",
+      );
 
       await loadBookedSlots(
         appointmentDate,
