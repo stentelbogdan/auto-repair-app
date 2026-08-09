@@ -90,6 +90,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const currentUserIdRef = useRef<string>("");
   const perfStartRef = useRef<number>(performance.now());
+  const loadConversationsGenerationRef = useRef(0);
+  const loadConversationsSessionRef = useRef(0);
+  const realtimeDegradedRef = useRef(false);
 
   const logPerf = useCallback(
     (event: string, details?: Record<string, unknown>) => {
@@ -104,10 +107,18 @@ export default function MessagesInbox({ role }: { role: Role }) {
     [role],
   );
 
+  const invalidateLoadConversationsGeneration = useCallback(() => {
+    loadConversationsGenerationRef.current += 1;
+    return loadConversationsGenerationRef.current;
+  }, []);
+
   const loadConversations = useCallback(
     async (showLoader = true) => {
+      const generation = invalidateLoadConversationsGeneration();
+      const session = loadConversationsSessionRef.current;
+
       try {
-        logPerf("loadConversations:start", { showLoader });
+        logPerf("loadConversations:start", { showLoader, generation, session });
 
         if (showLoader) {
           setLoading(true);
@@ -119,7 +130,20 @@ export default function MessagesInbox({ role }: { role: Role }) {
         logPerf("auth.getUser:end", {
           durationMs: Number((performance.now() - authStart).toFixed(1)),
           hasUser: Boolean(authData.user),
+          generation,
         });
+
+        if (
+          loadConversationsSessionRef.current !== session ||
+          loadConversationsGenerationRef.current !== generation
+        ) {
+          logPerf("loadConversations:staleIgnored", {
+            generation,
+            session,
+            phase: "auth",
+          });
+          return;
+        }
 
         if (!authData.user) {
           router.push("/login");
@@ -167,13 +191,27 @@ export default function MessagesInbox({ role }: { role: Role }) {
         logPerf("query:repair_offers:end", {
           durationMs: Number((performance.now() - offersStart).toFixed(1)),
           count: offersData?.length || 0,
+          generation,
         });
         logPerf("query:direct_requests:end", {
           durationMs: Number(
             (performance.now() - directRequestsStart).toFixed(1),
           ),
           count: directRequestsData?.length || 0,
+          generation,
         });
+
+        if (
+          loadConversationsSessionRef.current !== session ||
+          loadConversationsGenerationRef.current !== generation
+        ) {
+          logPerf("loadConversations:staleIgnored", {
+            generation,
+            session,
+            phase: "offers-direct-requests",
+          });
+          return;
+        }
 
         if (offersError) throw offersError;
         if (directRequestsError) throw directRequestsError;
@@ -205,7 +243,21 @@ export default function MessagesInbox({ role }: { role: Role }) {
           logPerf("query:repair_requests_for_offers:end", {
             durationMs: Number((performance.now() - requestsStart).toFixed(1)),
             count: requestsData?.length || 0,
+            generation,
           });
+
+          if (
+            loadConversationsSessionRef.current !== session ||
+            loadConversationsGenerationRef.current !== generation
+          ) {
+            logPerf("loadConversations:staleIgnored", {
+              generation,
+              session,
+              phase: "requests-for-offers",
+            });
+            return;
+          }
+
           if (requestsError) throw requestsError;
           requests = (requestsData || []) as RequestRow[];
         }
@@ -255,13 +307,27 @@ export default function MessagesInbox({ role }: { role: Role }) {
           logPerf("query:messages_grouped:end", {
             durationMs: Number((performance.now() - messagesStart).toFixed(1)),
             count: messagesResult.data?.length || 0,
+            generation,
           });
         }
         if (directWorkshopIds.length > 0) {
           logPerf("query:profiles_grouped:end", {
             durationMs: Number((performance.now() - profilesStart).toFixed(1)),
             count: profilesResult.data?.length || 0,
+            generation,
           });
+        }
+
+        if (
+          loadConversationsSessionRef.current !== session ||
+          loadConversationsGenerationRef.current !== generation
+        ) {
+          logPerf("loadConversations:staleIgnored", {
+            generation,
+            session,
+            phase: "messages-profiles",
+          });
+          return;
         }
 
         if (messagesResult.error) throw messagesResult.error;
@@ -366,6 +432,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
         logPerf("setConversations:prepared", {
           totalConversations: mapped.length,
+          generation,
           firstConversationKey:
             mapped[0] != null
               ? getConversationKey(mapped[0].requestId, mapped[0].offerId)
@@ -403,26 +470,53 @@ export default function MessagesInbox({ role }: { role: Role }) {
             };
           }),
         });
+
+        if (
+          loadConversationsSessionRef.current !== session ||
+          loadConversationsGenerationRef.current !== generation
+        ) {
+          logPerf("loadConversations:staleIgnored", {
+            generation,
+            session,
+            phase: "before-setConversations",
+          });
+          return;
+        }
+
         setConversations(mapped);
         logPerf("loadConversations:end", {
           totalConversations: mapped.length,
+          generation,
         });
       } catch (error) {
         console.error("Failed to load conversations:", error);
         logPerf("loadConversations:error", {
+          generation,
           error: error instanceof Error ? error.message : String(error),
         });
-        setConversations([]);
+
+        if (
+          loadConversationsSessionRef.current === session &&
+          loadConversationsGenerationRef.current === generation
+        ) {
+          setConversations([]);
+        }
       } finally {
-        if (showLoader) {
+        if (
+          showLoader &&
+          loadConversationsSessionRef.current === session &&
+          loadConversationsGenerationRef.current === generation
+        ) {
           setLoading(false);
         }
       }
     },
-    [logPerf, role, router],
+    [invalidateLoadConversationsGeneration, logPerf, role, router],
   );
 
   useEffect(() => {
+    loadConversationsSessionRef.current += 1;
+    realtimeDegradedRef.current = false;
     logPerf("mount");
     localStorage.setItem("activeRole", role);
 
@@ -497,13 +591,35 @@ export default function MessagesInbox({ role }: { role: Role }) {
           window.dispatchEvent(new Event("messages-read-updated"));
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        logPerf("channel:status", { status });
+
+        if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          realtimeDegradedRef.current = true;
+          return;
+        }
+
+        if (status === "SUBSCRIBED" && realtimeDegradedRef.current) {
+          realtimeDegradedRef.current = false;
+          logPerf("channel:reconcileAfterDegraded");
+          void loadConversations(false);
+        }
+      });
 
     return () => {
-      logPerf("unmount");
+      const invalidatedGeneration = invalidateLoadConversationsGeneration();
+      loadConversationsSessionRef.current += 1;
+      realtimeDegradedRef.current = false;
+      logPerf("unmount", {
+        invalidatedGeneration,
+      });
       void supabase.removeChannel(channel);
     };
-  }, [loadConversations, logPerf, role]);
+  }, [invalidateLoadConversationsGeneration, loadConversations, logPerf, role]);
 
   useEffect(() => {
     if (!loading) {

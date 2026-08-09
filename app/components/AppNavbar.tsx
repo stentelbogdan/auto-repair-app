@@ -51,6 +51,12 @@ export default function AppNavbar() {
   const [fromParam, setFromParam] = useState<string | null>(null);
   const perfStartRef = useRef(0);
   const unreadCountRef = useRef(0);
+  const unreadMessagesGenerationRef = useRef(0);
+  const unreadMessagesRefreshInFlightRef = useRef(false);
+  const unreadMessagesPendingRefreshRef = useRef(false);
+  const unreadMessagesPendingReasonRef = useRef<string | null>(null);
+  const unreadMessagesRealtimeDegradedRef = useRef(false);
+  const unreadMessagesSchedulerSessionRef = useRef(0);
 
   const logPerf = useCallback(
     (event: string, details?: Record<string, unknown>) => {
@@ -195,106 +201,203 @@ export default function AppNavbar() {
       return;
     }
 
-    const loadUnreadMessages = async () => {
+    const schedulerSession = unreadMessagesSchedulerSessionRef.current + 1;
+    unreadMessagesSchedulerSessionRef.current = schedulerSession;
+    unreadMessagesRefreshInFlightRef.current = false;
+    unreadMessagesPendingRefreshRef.current = false;
+    unreadMessagesPendingReasonRef.current = null;
+
+    const loadUnreadMessages = async (reason: string) => {
+      if (unreadMessagesSchedulerSessionRef.current !== schedulerSession) {
+        return;
+      }
+
       if (!userId) {
         logPerf("loadUnreadMessages:resetNoUser");
         setUnreadCount(0);
         return;
       }
 
+      unreadMessagesRefreshInFlightRef.current = true;
+      unreadMessagesPendingRefreshRef.current = false;
+      unreadMessagesPendingReasonRef.current = null;
+
       const currentUserId = userId;
       let requestIds: string[] = [];
       const startedAt = performance.now();
+      const generation = unreadMessagesGenerationRef.current + 1;
+      unreadMessagesGenerationRef.current = generation;
       logPerf("loadUnreadMessages:start", {
         previousUnreadCount: unreadCountRef.current,
+        reason,
+        generation,
       });
 
-      if (isWorkshopMode) {
-        const [
-          { data: directRequests, error: directRequestsError },
-          { data: workshopOffers, error: workshopOffersError },
-        ] = await Promise.all([
-          supabase
+      try {
+        if (isWorkshopMode) {
+          const [
+            { data: directRequests, error: directRequestsError },
+            { data: workshopOffers, error: workshopOffersError },
+          ] = await Promise.all([
+            supabase
+              .from("repair_requests")
+              .select("id")
+              .eq("target_workshop_id", currentUserId),
+            supabase
+              .from("repair_offers")
+              .select("request_id")
+              .eq("workshop_user_id", currentUserId)
+              .in("status", ["pending", "accepted"]),
+          ]);
+
+          if (directRequestsError) {
+            console.error(
+              "Failed to load workshop direct message requests:",
+              directRequestsError,
+            );
+          }
+
+          if (workshopOffersError) {
+            console.error(
+              "Failed to load workshop conversations:",
+              workshopOffersError,
+            );
+          }
+
+          requestIds = [
+            ...(directRequests || []).map((request) => request.id),
+            ...(workshopOffers || []).map((offer) => offer.request_id),
+          ];
+        } else {
+          const { data: customerRequests } = await supabase
             .from("repair_requests")
             .select("id")
-            .eq("target_workshop_id", currentUserId),
-          supabase
-            .from("repair_offers")
-            .select("request_id")
-            .eq("workshop_user_id", currentUserId)
-            .in("status", ["pending", "accepted"]),
-        ]);
+            .eq("user_id", currentUserId);
 
-        if (directRequestsError) {
-          console.error(
-            "Failed to load workshop direct message requests:",
-            directRequestsError,
-          );
+          requestIds = (customerRequests || []).map((request) => request.id);
         }
 
-        if (workshopOffersError) {
-          console.error(
-            "Failed to load workshop conversations:",
-            workshopOffersError,
-          );
-        }
-
-        requestIds = [
-          ...(directRequests || []).map((request) => request.id),
-          ...(workshopOffers || []).map((offer) => offer.request_id),
-        ];
-      } else {
-        const { data: customerRequests } = await supabase
-          .from("repair_requests")
-          .select("id")
-          .eq("user_id", currentUserId);
-
-        requestIds = (customerRequests || []).map((request) => request.id);
-      }
-
-      requestIds = Array.from(new Set(requestIds)).filter(Boolean);
-      logPerf("loadUnreadMessages:requestIds", {
-        requestIdsCount: requestIds.length,
-      });
-
-      if (requestIds.length === 0) {
-        logPerf("loadUnreadMessages:setUnreadCount", {
-          nextUnreadCount: 0,
-          reason: "no_request_ids",
+        requestIds = Array.from(new Set(requestIds)).filter(Boolean);
+        logPerf("loadUnreadMessages:requestIds", {
+          requestIdsCount: requestIds.length,
+          reason,
+          generation,
         });
-        setUnreadCount(0);
-        return;
-      }
 
-      const unreadMessagesQuery = supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("request_id", requestIds)
-        .neq("sender_id", currentUserId)
-        .neq("sender_role", "system")
-        .is("read_at", null);
+        if (
+          unreadMessagesSchedulerSessionRef.current !== schedulerSession ||
+          unreadMessagesGenerationRef.current !== generation
+        ) {
+          logPerf("loadUnreadMessages:staleIgnored", {
+            reason,
+            generation,
+            phase: "requestIds",
+          });
+          return;
+        }
 
-      const { count: unreadCountResult, error: unreadMessagesError } =
-        await unreadMessagesQuery;
+        if (requestIds.length === 0) {
+          logPerf("loadUnreadMessages:end", {
+            durationMs: Number((performance.now() - startedAt).toFixed(1)),
+            calculatedUnreadCount: 0,
+            reason,
+            generation,
+          });
+          logPerf("loadUnreadMessages:setUnreadCount", {
+            nextUnreadCount: 0,
+            reason: "no_request_ids",
+            generation,
+          });
+          setUnreadCount(0);
+          return;
+        }
 
-      if (unreadMessagesError) {
-        console.error("Failed to load unread messages:", unreadMessagesError);
-        logPerf("loadUnreadMessages:error", {
+        const unreadMessagesQuery = supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .in("request_id", requestIds)
+          .neq("sender_id", currentUserId)
+          .neq("sender_role", "system")
+          .is("read_at", null);
+
+        const { count: unreadCountResult, error: unreadMessagesError } =
+          await unreadMessagesQuery;
+
+        if (
+          unreadMessagesSchedulerSessionRef.current !== schedulerSession ||
+          unreadMessagesGenerationRef.current !== generation
+        ) {
+          logPerf("loadUnreadMessages:staleIgnored", {
+            reason,
+            generation,
+            phase: "countResult",
+          });
+          return;
+        }
+
+        if (unreadMessagesError) {
+          console.error("Failed to load unread messages:", unreadMessagesError);
+          logPerf("loadUnreadMessages:error", {
+            durationMs: Number((performance.now() - startedAt).toFixed(1)),
+            error: unreadMessagesError.message,
+            reason,
+            generation,
+          });
+          setUnreadCount(0);
+          return;
+        }
+
+        logPerf("loadUnreadMessages:end", {
           durationMs: Number((performance.now() - startedAt).toFixed(1)),
-          error: unreadMessagesError.message,
+          calculatedUnreadCount: unreadCountResult || 0,
+          reason,
+          generation,
         });
-        setUnreadCount(0);
+        logPerf("loadUnreadMessages:setUnreadCount", {
+          nextUnreadCount: unreadCountResult || 0,
+          reason,
+          generation,
+        });
+        setUnreadCount(unreadCountResult || 0);
+      } finally {
+        if (unreadMessagesSchedulerSessionRef.current !== schedulerSession) {
+          return;
+        }
+
+        unreadMessagesRefreshInFlightRef.current = false;
+
+        if (unreadMessagesPendingRefreshRef.current) {
+          const pendingReason =
+            unreadMessagesPendingReasonRef.current || "pending-refresh";
+          unreadMessagesPendingRefreshRef.current = false;
+          unreadMessagesPendingReasonRef.current = null;
+          logPerf("scheduleUnreadMessagesRefresh:drainPending", {
+            reason: pendingReason,
+          });
+          void loadUnreadMessages(pendingReason);
+        }
+      }
+    };
+
+    const scheduleUnreadMessagesRefresh = (reason: string) => {
+      if (unreadMessagesSchedulerSessionRef.current !== schedulerSession) {
         return;
       }
 
-      logPerf("loadUnreadMessages:end", {
-        durationMs: Number((performance.now() - startedAt).toFixed(1)),
-        calculatedUnreadCount: unreadCountResult || 0,
+      logPerf("scheduleUnreadMessagesRefresh", {
+        reason,
+        inFlight: unreadMessagesRefreshInFlightRef.current,
+        pending: unreadMessagesPendingRefreshRef.current,
       });
-      logPerf("loadUnreadMessages:setUnreadCount", {
-        nextUnreadCount: unreadCountResult || 0,
-      });
-      setUnreadCount(unreadCountResult || 0);
+
+      if (unreadMessagesRefreshInFlightRef.current) {
+        unreadMessagesPendingRefreshRef.current = true;
+        unreadMessagesPendingReasonRef.current = reason;
+        logPerf("scheduleUnreadMessagesRefresh:queued", { reason });
+        return;
+      }
+
+      void loadUnreadMessages(reason);
     };
 
     const loadUnreadProgress = async () => {
@@ -463,7 +566,7 @@ export default function AppNavbar() {
       setNewRequestsUnreadCount(count || 0);
     };
 
-    loadUnreadMessages();
+    scheduleUnreadMessagesRefresh("effect-start");
     loadUnreadProgress();
     loadUnreadOffers();
     loadUnreadWonJobs();
@@ -522,7 +625,7 @@ export default function AppNavbar() {
             offerId: messagePayload?.offer_id ?? null,
             readAt: messagePayload?.read_at ?? null,
           });
-          await loadUnreadMessages();
+          scheduleUnreadMessagesRefresh(`realtime:${payload.eventType}`);
         },
       )
 
@@ -604,20 +707,24 @@ export default function AppNavbar() {
 
       .subscribe((status) => {
         logPerf("channel:status", { status });
+        if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          unreadMessagesRealtimeDegradedRef.current = true;
+          return;
+        }
+
         if (status === "SUBSCRIBED") {
-          loadUnreadMessages();
-          loadUnreadProgress();
-          loadUnreadOffers();
-          loadUnreadWonJobs();
-          loadUnreadDirectRequests();
-          loadUnreadOpenRequests();
-          loadUnreadAppointmentNotifications();
+          if (unreadMessagesRealtimeDegradedRef.current) {
+            unreadMessagesRealtimeDegradedRef.current = false;
+            scheduleUnreadMessagesRefresh("realtime-recovered");
+          }
         }
       });
 
-    const refreshBadges = () => {
-      logPerf("refreshBadges");
-      loadUnreadMessages();
+    const refreshAllBadges = () => {
       loadUnreadProgress();
       loadUnreadOffers();
       loadUnreadWonJobs();
@@ -626,29 +733,52 @@ export default function AppNavbar() {
       loadUnreadAppointmentNotifications();
     };
 
+    const refreshMessageBadgeOnly = (reason: string) => {
+      logPerf("refreshMessageBadgeOnly", { reason });
+      scheduleUnreadMessagesRefresh(reason);
+    };
+
     const handleFocus = () => {
       logPerf("focus:refresh");
-      refreshBadges();
+      refreshMessageBadgeOnly("focus");
+      refreshAllBadges();
     };
 
     const handleMessagesReadUpdated = () => {
       logPerf("event:messages-read-updated");
-      refreshBadges();
+      refreshMessageBadgeOnly("messages-read-updated");
     };
 
-    const handleVisibilityChange = () => {
-      logPerf("visibilitychange", {
-        state: document.visibilityState,
-      });
+    const handleProgressReadUpdated = () => {
+      loadUnreadProgress();
+    };
+
+    const handleOffersReadUpdated = () => {
+      loadUnreadOffers();
+      loadUnreadWonJobs();
+    };
+
+    const handleDirectRequestsReadUpdated = () => {
+      loadUnreadDirectRequests();
+      loadUnreadOpenRequests();
+    };
+
+    const handleNotificationsReadUpdated = () => {
+      loadUnreadAppointmentNotifications();
     };
 
     window.addEventListener("focus", handleFocus);
     window.addEventListener("messages-read-updated", handleMessagesReadUpdated);
-    window.addEventListener("progress-read-updated", refreshBadges);
-    window.addEventListener("offers-read-updated", refreshBadges);
-    window.addEventListener("direct-requests-read-updated", refreshBadges);
-    window.addEventListener("notifications-read-updated", refreshBadges);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("progress-read-updated", handleProgressReadUpdated);
+    window.addEventListener("offers-read-updated", handleOffersReadUpdated);
+    window.addEventListener(
+      "direct-requests-read-updated",
+      handleDirectRequestsReadUpdated,
+    );
+    window.addEventListener(
+      "notifications-read-updated",
+      handleNotificationsReadUpdated,
+    );
 
     return () => {
       window.removeEventListener("focus", handleFocus);
@@ -656,11 +786,24 @@ export default function AppNavbar() {
         "messages-read-updated",
         handleMessagesReadUpdated,
       );
-      window.removeEventListener("progress-read-updated", refreshBadges);
-      window.removeEventListener("offers-read-updated", refreshBadges);
-      window.removeEventListener("direct-requests-read-updated", refreshBadges);
-      window.removeEventListener("notifications-read-updated", refreshBadges);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener(
+        "progress-read-updated",
+        handleProgressReadUpdated,
+      );
+      window.removeEventListener("offers-read-updated", handleOffersReadUpdated);
+      unreadMessagesSchedulerSessionRef.current += 1;
+      unreadMessagesRefreshInFlightRef.current = false;
+      unreadMessagesPendingRefreshRef.current = false;
+      unreadMessagesPendingReasonRef.current = null;
+      unreadMessagesRealtimeDegradedRef.current = false;
+      window.removeEventListener(
+        "direct-requests-read-updated",
+        handleDirectRequestsReadUpdated,
+      );
+      window.removeEventListener(
+        "notifications-read-updated",
+        handleNotificationsReadUpdated,
+      );
 
       supabase.removeChannel(channel);
     };

@@ -77,6 +77,8 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const systemMessageCreatedRef = useRef(false);
+  const loadMessagesGenerationRef = useRef(0);
+  const markReadGenerationRef = useRef(0);
 
   const [selectedChatGallery, setSelectedChatGallery] = useState<{
     images: ChatImage[];
@@ -110,10 +112,21 @@ export default function ChatPage() {
     [offerId],
   );
 
+  const invalidateLoadMessagesGeneration = useCallback(() => {
+    loadMessagesGenerationRef.current += 1;
+    return loadMessagesGenerationRef.current;
+  }, []);
+
+  const invalidateMarkReadGeneration = useCallback(() => {
+    markReadGenerationRef.current += 1;
+    return markReadGenerationRef.current;
+  }, []);
+
   const loadMessages = useCallback(async () => {
     if (!requestId) return;
     const startedAt = performance.now();
-    logPerf("loadMessages:start");
+    const generation = invalidateLoadMessagesGeneration();
+    logPerf("loadMessages:start", { generation });
 
     let query = supabase
       .from("messages")
@@ -130,18 +143,37 @@ export default function ChatPage() {
     const { data, error } = await query;
 
     if (error) {
+      if (loadMessagesGenerationRef.current !== generation) {
+        logPerf("loadMessages:staleIgnored", {
+          generation,
+          phase: "error",
+        });
+        return;
+      }
+
       logPerf("loadMessages:error", {
         durationMs: Number((performance.now() - startedAt).toFixed(1)),
         error: error.message,
+        generation,
       });
       setMessagesLoading(false);
       return;
     }
 
     if (data && data.length > 0) {
+      if (loadMessagesGenerationRef.current !== generation) {
+        logPerf("loadMessages:staleIgnored", {
+          generation,
+          phase: "setMessages",
+          count: data.length,
+        });
+        return;
+      }
+
       logPerf("loadMessages:setMessages", {
         durationMs: Number((performance.now() - startedAt).toFixed(1)),
         count: data.length,
+        generation,
       });
       setMessages(data);
       setMessagesLoading(false);
@@ -164,18 +196,29 @@ export default function ChatPage() {
       images: [],
     });
 
+    if (loadMessagesGenerationRef.current !== generation) {
+      logPerf("loadMessages:staleIgnored", {
+        generation,
+        phase: "emptyInsertedSystemMessage",
+      });
+      return;
+    }
+
     logPerf("loadMessages:emptyInsertedSystemMessage", {
       durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      generation,
     });
     setMessagesLoading(false);
-  }, [logPerf, offerId, requestId]);
+  }, [invalidateLoadMessagesGeneration, logPerf, offerId, requestId]);
 
   const markConversationAsRead = useCallback(async () => {
     if (!userId || !requestId || messages.length === 0) return;
 
     const startedAt = performance.now();
+    const generation = invalidateMarkReadGeneration();
     logPerf("markConversationAsRead:start", {
       totalMessagesInState: messages.length,
+      generation,
     });
     const now = new Date().toISOString();
     const unreadMessageIds = messages
@@ -192,6 +235,7 @@ export default function ChatPage() {
     if (unreadMessageIds.length === 0) {
       logPerf("markConversationAsRead:noop", {
         durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        generation,
       });
       return;
     }
@@ -200,9 +244,20 @@ export default function ChatPage() {
       .from("messages")
       .update({ read_at: now })
       .in("id", unreadMessageIds);
+
+    if (markReadGenerationRef.current !== generation) {
+      logPerf("markConversationAsRead:staleIgnored", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        generation,
+        updatedCount: unreadMessageIds.length,
+      });
+      return;
+    }
+
     logPerf("markConversationAsRead:end", {
       durationMs: Number((performance.now() - startedAt).toFixed(1)),
       updatedCount: unreadMessageIds.length,
+      generation,
     });
 
     sessionStorage.setItem(
@@ -216,10 +271,12 @@ export default function ChatPage() {
 
     logPerf("dispatch:messages-read-updated", {
       updatedCount: unreadMessageIds.length,
+      generation,
     });
     window.dispatchEvent(new Event("messages-read-updated"));
   }, [
     belongsToCurrentConversation,
+    invalidateMarkReadGeneration,
     logPerf,
     messages,
     offerId,
@@ -466,7 +523,12 @@ export default function ChatPage() {
     channelRef.current = channel;
 
     return () => {
-      logPerf("unmount");
+      const invalidatedLoadGeneration = invalidateLoadMessagesGeneration();
+      const invalidatedMarkReadGeneration = invalidateMarkReadGeneration();
+      logPerf("unmount", {
+        invalidatedLoadGeneration,
+        invalidatedMarkReadGeneration,
+      });
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
@@ -475,6 +537,8 @@ export default function ChatPage() {
     };
   }, [
     belongsToCurrentConversation,
+    invalidateLoadMessagesGeneration,
+    invalidateMarkReadGeneration,
     loadMessages,
     loadRequest,
     loadWorkshopProfile,
