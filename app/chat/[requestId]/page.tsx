@@ -87,6 +87,21 @@ export default function ChatPage() {
     workshop_name: string | null;
     workshop_slug: string | null;
   } | null>(null);
+  const perfStartRef = useRef<number>(performance.now());
+
+  const logPerf = useCallback(
+    (event: string, details?: Record<string, unknown>) => {
+      const elapsed = (performance.now() - perfStartRef.current).toFixed(1);
+      console.log("[MSG-PERF][Chat]", {
+        event,
+        elapsedMs: Number(elapsed),
+        requestId,
+        offerId: offerId ?? null,
+        ...details,
+      });
+    },
+    [offerId, requestId],
+  );
 
   const belongsToCurrentConversation = useCallback(
     (messageOfferId?: string | null) => {
@@ -97,6 +112,8 @@ export default function ChatPage() {
 
   const loadMessages = useCallback(async () => {
     if (!requestId) return;
+    const startedAt = performance.now();
+    logPerf("loadMessages:start");
 
     let query = supabase
       .from("messages")
@@ -113,11 +130,19 @@ export default function ChatPage() {
     const { data, error } = await query;
 
     if (error) {
+      logPerf("loadMessages:error", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        error: error.message,
+      });
       setMessagesLoading(false);
       return;
     }
 
     if (data && data.length > 0) {
+      logPerf("loadMessages:setMessages", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        count: data.length,
+      });
       setMessages(data);
       setMessagesLoading(false);
       return;
@@ -139,12 +164,19 @@ export default function ChatPage() {
       images: [],
     });
 
+    logPerf("loadMessages:emptyInsertedSystemMessage", {
+      durationMs: Number((performance.now() - startedAt).toFixed(1)),
+    });
     setMessagesLoading(false);
-  }, [offerId, requestId]);
+  }, [logPerf, offerId, requestId]);
 
   const markConversationAsRead = useCallback(async () => {
     if (!userId || !requestId || messages.length === 0) return;
 
+    const startedAt = performance.now();
+    logPerf("markConversationAsRead:start", {
+      totalMessagesInState: messages.length,
+    });
     const now = new Date().toISOString();
     const unreadMessageIds = messages
       .filter(
@@ -157,12 +189,21 @@ export default function ChatPage() {
       )
       .map((message) => message.id);
 
-    if (unreadMessageIds.length === 0) return;
+    if (unreadMessageIds.length === 0) {
+      logPerf("markConversationAsRead:noop", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      });
+      return;
+    }
 
     await supabase
       .from("messages")
       .update({ read_at: now })
       .in("id", unreadMessageIds);
+    logPerf("markConversationAsRead:end", {
+      durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      updatedCount: unreadMessageIds.length,
+    });
 
     sessionStorage.setItem(
       "last-read-conversation",
@@ -173,16 +214,29 @@ export default function ChatPage() {
       }),
     );
 
+    logPerf("dispatch:messages-read-updated", {
+      updatedCount: unreadMessageIds.length,
+    });
     window.dispatchEvent(new Event("messages-read-updated"));
-  }, [belongsToCurrentConversation, messages, offerId, requestId, userId]);
+  }, [
+    belongsToCurrentConversation,
+    logPerf,
+    messages,
+    offerId,
+    requestId,
+    userId,
+  ]);
 
   useEffect(() => {
+    logPerf("focusVisibilitySync:subscribe");
     const syncMessages = () => {
+      logPerf("focusVisibilitySync:trigger");
       void loadMessages();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        logPerf("visibilitychange:visible");
         syncMessages();
       }
     };
@@ -191,10 +245,11 @@ export default function ChatPage() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      logPerf("focusVisibilitySync:unsubscribe");
       window.removeEventListener("focus", syncMessages);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadMessages]);
+  }, [loadMessages, logPerf]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -306,6 +361,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
+    logPerf("mount", { roleParam });
 
     if (roleParam === "workshop") {
       localStorage.setItem("activeRole", "workshop");
@@ -334,8 +390,17 @@ export default function ChatPage() {
         },
         (payload) => {
           const insertedMessage = payload.new as Message;
+          logPerf("realtime:INSERT", {
+            messageId: insertedMessage.id,
+            messageOfferId: insertedMessage.offer_id ?? null,
+            readAt: insertedMessage.read_at ?? null,
+          });
 
           if (!belongsToCurrentConversation(insertedMessage.offer_id)) {
+            logPerf("realtime:INSERT:ignoredOtherConversation", {
+              messageId: insertedMessage.id,
+              messageOfferId: insertedMessage.offer_id ?? null,
+            });
             return;
           }
 
@@ -362,8 +427,17 @@ export default function ChatPage() {
         },
         (payload) => {
           const updatedMessage = payload.new as Message;
+          logPerf("realtime:UPDATE", {
+            messageId: updatedMessage.id,
+            messageOfferId: updatedMessage.offer_id ?? null,
+            readAt: updatedMessage.read_at ?? null,
+          });
 
           if (!belongsToCurrentConversation(updatedMessage.offer_id)) {
+            logPerf("realtime:UPDATE:ignoredOtherConversation", {
+              messageId: updatedMessage.id,
+              messageOfferId: updatedMessage.offer_id ?? null,
+            });
             return;
           }
 
@@ -392,6 +466,7 @@ export default function ChatPage() {
     channelRef.current = channel;
 
     return () => {
+      logPerf("unmount");
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
@@ -403,10 +478,19 @@ export default function ChatPage() {
     loadMessages,
     loadRequest,
     loadWorkshopProfile,
+    logPerf,
     requestId,
     roleParam,
     userId,
   ]);
+
+  useEffect(() => {
+    if (!messagesLoading) {
+      logPerf("messagesVisible", {
+        count: messages.length,
+      });
+    }
+  }, [logPerf, messages.length, messagesLoading]);
 
   const sendTypingStatus = async (isTyping: boolean) => {
     if (!channelRef.current || !userId) return;

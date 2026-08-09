@@ -89,15 +89,37 @@ export default function MessagesInbox({ role }: { role: Role }) {
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const currentUserIdRef = useRef<string>("");
+  const perfStartRef = useRef<number>(performance.now());
+
+  const logPerf = useCallback(
+    (event: string, details?: Record<string, unknown>) => {
+      const elapsed = (performance.now() - perfStartRef.current).toFixed(1);
+      console.log("[MSG-PERF][Inbox]", {
+        event,
+        elapsedMs: Number(elapsed),
+        role,
+        ...details,
+      });
+    },
+    [role],
+  );
 
   const loadConversations = useCallback(
     async (showLoader = true) => {
       try {
+        logPerf("loadConversations:start", { showLoader });
+
         if (showLoader) {
           setLoading(true);
         }
 
+        const authStart = performance.now();
+        logPerf("auth.getUser:start");
         const { data: authData } = await supabase.auth.getUser();
+        logPerf("auth.getUser:end", {
+          durationMs: Number((performance.now() - authStart).toFixed(1)),
+          hasUser: Boolean(authData.user),
+        });
 
         if (!authData.user) {
           router.push("/login");
@@ -134,8 +156,24 @@ export default function MessagesInbox({ role }: { role: Role }) {
           directRequestsQuery = directRequestsQuery.eq("user_id", userId);
         }
 
-        const [{ data: offersData, error: offersError }, { data: directRequestsData, error: directRequestsError }] =
-          await Promise.all([offersQuery, directRequestsQuery]);
+        const offersStart = performance.now();
+        const directRequestsStart = performance.now();
+        logPerf("query:repair_offers:start");
+        logPerf("query:direct_requests:start");
+        const [
+          { data: offersData, error: offersError },
+          { data: directRequestsData, error: directRequestsError },
+        ] = await Promise.all([offersQuery, directRequestsQuery]);
+        logPerf("query:repair_offers:end", {
+          durationMs: Number((performance.now() - offersStart).toFixed(1)),
+          count: offersData?.length || 0,
+        });
+        logPerf("query:direct_requests:end", {
+          durationMs: Number(
+            (performance.now() - directRequestsStart).toFixed(1),
+          ),
+          count: directRequestsData?.length || 0,
+        });
 
         if (offersError) throw offersError;
         if (directRequestsError) throw directRequestsError;
@@ -148,6 +186,10 @@ export default function MessagesInbox({ role }: { role: Role }) {
         let requests: RequestRow[] = [];
 
         if (offerRequestIds.length > 0) {
+          const requestsStart = performance.now();
+          logPerf("query:repair_requests_for_offers:start", {
+            requestIds: offerRequestIds.length,
+          });
           let requestsQuery = supabase
             .from("repair_requests")
             .select(
@@ -160,6 +202,10 @@ export default function MessagesInbox({ role }: { role: Role }) {
           }
 
           const { data: requestsData, error: requestsError } = await requestsQuery;
+          logPerf("query:repair_requests_for_offers:end", {
+            durationMs: Number((performance.now() - requestsStart).toFixed(1)),
+            count: requestsData?.length || 0,
+          });
           if (requestsError) throw requestsError;
           requests = (requestsData || []) as RequestRow[];
         }
@@ -176,6 +222,18 @@ export default function MessagesInbox({ role }: { role: Role }) {
           ),
         ];
 
+        const messagesStart = performance.now();
+        const profilesStart = performance.now();
+        if (allRequestIds.length > 0) {
+          logPerf("query:messages_grouped:start", {
+            requestIds: allRequestIds.length,
+          });
+        }
+        if (directWorkshopIds.length > 0) {
+          logPerf("query:profiles_grouped:start", {
+            workshopIds: directWorkshopIds.length,
+          });
+        }
         const [messagesResult, profilesResult] = await Promise.all([
           allRequestIds.length > 0
             ? supabase
@@ -193,6 +251,18 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 .in("id", directWorkshopIds)
             : Promise.resolve({ data: [], error: null }),
         ]);
+        if (allRequestIds.length > 0) {
+          logPerf("query:messages_grouped:end", {
+            durationMs: Number((performance.now() - messagesStart).toFixed(1)),
+            count: messagesResult.data?.length || 0,
+          });
+        }
+        if (directWorkshopIds.length > 0) {
+          logPerf("query:profiles_grouped:end", {
+            durationMs: Number((performance.now() - profilesStart).toFixed(1)),
+            count: profilesResult.data?.length || 0,
+          });
+        }
 
         if (messagesResult.error) throw messagesResult.error;
         if (profilesResult.error) throw profilesResult.error;
@@ -294,9 +364,27 @@ export default function MessagesInbox({ role }: { role: Role }) {
             new Date(a.lastMessageTime).getTime(),
         );
 
+        logPerf("setConversations:prepared", {
+          totalConversations: mapped.length,
+          firstConversationKey:
+            mapped[0] != null
+              ? getConversationKey(mapped[0].requestId, mapped[0].offerId)
+              : null,
+          firstUnreadCount: mapped[0]?.unreadCount ?? null,
+          testConversationUnread: mapped.map((conversation) => ({
+            key: getConversationKey(conversation.requestId, conversation.offerId),
+            unreadCount: conversation.unreadCount,
+          })),
+        });
         setConversations(mapped);
+        logPerf("loadConversations:end", {
+          totalConversations: mapped.length,
+        });
       } catch (error) {
         console.error("Failed to load conversations:", error);
+        logPerf("loadConversations:error", {
+          error: error instanceof Error ? error.message : String(error),
+        });
         setConversations([]);
       } finally {
         if (showLoader) {
@@ -304,10 +392,11 @@ export default function MessagesInbox({ role }: { role: Role }) {
         }
       }
     },
-    [role, router],
+    [logPerf, role, router],
   );
 
   useEffect(() => {
+    logPerf("mount");
     localStorage.setItem("activeRole", role);
 
     void loadConversations();
@@ -323,6 +412,13 @@ export default function MessagesInbox({ role }: { role: Role }) {
         },
         (payload) => {
           const newMessage = payload.new as MessageRow;
+          logPerf("realtime:INSERT", {
+            requestId: newMessage.request_id,
+            offerId: newMessage.offer_id ?? null,
+            readAt: newMessage.read_at,
+            senderId: newMessage.sender_id,
+            senderRole: newMessage.sender_role,
+          });
 
           const currentUserId = currentUserIdRef.current;
 
@@ -339,6 +435,10 @@ export default function MessagesInbox({ role }: { role: Role }) {
                * Este o conversație nouă care încă nu există în Inbox.
                * În cazul acesta facem un singur refresh.
                */
+              logPerf("realtime:INSERT:conversation_missing_refetch", {
+                requestId: newMessage.request_id,
+                offerId: newMessage.offer_id ?? null,
+              });
               void loadConversations(false);
               return current;
             }
@@ -373,9 +473,18 @@ export default function MessagesInbox({ role }: { role: Role }) {
       .subscribe();
 
     return () => {
+      logPerf("unmount");
       void supabase.removeChannel(channel);
     };
-  }, [loadConversations, role]);
+  }, [loadConversations, logPerf, role]);
+
+  useEffect(() => {
+    if (!loading) {
+      logPerf("firstListVisible", {
+        conversations: conversations.length,
+      });
+    }
+  }, [conversations.length, loading, logPerf]);
 
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white">
