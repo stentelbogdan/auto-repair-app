@@ -57,28 +57,49 @@ export default function AppNavbar() {
   const unreadMessagesPendingReasonRef = useRef<string | null>(null);
   const unreadMessagesRealtimeDegradedRef = useRef(false);
   const unreadMessagesSchedulerSessionRef = useRef(0);
+  const unreadMessagesRequestIdRef = useRef(0);
+  const logContextRef = useRef({
+    pathname,
+    userId,
+    activeRole,
+    roleParam,
+    fromParam,
+  });
+
+  useEffect(() => {
+    logContextRef.current = {
+      pathname,
+      userId,
+      activeRole,
+      roleParam,
+      fromParam,
+    };
+  }, [activeRole, fromParam, pathname, roleParam, userId]);
 
   const logPerf = useCallback(
     (event: string, details?: Record<string, unknown>) => {
       if (perfStartRef.current === 0) {
         perfStartRef.current = performance.now();
       }
+
+      const context = logContextRef.current;
       const elapsed = (performance.now() - perfStartRef.current).toFixed(1);
       console.log("[MSG-PERF][Navbar]", {
         event,
         elapsedMs: Number(elapsed),
-        pathname,
-        userId,
-        activeRole,
+        pathname: context.pathname,
+        userId: context.userId,
+        activeRole: context.activeRole,
         isWorkshopMode:
-          pathname.startsWith("/workshops") ||
-          roleParam === "workshop" ||
-          fromParam === "workshop" ||
-          (pathname.startsWith("/chat") && activeRole === "workshop"),
+          context.pathname.startsWith("/workshops") ||
+          context.roleParam === "workshop" ||
+          context.fromParam === "workshop" ||
+          (context.pathname.startsWith("/chat") &&
+            context.activeRole === "workshop"),
         ...details,
       });
     },
-    [activeRole, fromParam, pathname, roleParam, userId],
+    [],
   );
 
   useEffect(() => {
@@ -206,6 +227,11 @@ export default function AppNavbar() {
     unreadMessagesRefreshInFlightRef.current = false;
     unreadMessagesPendingRefreshRef.current = false;
     unreadMessagesPendingReasonRef.current = null;
+    logPerf("scheduler:session:start", {
+      schedulerSession,
+      isWorkshopMode,
+      isClientMode,
+    });
 
     const loadUnreadMessages = async (reason: string) => {
       if (unreadMessagesSchedulerSessionRef.current !== schedulerSession) {
@@ -226,11 +252,16 @@ export default function AppNavbar() {
       let requestIds: string[] = [];
       const startedAt = performance.now();
       const generation = unreadMessagesGenerationRef.current + 1;
+      const requestId = unreadMessagesRequestIdRef.current + 1;
       unreadMessagesGenerationRef.current = generation;
+      unreadMessagesRequestIdRef.current = requestId;
       logPerf("loadUnreadMessages:start", {
         previousUnreadCount: unreadCountRef.current,
         reason,
         generation,
+        requestId,
+        schedulerSession,
+        isWorkshopMode,
       });
 
       try {
@@ -268,6 +299,18 @@ export default function AppNavbar() {
             ...(directRequests || []).map((request) => request.id),
             ...(workshopOffers || []).map((offer) => offer.request_id),
           ];
+          logPerf("loadUnreadMessages:workshopRequestSources", {
+            reason,
+            generation,
+            requestId,
+            schedulerSession,
+            directRequestIds: (directRequests || []).map(
+              (request) => request.id,
+            ),
+            offerRequestIds: (workshopOffers || []).map(
+              (offer) => offer.request_id,
+            ),
+          });
         } else {
           const { data: customerRequests } = await supabase
             .from("repair_requests")
@@ -280,8 +323,11 @@ export default function AppNavbar() {
         requestIds = Array.from(new Set(requestIds)).filter(Boolean);
         logPerf("loadUnreadMessages:requestIds", {
           requestIdsCount: requestIds.length,
+          requestIds,
           reason,
           generation,
+          requestId,
+          schedulerSession,
         });
 
         if (
@@ -323,6 +369,16 @@ export default function AppNavbar() {
         const { count: unreadCountResult, error: unreadMessagesError } =
           await unreadMessagesQuery;
 
+        logPerf("loadUnreadMessages:countResult", {
+          calculatedUnreadCount: unreadCountResult || 0,
+          reason,
+          generation,
+          requestId,
+          schedulerSession,
+          requestIds,
+          timestamp: new Date().toISOString(),
+        });
+
         if (
           unreadMessagesSchedulerSessionRef.current !== schedulerSession ||
           unreadMessagesGenerationRef.current !== generation
@@ -352,11 +408,15 @@ export default function AppNavbar() {
           calculatedUnreadCount: unreadCountResult || 0,
           reason,
           generation,
+          requestId,
+          schedulerSession,
         });
         logPerf("loadUnreadMessages:setUnreadCount", {
           nextUnreadCount: unreadCountResult || 0,
           reason,
           generation,
+          requestId,
+          schedulerSession,
         });
         setUnreadCount(unreadCountResult || 0);
       } finally {
@@ -386,14 +446,21 @@ export default function AppNavbar() {
 
       logPerf("scheduleUnreadMessagesRefresh", {
         reason,
+        schedulerSession,
         inFlight: unreadMessagesRefreshInFlightRef.current,
         pending: unreadMessagesPendingRefreshRef.current,
       });
 
       if (unreadMessagesRefreshInFlightRef.current) {
+        const invalidatedGeneration =
+          unreadMessagesGenerationRef.current + 1;
+        unreadMessagesGenerationRef.current = invalidatedGeneration;
         unreadMessagesPendingRefreshRef.current = true;
         unreadMessagesPendingReasonRef.current = reason;
-        logPerf("scheduleUnreadMessagesRefresh:queued", { reason });
+        logPerf("scheduleUnreadMessagesRefresh:queued", {
+          reason,
+          invalidatedGeneration,
+        });
         return;
       }
 
@@ -781,6 +848,11 @@ export default function AppNavbar() {
     );
 
     return () => {
+      logPerf("scheduler:session:cleanup", {
+        schedulerSession,
+        isWorkshopMode,
+        isClientMode,
+      });
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener(
         "messages-read-updated",
