@@ -58,6 +58,11 @@ export default function AppNavbar() {
   const unreadMessagesRealtimeDegradedRef = useRef(false);
   const unreadMessagesSchedulerSessionRef = useRef(0);
   const unreadMessagesRequestIdRef = useRef(0);
+  const lastBrowserNavigationEventRef = useRef<{
+    type: "pageshow" | "pagehide" | "focus" | "popstate";
+    timestamp: string;
+    persisted?: boolean;
+  } | null>(null);
   const logContextRef = useRef({
     pathname,
     userId,
@@ -417,6 +422,7 @@ export default function AppNavbar() {
           generation,
           requestId,
           schedulerSession,
+          lastBrowserNavigationEvent: lastBrowserNavigationEventRef.current,
         });
         setUnreadCount(unreadCountResult || 0);
       } finally {
@@ -806,9 +812,66 @@ export default function AppNavbar() {
     };
 
     const handleFocus = () => {
-      logPerf("focus:refresh");
+      const timestamp = new Date().toISOString();
+      lastBrowserNavigationEventRef.current = {
+        type: "focus",
+        timestamp,
+      };
+      logPerf("browser:focus", {
+        timestamp,
+        unreadCount: unreadCountRef.current,
+        visibilityState: document.visibilityState,
+        windowPathname: window.location.pathname,
+      });
       refreshMessageBadgeOnly("focus");
       refreshAllBadges();
+    };
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      const timestamp = new Date().toISOString();
+      lastBrowserNavigationEventRef.current = {
+        type: "pageshow",
+        timestamp,
+        persisted: event.persisted,
+      };
+      logPerf("browser:pageshow", {
+        timestamp,
+        persisted: event.persisted,
+        unreadCount: unreadCountRef.current,
+        visibilityState: document.visibilityState,
+        windowPathname: window.location.pathname,
+      });
+    };
+
+    const handlePageHide = (event: PageTransitionEvent) => {
+      const timestamp = new Date().toISOString();
+      lastBrowserNavigationEventRef.current = {
+        type: "pagehide",
+        timestamp,
+        persisted: event.persisted,
+      };
+      logPerf("browser:pagehide", {
+        timestamp,
+        persisted: event.persisted,
+        unreadCount: unreadCountRef.current,
+        visibilityState: document.visibilityState,
+        windowPathname: window.location.pathname,
+      });
+    };
+
+    const handlePopState = () => {
+      const timestamp = new Date().toISOString();
+      lastBrowserNavigationEventRef.current = {
+        type: "popstate",
+        timestamp,
+      };
+      logPerf("browser:popstate", {
+        timestamp,
+        unreadCount: unreadCountRef.current,
+        visibilityState: document.visibilityState,
+        windowPathname: window.location.pathname,
+        historyState: window.history.state,
+      });
     };
 
     const handleMessagesReadUpdated = () => {
@@ -835,6 +898,9 @@ export default function AppNavbar() {
     };
 
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("popstate", handlePopState);
     window.addEventListener("messages-read-updated", handleMessagesReadUpdated);
     window.addEventListener("progress-read-updated", handleProgressReadUpdated);
     window.addEventListener("offers-read-updated", handleOffersReadUpdated);
@@ -854,6 +920,9 @@ export default function AppNavbar() {
         isClientMode,
       });
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("popstate", handlePopState);
       window.removeEventListener(
         "messages-read-updated",
         handleMessagesReadUpdated,
