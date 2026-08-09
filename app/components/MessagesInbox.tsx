@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -771,7 +771,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
     };
   }, [invalidateLoadConversationsGeneration, loadConversations, logPerf, role]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (conversations.length === 0) {
       return;
     }
