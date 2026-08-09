@@ -375,6 +375,33 @@ export default function MessagesInbox({ role }: { role: Role }) {
             key: getConversationKey(conversation.requestId, conversation.offerId),
             unreadCount: conversation.unreadCount,
           })),
+          incomingRelevantReadStates: mapped.map((conversation) => {
+            const conversationMessages =
+              messagesByConversation.get(
+                getConversationKey(
+                  conversation.requestId,
+                  conversation.offerId ?? null,
+                ),
+              ) || [];
+
+            return {
+              key: getConversationKey(
+                conversation.requestId,
+                conversation.offerId ?? null,
+              ),
+              incomingMessages: conversationMessages
+                .filter(
+                  (message) =>
+                    message.sender_id !== userId &&
+                    message.sender_role !== "system",
+                )
+                .map((message) => ({
+                  id: message.id,
+                  createdAt: message.created_at,
+                  readAt: message.read_at,
+                })),
+            };
+          }),
         });
         setConversations(mapped);
         logPerf("loadConversations:end", {

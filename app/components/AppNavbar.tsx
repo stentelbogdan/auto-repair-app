@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
@@ -49,6 +49,31 @@ export default function AppNavbar() {
     targetUrl: string | null;
   } | null>(null);
   const [fromParam, setFromParam] = useState<string | null>(null);
+  const perfStartRef = useRef(0);
+  const unreadCountRef = useRef(0);
+
+  const logPerf = useCallback(
+    (event: string, details?: Record<string, unknown>) => {
+      if (perfStartRef.current === 0) {
+        perfStartRef.current = performance.now();
+      }
+      const elapsed = (performance.now() - perfStartRef.current).toFixed(1);
+      console.log("[MSG-PERF][Navbar]", {
+        event,
+        elapsedMs: Number(elapsed),
+        pathname,
+        userId,
+        activeRole,
+        isWorkshopMode:
+          pathname.startsWith("/workshops") ||
+          roleParam === "workshop" ||
+          fromParam === "workshop" ||
+          (pathname.startsWith("/chat") && activeRole === "workshop"),
+        ...details,
+      });
+    },
+    [activeRole, fromParam, pathname, roleParam, userId],
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -106,6 +131,10 @@ export default function AppNavbar() {
     (pathname.startsWith("/chat") && activeRole === "workshop");
 
   const isClientMode = !isWorkshopMode;
+
+  useEffect(() => {
+    unreadCountRef.current = unreadCount;
+  }, [unreadCount]);
 
   useEffect(() => {
     let mounted = true;
@@ -168,12 +197,17 @@ export default function AppNavbar() {
 
     const loadUnreadMessages = async () => {
       if (!userId) {
+        logPerf("loadUnreadMessages:resetNoUser");
         setUnreadCount(0);
         return;
       }
 
       const currentUserId = userId;
       let requestIds: string[] = [];
+      const startedAt = performance.now();
+      logPerf("loadUnreadMessages:start", {
+        previousUnreadCount: unreadCountRef.current,
+      });
 
       if (isWorkshopMode) {
         const [
@@ -219,8 +253,15 @@ export default function AppNavbar() {
       }
 
       requestIds = Array.from(new Set(requestIds)).filter(Boolean);
+      logPerf("loadUnreadMessages:requestIds", {
+        requestIdsCount: requestIds.length,
+      });
 
       if (requestIds.length === 0) {
+        logPerf("loadUnreadMessages:setUnreadCount", {
+          nextUnreadCount: 0,
+          reason: "no_request_ids",
+        });
         setUnreadCount(0);
         return;
       }
@@ -238,10 +279,21 @@ export default function AppNavbar() {
 
       if (unreadMessagesError) {
         console.error("Failed to load unread messages:", unreadMessagesError);
+        logPerf("loadUnreadMessages:error", {
+          durationMs: Number((performance.now() - startedAt).toFixed(1)),
+          error: unreadMessagesError.message,
+        });
         setUnreadCount(0);
         return;
       }
 
+      logPerf("loadUnreadMessages:end", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        calculatedUnreadCount: unreadCountResult || 0,
+      });
+      logPerf("loadUnreadMessages:setUnreadCount", {
+        nextUnreadCount: unreadCountResult || 0,
+      });
       setUnreadCount(unreadCountResult || 0);
     };
 
@@ -454,7 +506,22 @@ export default function AppNavbar() {
           schema: "public",
           table: "messages",
         },
-        async () => {
+        async (payload) => {
+          const messagePayload = payload.new as
+            | {
+                id?: string;
+                request_id?: string;
+                offer_id?: string | null;
+                read_at?: string | null;
+              }
+            | undefined;
+          logPerf("realtime:messages", {
+            eventType: payload.eventType,
+            messageId: messagePayload?.id ?? null,
+            requestId: messagePayload?.request_id ?? null,
+            offerId: messagePayload?.offer_id ?? null,
+            readAt: messagePayload?.read_at ?? null,
+          });
           await loadUnreadMessages();
         },
       )
@@ -536,6 +603,7 @@ export default function AppNavbar() {
       )
 
       .subscribe((status) => {
+        logPerf("channel:status", { status });
         if (status === "SUBSCRIBED") {
           loadUnreadMessages();
           loadUnreadProgress();
@@ -548,6 +616,7 @@ export default function AppNavbar() {
       });
 
     const refreshBadges = () => {
+      logPerf("refreshBadges");
       loadUnreadMessages();
       loadUnreadProgress();
       loadUnreadOffers();
@@ -557,24 +626,45 @@ export default function AppNavbar() {
       loadUnreadAppointmentNotifications();
     };
 
-    window.addEventListener("focus", refreshBadges);
-    window.addEventListener("messages-read-updated", refreshBadges);
+    const handleFocus = () => {
+      logPerf("focus:refresh");
+      refreshBadges();
+    };
+
+    const handleMessagesReadUpdated = () => {
+      logPerf("event:messages-read-updated");
+      refreshBadges();
+    };
+
+    const handleVisibilityChange = () => {
+      logPerf("visibilitychange", {
+        state: document.visibilityState,
+      });
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("messages-read-updated", handleMessagesReadUpdated);
     window.addEventListener("progress-read-updated", refreshBadges);
     window.addEventListener("offers-read-updated", refreshBadges);
     window.addEventListener("direct-requests-read-updated", refreshBadges);
     window.addEventListener("notifications-read-updated", refreshBadges);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.removeEventListener("focus", refreshBadges);
-      window.removeEventListener("messages-read-updated", refreshBadges);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(
+        "messages-read-updated",
+        handleMessagesReadUpdated,
+      );
       window.removeEventListener("progress-read-updated", refreshBadges);
       window.removeEventListener("offers-read-updated", refreshBadges);
       window.removeEventListener("direct-requests-read-updated", refreshBadges);
       window.removeEventListener("notifications-read-updated", refreshBadges);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
 
       supabase.removeChannel(channel);
     };
-  }, [userId, isWorkshopMode, isClientMode]);
+  }, [userId, isWorkshopMode, isClientMode, logPerf]);
 
   if (pathname === "/" || pathname === "/login") {
     return null;
