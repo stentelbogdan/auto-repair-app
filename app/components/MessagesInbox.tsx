@@ -69,9 +69,15 @@ type PendingInboxMutation = {
   message: string;
   hasImages: boolean;
   createdAt: string;
+  uiApplied?: boolean;
 };
 
 type PendingInboxMutationMap = Record<string, PendingInboxMutation>;
+
+type PendingInboxMutationReference = {
+  conversationKey: string;
+  createdAt: string;
+};
 
 const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
 
@@ -129,15 +135,40 @@ function writePendingInboxMutations(map: PendingInboxMutationMap) {
   );
 }
 
-function clearPendingInboxMutations(keys: string[]) {
-  if (keys.length === 0) return;
+function reconcilePendingInboxMutationStorage({
+  uiAppliedMutations,
+  dbConfirmedMutations,
+}: {
+  uiAppliedMutations: PendingInboxMutationReference[];
+  dbConfirmedMutations: PendingInboxMutationReference[];
+}) {
+  if (uiAppliedMutations.length === 0 && dbConfirmedMutations.length === 0) {
+    return;
+  }
 
   const currentMutations = readPendingInboxMutations();
   let hasChanges = false;
 
-  for (const key of keys) {
-    if (key in currentMutations) {
-      delete currentMutations[key];
+  for (const { conversationKey, createdAt } of dbConfirmedMutations) {
+    const currentMutation = currentMutations[conversationKey];
+
+    if (currentMutation?.createdAt === createdAt) {
+      delete currentMutations[conversationKey];
+      hasChanges = true;
+    }
+  }
+
+  for (const { conversationKey, createdAt } of uiAppliedMutations) {
+    const currentMutation = currentMutations[conversationKey];
+
+    if (
+      currentMutation?.createdAt === createdAt &&
+      currentMutation.uiApplied !== true
+    ) {
+      currentMutations[conversationKey] = {
+        ...currentMutation,
+        uiApplied: true,
+      };
       hasChanges = true;
     }
   }
@@ -167,6 +198,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
   const loadConversationsGenerationRef = useRef(0);
   const loadConversationsSessionRef = useRef(0);
   const realtimeDegradedRef = useRef(false);
+  const uiAppliedThisMountRef = useRef<Map<string, string>>(new Map());
 
   const logPerf = useCallback(
     (event: string, details?: Record<string, unknown>) => {
@@ -187,19 +219,24 @@ export default function MessagesInbox({ role }: { role: Role }) {
   }, []);
 
   const applyPendingInboxMutations = useCallback(
-    (currentConversations: Conversation[]) => {
+    (
+      currentConversations: Conversation[],
+      source: "ui" | "database",
+    ) => {
       const pendingMutations = readPendingInboxMutations();
       const mutationEntries = Object.entries(pendingMutations);
 
       if (mutationEntries.length === 0) {
         return {
           nextConversations: currentConversations,
-          appliedOrConfirmedKeys: [] as string[],
+          uiAppliedMutations: [] as PendingInboxMutationReference[],
+          dbConfirmedMutations: [] as PendingInboxMutationReference[],
         };
       }
 
       let hasChanges = false;
-      const appliedOrConfirmedKeys: string[] = [];
+      const uiAppliedMutations: PendingInboxMutationReference[] = [];
+      const dbConfirmedMutations: PendingInboxMutationReference[] = [];
       const nextConversations = currentConversations.map((conversation) => {
         const conversationKey = getConversationKey(
           conversation.requestId,
@@ -213,14 +250,33 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
         const mutationTime = new Date(mutation.createdAt).getTime();
         const conversationTime = new Date(conversation.lastMessageTime).getTime();
+        const mutationReference = {
+          conversationKey,
+          createdAt: mutation.createdAt,
+        };
+
+        if (source === "database" && mutationTime <= conversationTime) {
+          dbConfirmedMutations.push(mutationReference);
+          return conversation;
+        }
+
+        const wasAppliedThisMount =
+          uiAppliedThisMountRef.current.get(conversationKey) ===
+          mutation.createdAt;
+
+        if (mutation.uiApplied === true && !wasAppliedThisMount) {
+          return conversation;
+        }
 
         if (mutationTime <= conversationTime) {
-          appliedOrConfirmedKeys.push(conversationKey);
           return conversation;
         }
 
         hasChanges = true;
-        appliedOrConfirmedKeys.push(conversationKey);
+
+        if (mutation.uiApplied !== true) {
+          uiAppliedMutations.push(mutationReference);
+        }
 
         return {
           ...conversation,
@@ -232,7 +288,8 @@ export default function MessagesInbox({ role }: { role: Role }) {
       if (!hasChanges) {
         return {
           nextConversations: currentConversations,
-          appliedOrConfirmedKeys,
+          uiAppliedMutations,
+          dbConfirmedMutations,
         };
       }
 
@@ -244,7 +301,8 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
       return {
         nextConversations,
-        appliedOrConfirmedKeys,
+        uiAppliedMutations,
+        dbConfirmedMutations,
       };
     },
     [],
@@ -623,11 +681,28 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
         const {
           nextConversations,
-          appliedOrConfirmedKeys,
-        } = applyPendingInboxMutations(mapped);
+          uiAppliedMutations,
+          dbConfirmedMutations,
+        } = applyPendingInboxMutations(mapped, "database");
+
+        for (const { conversationKey, createdAt } of uiAppliedMutations) {
+          uiAppliedThisMountRef.current.set(conversationKey, createdAt);
+        }
+
+        for (const { conversationKey, createdAt } of dbConfirmedMutations) {
+          if (
+            uiAppliedThisMountRef.current.get(conversationKey) === createdAt
+          ) {
+            uiAppliedThisMountRef.current.delete(conversationKey);
+          }
+        }
+
+        reconcilePendingInboxMutationStorage({
+          uiAppliedMutations,
+          dbConfirmedMutations,
+        });
 
         setConversations(nextConversations);
-        clearPendingInboxMutations(appliedOrConfirmedKeys);
         logPerf("loadConversations:end", {
           totalConversations: nextConversations.length,
           generation,
@@ -778,18 +853,24 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
     const {
       nextConversations,
-      appliedOrConfirmedKeys,
-    } = applyPendingInboxMutations(conversations);
+      uiAppliedMutations,
+      dbConfirmedMutations,
+    } = applyPendingInboxMutations(conversations, "ui");
 
-    if (appliedOrConfirmedKeys.length === 0) {
-      return;
+    for (const { conversationKey, createdAt } of uiAppliedMutations) {
+      uiAppliedThisMountRef.current.set(conversationKey, createdAt);
     }
 
-    clearPendingInboxMutations(appliedOrConfirmedKeys);
+    reconcilePendingInboxMutationStorage({
+      uiAppliedMutations,
+      dbConfirmedMutations,
+    });
 
     if (nextConversations !== conversations) {
       logPerf("pendingInboxMutations:appliedOnMountedState", {
-        appliedKeys: appliedOrConfirmedKeys,
+        appliedKeys: uiAppliedMutations.map(
+          ({ conversationKey }) => conversationKey,
+        ),
       });
       setConversations(nextConversations);
     }
