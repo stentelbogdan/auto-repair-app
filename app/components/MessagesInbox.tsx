@@ -199,6 +199,11 @@ export default function MessagesInbox({ role }: { role: Role }) {
   const loadConversationsSessionRef = useRef(0);
   const realtimeDegradedRef = useRef(false);
   const uiAppliedThisMountRef = useRef<Map<string, string>>(new Map());
+  const realtimeInsertVersionRef = useRef(0);
+  const lastRealtimeConversationKeyRef = useRef<string | null>(null);
+  const inboxInstanceIdRef = useRef(
+    `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
 
   const logPerf = useCallback(
     (event: string, details?: Record<string, unknown>) => {
@@ -312,9 +317,15 @@ export default function MessagesInbox({ role }: { role: Role }) {
     async (showLoader = true) => {
       const generation = invalidateLoadConversationsGeneration();
       const session = loadConversationsSessionRef.current;
+      const realtimeVersionAtStart = realtimeInsertVersionRef.current;
 
       try {
-        logPerf("loadConversations:start", { showLoader, generation, session });
+        logPerf("loadConversations:start", {
+          showLoader,
+          generation,
+          session,
+          realtimeVersionAtStart,
+        });
 
         if (showLoader) {
           setLoading(true);
@@ -706,6 +717,33 @@ export default function MessagesInbox({ role }: { role: Role }) {
           dbConfirmedMutations,
         });
 
+        const trackedConversationKey = lastRealtimeConversationKeyRef.current;
+        const trackedConversation = trackedConversationKey
+          ? nextConversations.find(
+              (conversation) =>
+                getConversationKey(
+                  conversation.requestId,
+                  conversation.offerId,
+                ) === trackedConversationKey,
+            )
+          : null;
+
+        logPerf("loadConversations:beforeSetConversations", {
+          generation,
+          realtimeVersionAtStart,
+          realtimeVersionBeforeSet: realtimeInsertVersionRef.current,
+          startedBeforeLatestRealtimeInsert:
+            realtimeVersionAtStart < realtimeInsertVersionRef.current,
+          trackedConversationKey,
+          trackedConversation: trackedConversation
+            ? {
+                lastMessage: trackedConversation.lastMessage,
+                lastMessageTime: trackedConversation.lastMessageTime,
+                unreadCount: trackedConversation.unreadCount,
+              }
+            : null,
+        });
+
         setConversations(nextConversations);
         logPerf("loadConversations:end", {
           totalConversations: nextConversations.length,
@@ -744,15 +782,34 @@ export default function MessagesInbox({ role }: { role: Role }) {
   );
 
   useEffect(() => {
+    const instanceId = inboxInstanceIdRef.current;
+    const channelName = `messages-inbox-${role}`;
     loadConversationsSessionRef.current += 1;
     realtimeDegradedRef.current = false;
-    logPerf("mount");
+    logPerf("mount", { instanceId });
     localStorage.setItem("activeRole", role);
 
     void loadConversations();
 
+    const channelsBeforeCreate = supabase.getChannels();
+    const existingChannel = channelsBeforeCreate.find(
+      (existing) => existing.topic === `realtime:${channelName}`,
+    );
+
+    logPerf("channel:create", {
+      instanceId,
+      channelName,
+      timestamp: new Date().toISOString(),
+      existingChannelFound: Boolean(existingChannel),
+      existingChannelState: existingChannel?.state ?? null,
+      activeChannelTopics: channelsBeforeCreate.map((existing) => ({
+        topic: existing.topic,
+        state: existing.state,
+      })),
+    });
+
     const channel = supabase
-      .channel(`messages-inbox-${role}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -762,15 +819,35 @@ export default function MessagesInbox({ role }: { role: Role }) {
         },
         (payload) => {
           const newMessage = payload.new as MessageRow;
+          const conversationKey = getConversationKey(
+            newMessage.request_id,
+            newMessage.offer_id ?? null,
+          );
+          const currentUserId = currentUserIdRef.current;
+          const isIncomingMessage =
+            newMessage.sender_id !== currentUserId &&
+            newMessage.sender_role !== "system" &&
+            newMessage.read_at == null;
+          const realtimeVersion = realtimeInsertVersionRef.current + 1;
+          realtimeInsertVersionRef.current = realtimeVersion;
+          lastRealtimeConversationKeyRef.current = conversationKey;
+
           logPerf("realtime:INSERT", {
+            instanceId,
+            channelName,
+            channelState: channel.state,
+            realtimeVersion,
+            conversationKey,
             requestId: newMessage.request_id,
             offerId: newMessage.offer_id ?? null,
             readAt: newMessage.read_at,
+            currentUserId,
             senderId: newMessage.sender_id,
             senderRole: newMessage.sender_role,
+            isIncomingMessage,
+            nextLastMessage: getLastMessageText(newMessage),
+            nextLastMessageTime: newMessage.created_at,
           });
-
-          const currentUserId = currentUserIdRef.current;
 
           setConversations((current) => {
             const conversationIndex = current.findIndex(
@@ -786,19 +863,19 @@ export default function MessagesInbox({ role }: { role: Role }) {
                * În cazul acesta facem un singur refresh.
                */
               logPerf("realtime:INSERT:conversation_missing_refetch", {
+                realtimeVersion,
+                conversationKey,
                 requestId: newMessage.request_id,
                 offerId: newMessage.offer_id ?? null,
+                currentUserId,
+                senderId: newMessage.sender_id,
+                isIncomingMessage,
               });
               void loadConversations(false);
               return current;
             }
 
             const conversation = current[conversationIndex];
-
-            const isIncomingMessage =
-              newMessage.sender_id !== currentUserId &&
-              newMessage.sender_role !== "system" &&
-              newMessage.read_at == null;
 
             const updatedConversation: Conversation = {
               ...conversation,
@@ -807,6 +884,25 @@ export default function MessagesInbox({ role }: { role: Role }) {
               unreadCount:
                 conversation.unreadCount + (isIncomingMessage ? 1 : 0),
             };
+
+            logPerf("realtime:INSERT:applyConversationUpdate", {
+              realtimeVersion,
+              conversationKey,
+              conversationIndex,
+              currentUserId,
+              senderId: newMessage.sender_id,
+              isIncomingMessage,
+              before: {
+                lastMessage: conversation.lastMessage,
+                lastMessageTime: conversation.lastMessageTime,
+                unreadCount: conversation.unreadCount,
+              },
+              after: {
+                lastMessage: updatedConversation.lastMessage,
+                lastMessageTime: updatedConversation.lastMessageTime,
+                unreadCount: updatedConversation.unreadCount,
+              },
+            });
 
             /*
              * Conversația cu mesaj nou urcă instant prima.
@@ -821,7 +917,14 @@ export default function MessagesInbox({ role }: { role: Role }) {
         },
       )
       .subscribe((status) => {
-        logPerf("channel:status", { status });
+        logPerf("channel:status", {
+          instanceId,
+          channelName,
+          channelState: channel.state,
+          status,
+          timestamp: new Date().toISOString(),
+          reusedExistingChannel: channel === existingChannel,
+        });
 
         if (
           status === "CHANNEL_ERROR" ||
@@ -843,10 +946,22 @@ export default function MessagesInbox({ role }: { role: Role }) {
       const invalidatedGeneration = invalidateLoadConversationsGeneration();
       loadConversationsSessionRef.current += 1;
       realtimeDegradedRef.current = false;
-      logPerf("unmount", {
+      logPerf("channel:cleanup:start", {
+        instanceId,
+        channelName,
+        channelState: channel.state,
+        timestamp: new Date().toISOString(),
         invalidatedGeneration,
       });
-      void supabase.removeChannel(channel);
+      void supabase.removeChannel(channel).then((result) => {
+        logPerf("channel:cleanup:end", {
+          instanceId,
+          channelName,
+          channelState: channel.state,
+          timestamp: new Date().toISOString(),
+          result,
+        });
+      });
     };
   }, [invalidateLoadConversationsGeneration, loadConversations, logPerf, role]);
 
