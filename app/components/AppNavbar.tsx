@@ -27,6 +27,10 @@ export default function AppNavbar() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [
+    suppressUnreadBadgeForNavigation,
+    setSuppressUnreadBadgeForNavigation,
+  ] = useState(false);
   const [progressUnreadCount, setProgressUnreadCount] = useState(0);
   const [offerUnreadCount, setOfferUnreadCount] = useState(0);
   const [activeRole, setActiveRole] = useState<Role>("customer");
@@ -58,6 +62,8 @@ export default function AppNavbar() {
   const unreadMessagesRealtimeDegradedRef = useRef(false);
   const unreadMessagesSchedulerSessionRef = useRef(0);
   const unreadMessagesRequestIdRef = useRef(0);
+  const unreadBadgeSuppressionTimeoutRef = useRef<number | null>(null);
+  const unreadBadgeSuppressionRafRef = useRef<number | null>(null);
   const lastBrowserNavigationEventRef = useRef<{
     type: "pageshow" | "pagehide" | "focus" | "popstate";
     timestamp: string;
@@ -106,6 +112,62 @@ export default function AppNavbar() {
     },
     [],
   );
+
+  useEffect(() => {
+    const handleChatNavigationStart = () => {
+      setSuppressUnreadBadgeForNavigation(true);
+
+      if (unreadBadgeSuppressionTimeoutRef.current !== null) {
+        window.clearTimeout(unreadBadgeSuppressionTimeoutRef.current);
+      }
+
+      unreadBadgeSuppressionTimeoutRef.current = window.setTimeout(() => {
+        unreadBadgeSuppressionTimeoutRef.current = null;
+        setSuppressUnreadBadgeForNavigation(false);
+      }, 2000);
+    };
+
+    window.addEventListener("chat-navigation-start", handleChatNavigationStart);
+
+    return () => {
+      window.removeEventListener(
+        "chat-navigation-start",
+        handleChatNavigationStart,
+      );
+
+      if (unreadBadgeSuppressionTimeoutRef.current !== null) {
+        window.clearTimeout(unreadBadgeSuppressionTimeoutRef.current);
+        unreadBadgeSuppressionTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !suppressUnreadBadgeForNavigation ||
+      !pathname.startsWith("/chat/")
+    ) {
+      return;
+    }
+
+    unreadBadgeSuppressionRafRef.current = window.requestAnimationFrame(() => {
+      unreadBadgeSuppressionRafRef.current = null;
+
+      if (unreadBadgeSuppressionTimeoutRef.current !== null) {
+        window.clearTimeout(unreadBadgeSuppressionTimeoutRef.current);
+        unreadBadgeSuppressionTimeoutRef.current = null;
+      }
+
+      setSuppressUnreadBadgeForNavigation(false);
+    });
+
+    return () => {
+      if (unreadBadgeSuppressionRafRef.current !== null) {
+        window.cancelAnimationFrame(unreadBadgeSuppressionRafRef.current);
+        unreadBadgeSuppressionRafRef.current = null;
+      }
+    };
+  }, [pathname, suppressUnreadBadgeForNavigation]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1189,7 +1251,7 @@ export default function AppNavbar() {
               aria-label="Mesaje"
             >
               <MessageCircle size={17} strokeWidth={2.25} />
-              {unreadCount > 0 && (
+              {unreadCount > 0 && !suppressUnreadBadgeForNavigation && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>

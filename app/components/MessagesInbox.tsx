@@ -1054,6 +1054,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 key={`${conversation.requestId}-${conversation.offerId}`}
                 onClick={() => {
                   localStorage.setItem("activeRole", role);
+                  window.dispatchEvent(new Event("chat-navigation-start"));
 
                   router.push(
                     conversation.offerId
