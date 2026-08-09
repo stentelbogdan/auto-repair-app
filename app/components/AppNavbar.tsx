@@ -167,28 +167,36 @@ export default function AppNavbar() {
     }
 
     const loadUnreadMessages = async () => {
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (!authData.user) {
+      if (!userId) {
         setUnreadCount(0);
         return;
       }
 
-      const currentUserId = authData.user.id;
+      const currentUserId = userId;
       let requestIds: string[] = [];
 
       if (isWorkshopMode) {
-        const { data: directRequests } = await supabase
-          .from("repair_requests")
-          .select("id")
-          .eq("target_workshop_id", currentUserId);
-
-        const { data: workshopOffers, error: workshopOffersError } =
-          await supabase
+        const [
+          { data: directRequests, error: directRequestsError },
+          { data: workshopOffers, error: workshopOffersError },
+        ] = await Promise.all([
+          supabase
+            .from("repair_requests")
+            .select("id")
+            .eq("target_workshop_id", currentUserId),
+          supabase
             .from("repair_offers")
             .select("request_id")
             .eq("workshop_user_id", currentUserId)
-            .in("status", ["pending", "accepted"]);
+            .in("status", ["pending", "accepted"]),
+        ]);
+
+        if (directRequestsError) {
+          console.error(
+            "Failed to load workshop direct message requests:",
+            directRequestsError,
+          );
+        }
 
         if (workshopOffersError) {
           console.error(
@@ -217,40 +225,24 @@ export default function AppNavbar() {
         return;
       }
 
-      const { data: readsData } = await supabase
-        .from("conversation_reads")
-        .select("request_id, last_read_at")
-        .eq("user_id", currentUserId);
-
-      const readMap = new Map<string, string>();
-
-      (readsData || []).forEach((read: any) => {
-        readMap.set(read.request_id, read.last_read_at);
-      });
-
-      const { data: messagesData, error: messagesError } = await supabase
+      const unreadMessagesQuery = supabase
         .from("messages")
-        .select("id, request_id, sender_id, sender_role, created_at")
-        .in("request_id", requestIds);
+        .select("id", { count: "exact", head: true })
+        .in("request_id", requestIds)
+        .neq("sender_id", currentUserId)
+        .neq("sender_role", "system")
+        .is("read_at", null);
 
-      if (messagesError) {
-        console.error("Failed to load unread messages:", messagesError);
+      const { count: unreadCountResult, error: unreadMessagesError } =
+        await unreadMessagesQuery;
+
+      if (unreadMessagesError) {
+        console.error("Failed to load unread messages:", unreadMessagesError);
         setUnreadCount(0);
         return;
       }
 
-      const count = (messagesData || []).filter((message: any) => {
-        if (message.sender_id === currentUserId) return false;
-        if (message.sender_role === "system") return false;
-
-        const lastReadAt = readMap.get(message.request_id);
-
-        if (!lastReadAt) return true;
-
-        return new Date(message.created_at) > new Date(lastReadAt);
-      }).length;
-
-      setUnreadCount(count);
+      setUnreadCount(unreadCountResult || 0);
     };
 
     const loadUnreadProgress = async () => {
@@ -461,18 +453,6 @@ export default function AppNavbar() {
           event: "*",
           schema: "public",
           table: "messages",
-        },
-        async () => {
-          await loadUnreadMessages();
-        },
-      )
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversation_reads",
         },
         async () => {
           await loadUnreadMessages();

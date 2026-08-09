@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -19,12 +19,293 @@ type Conversation = {
   unreadCount: number;
 };
 
+type OfferRow = {
+  id: string;
+  request_id: string;
+  workshop_user_id: string | null;
+  workshop_name: string | null;
+  status: string | null;
+  created_at: string;
+};
+
+type RequestImage = {
+  url?: string | null;
+  dataUrl?: string | null;
+};
+
+type RequestRow = {
+  id: string;
+  user_id: string;
+  car_brand: string | null;
+  car_model: string | null;
+  city: string | null;
+  status: string | null;
+  images: RequestImage[] | null;
+  request_type: string | null;
+  target_workshop_id: string | null;
+  created_at: string;
+};
+
+type MessageRow = {
+  id: string;
+  request_id: string;
+  offer_id: string | null;
+  sender_id: string;
+  sender_role: string;
+  message: string | null;
+  images: unknown[] | null;
+  created_at: string;
+  read_at: string | null;
+};
+
+type ProfileRow = {
+  id: string;
+  workshop_name: string | null;
+};
+
+function getConversationKey(requestId: string, offerId: string | null) {
+  return `${requestId}::${offerId ?? "direct"}`;
+}
+
+function getLastMessageText(message?: Pick<MessageRow, "message" | "images"> | null) {
+  if (!message) {
+    return "Conversație începută";
+  }
+
+  const text = message.message?.trim();
+
+  if (text) {
+    return text;
+  }
+
+  return Array.isArray(message.images) && message.images.length > 0
+    ? "📷 Poză"
+    : "Mesaj nou";
+}
+
 export default function MessagesInbox({ role }: { role: Role }) {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const currentUserIdRef = useRef<string>("");
+
+  const loadConversations = useCallback(
+    async (showLoader = true) => {
+      try {
+        if (showLoader) {
+          setLoading(true);
+        }
+
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!authData.user) {
+          router.push("/login");
+          return;
+        }
+
+        const userId = authData.user.id;
+        currentUserIdRef.current = userId;
+
+        let offersQuery = supabase
+          .from("repair_offers")
+          .select(
+            "id, request_id, workshop_user_id, workshop_name, status, created_at",
+          )
+          .in("status", ["pending", "accepted"]);
+
+        if (role === "workshop") {
+          offersQuery = offersQuery.eq("workshop_user_id", userId);
+        }
+
+        let directRequestsQuery = supabase
+          .from("repair_requests")
+          .select(
+            "id, user_id, car_brand, car_model, city, status, images, request_type, target_workshop_id, created_at",
+          )
+          .eq("request_type", "direct_message");
+
+        if (role === "workshop") {
+          directRequestsQuery = directRequestsQuery.eq(
+            "target_workshop_id",
+            userId,
+          );
+        } else {
+          directRequestsQuery = directRequestsQuery.eq("user_id", userId);
+        }
+
+        const [{ data: offersData, error: offersError }, { data: directRequestsData, error: directRequestsError }] =
+          await Promise.all([offersQuery, directRequestsQuery]);
+
+        if (offersError) throw offersError;
+        if (directRequestsError) throw directRequestsError;
+
+        const offers = (offersData || []) as OfferRow[];
+        const directRequests = (directRequestsData || []) as RequestRow[];
+
+        const offerRequestIds = [...new Set(offers.map((offer) => offer.request_id))];
+
+        let requests: RequestRow[] = [];
+
+        if (offerRequestIds.length > 0) {
+          let requestsQuery = supabase
+            .from("repair_requests")
+            .select(
+              "id, user_id, car_brand, car_model, city, status, images, request_type, target_workshop_id, created_at",
+            )
+            .in("id", offerRequestIds);
+
+          if (role === "customer") {
+            requestsQuery = requestsQuery.eq("user_id", userId);
+          }
+
+          const { data: requestsData, error: requestsError } = await requestsQuery;
+          if (requestsError) throw requestsError;
+          requests = (requestsData || []) as RequestRow[];
+        }
+
+        const allRequests = [...requests, ...directRequests];
+        const requestMap = new Map(allRequests.map((request) => [request.id, request]));
+
+        const allRequestIds = [...new Set(allRequests.map((request) => request.id))];
+        const directWorkshopIds = [
+          ...new Set(
+            directRequests
+              .map((request) => request.target_workshop_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
+        ];
+
+        const [messagesResult, profilesResult] = await Promise.all([
+          allRequestIds.length > 0
+            ? supabase
+                .from("messages")
+                .select(
+                  "id, request_id, offer_id, sender_id, sender_role, message, images, created_at, read_at",
+                )
+                .in("request_id", allRequestIds)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+          directWorkshopIds.length > 0
+            ? supabase
+                .from("profiles")
+                .select("id, workshop_name")
+                .in("id", directWorkshopIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+
+        if (messagesResult.error) throw messagesResult.error;
+        if (profilesResult.error) throw profilesResult.error;
+
+        const messages = (messagesResult.data || []) as MessageRow[];
+        const profiles = (profilesResult.data || []) as ProfileRow[];
+
+        const profileMap = new Map(
+          profiles.map((profile) => [profile.id, profile.workshop_name || "Service"]),
+        );
+
+        const relevantConversationKeys = new Set<string>([
+          ...offers.map((offer) => getConversationKey(offer.request_id, offer.id)),
+          ...directRequests.map((request) => getConversationKey(request.id, null)),
+        ]);
+
+        const messagesByConversation = new Map<string, MessageRow[]>();
+
+        for (const message of messages) {
+          const key = getConversationKey(message.request_id, message.offer_id ?? null);
+
+          if (!relevantConversationKeys.has(key)) {
+            continue;
+          }
+
+          const conversationMessages = messagesByConversation.get(key) || [];
+          conversationMessages.push(message);
+          messagesByConversation.set(key, conversationMessages);
+        }
+
+        const mappedOffers: Conversation[] = offers.flatMap((offer) => {
+          const request = requestMap.get(offer.request_id);
+          if (!request) return [];
+
+          const conversationMessages =
+            messagesByConversation.get(getConversationKey(offer.request_id, offer.id)) || [];
+
+          const lastMessage = conversationMessages[0];
+          const unreadCount = conversationMessages.filter((message) => {
+            return (
+              message.sender_id !== userId &&
+              message.sender_role !== "system" &&
+              message.read_at == null
+            );
+          }).length;
+
+          const image =
+            request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
+
+          return [
+            {
+              requestId: request.id,
+              offerId: offer.id,
+              title: `${request.car_brand || "Lucrare"} ${request.car_model || ""}`,
+              city: request.city || "-",
+              status: request.status || "matched",
+              image,
+              workshopName: offer.workshop_name || "Service",
+              lastMessage: getLastMessageText(lastMessage),
+              lastMessageTime: lastMessage?.created_at || offer.created_at,
+              unreadCount,
+            },
+          ];
+        });
+
+        const mappedDirectRequests: Conversation[] = directRequests.map((request) => {
+          const conversationMessages =
+            messagesByConversation.get(getConversationKey(request.id, null)) || [];
+          const lastMessage = conversationMessages[0];
+          const unreadCount = conversationMessages.filter((message) => {
+            return (
+              message.sender_id !== userId &&
+              message.sender_role !== "system" &&
+              message.read_at == null
+            );
+          }).length;
+
+          return {
+            requestId: request.id,
+            offerId: null,
+            title: "Mesaj direct Service",
+            city: "Conversație directă",
+            status: request.status || "open",
+            image: "",
+            workshopName: request.target_workshop_id
+              ? profileMap.get(request.target_workshop_id) || "Service"
+              : "Service",
+            lastMessage: getLastMessageText(lastMessage),
+            lastMessageTime: lastMessage?.created_at || request.created_at,
+            unreadCount,
+          };
+        });
+
+        const mapped = [...mappedOffers, ...mappedDirectRequests];
+
+        mapped.sort(
+          (a, b) =>
+            new Date(b.lastMessageTime).getTime() -
+            new Date(a.lastMessageTime).getTime(),
+        );
+
+        setConversations(mapped);
+      } catch (error) {
+        console.error("Failed to load conversations:", error);
+        setConversations([]);
+      } finally {
+        if (showLoader) {
+          setLoading(false);
+        }
+      }
+    },
+    [role, router],
+  );
 
   useEffect(() => {
     localStorage.setItem("activeRole", role);
@@ -41,16 +322,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
           table: "messages",
         },
         (payload) => {
-          const newMessage = payload.new as {
-            id: string;
-            request_id: string;
-            offer_id?: string | null;
-            sender_id: string;
-            sender_role: string;
-            message?: string | null;
-            images?: unknown[] | null;
-            created_at: string;
-          };
+          const newMessage = payload.new as MessageRow;
 
           const currentUserId = currentUserIdRef.current;
 
@@ -75,20 +347,13 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
             const isIncomingMessage =
               newMessage.sender_id !== currentUserId &&
-              newMessage.sender_role !== "system";
-
-            const hasImages =
-              Array.isArray(newMessage.images) && newMessage.images.length > 0;
+              newMessage.sender_role !== "system" &&
+              newMessage.read_at == null;
 
             const updatedConversation: Conversation = {
               ...conversation,
-
-              lastMessage:
-                newMessage.message?.trim() ||
-                (hasImages ? "📷 Poză" : "Mesaj nou"),
-
+              lastMessage: getLastMessageText(newMessage),
               lastMessageTime: newMessage.created_at,
-
               unreadCount:
                 conversation.unreadCount + (isIncomingMessage ? 1 : 0),
             };
@@ -108,194 +373,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
-  }, [role]);
-
-  const loadConversations = async (showLoader = true) => {
-    try {
-      if (showLoader) {
-        setLoading(true);
-      }
-
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (!authData.user) {
-        router.push("/login");
-        return;
-      }
-
-      const userId = authData.user.id;
-      currentUserIdRef.current = userId;
-
-      /*
-       * Chatul trebuie să fie disponibil atât în perioada negocierii,
-       * cât și după acceptarea ofertei.
-       */
-      let offersQuery = supabase
-        .from("repair_offers")
-        .select("*")
-        .in("status", ["pending", "accepted"]);
-
-      if (role === "workshop") {
-        offersQuery = offersQuery.eq("workshop_user_id", userId);
-      }
-
-      const { data: offersData, error: offersError } = await offersQuery;
-      if (offersError) throw offersError;
-
-      const offers = offersData || [];
-
-      const requestIds = offers.map((offer: any) => offer.request_id);
-
-      let requestsQuery = supabase
-        .from("repair_requests")
-        .select("*")
-        .in("id", requestIds);
-
-      if (role === "customer") {
-        requestsQuery = requestsQuery.eq("user_id", userId);
-      }
-
-      const { data: requestsData, error: requestsError } = await requestsQuery;
-      if (requestsError) throw requestsError;
-
-      const requests = requestsData || [];
-      const requestMap = new Map(
-        requests.map((request: any) => [request.id, request]),
-      );
-
-      const { data: readsData } = await supabase
-        .from("conversation_reads")
-        .select("request_id, last_read_at")
-        .eq("user_id", userId);
-
-      const readMap = new Map<string, string>();
-
-      (readsData || []).forEach((read: any) => {
-        readMap.set(read.request_id, read.last_read_at);
-      });
-
-      const mapped: Conversation[] = [];
-
-      for (const offer of offers) {
-        const request = requestMap.get(offer.request_id);
-        if (!request) continue;
-
-        const { data: messagesData } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("request_id", offer.request_id)
-          .eq("offer_id", offer.id)
-          .order("created_at", { ascending: false });
-
-        const messages = messagesData || [];
-        const lastMessage = messages[0];
-        const lastReadAt = readMap.get(offer.request_id);
-
-        const unreadCount = messages.filter((message: any) => {
-          if (message.sender_id === userId) return false;
-          if (message.sender_role === "system") return false;
-          if (!lastReadAt) return true;
-
-          return new Date(message.created_at) > new Date(lastReadAt);
-        }).length;
-
-        const image =
-          request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
-
-        mapped.push({
-          requestId: request.id,
-          offerId: offer.id,
-          title: `${request.car_brand || "Lucrare"} ${request.car_model || ""}`,
-          city: request.city || "-",
-          status: request.status || "matched",
-          image,
-          workshopName: offer.workshop_name || "Service",
-          lastMessage: lastMessage?.message || "Conversație începută",
-          lastMessageTime: lastMessage?.created_at || offer.created_at,
-          unreadCount,
-        });
-      }
-
-      let directRequestsQuery = supabase
-        .from("repair_requests")
-        .select("*")
-        .eq("request_type", "direct_message");
-
-      if (role === "workshop") {
-        directRequestsQuery = directRequestsQuery.eq(
-          "target_workshop_id",
-          userId,
-        );
-      } else {
-        directRequestsQuery = directRequestsQuery.eq("user_id", userId);
-      }
-
-      const { data: directRequestsData } = await directRequestsQuery;
-
-      for (const request of directRequestsData || []) {
-        const { data: messagesData } = await supabase
-          .from("messages")
-          .select("*")
-          .eq("request_id", request.id)
-          .is("offer_id", null)
-          .order("created_at", { ascending: false });
-
-        const messages = messagesData || [];
-        const lastMessage = messages[0];
-        const lastReadAt = readMap.get(request.id);
-
-        const unreadCount = messages.filter((message: any) => {
-          if (message.sender_id === userId) return false;
-          if (message.sender_role === "system") return false;
-          if (!lastReadAt) return true;
-
-          return new Date(message.created_at) > new Date(lastReadAt);
-        }).length;
-
-        let workshopName = "Service";
-
-        if (request.target_workshop_id) {
-          const { data: workshopProfile } = await supabase
-            .from("profiles")
-            .select("workshop_name")
-            .eq("id", request.target_workshop_id)
-            .single();
-
-          workshopName = workshopProfile?.workshop_name || "Service";
-        }
-
-        mapped.push({
-          requestId: request.id,
-          offerId: null,
-          title: "Mesaj direct Service",
-          city: "Conversație directă",
-          status: request.status || "open",
-          image: "",
-          workshopName,
-          lastMessage: lastMessage?.message || "Conversație începută",
-          lastMessageTime: lastMessage?.created_at || request.created_at,
-          unreadCount,
-        });
-      }
-
-      mapped.sort(
-        (a, b) =>
-          new Date(b.lastMessageTime).getTime() -
-          new Date(a.lastMessageTime).getTime(),
-      );
-
-      setConversations(mapped);
-    } catch (error) {
-      console.error("Failed to load conversations:", error);
-      setConversations([]);
-    } finally {
-      if (showLoader) {
-        setLoading(false);
-      }
-    }
-  };
+  }, [loadConversations, role]);
 
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white">
@@ -348,30 +428,6 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 key={`${conversation.requestId}-${conversation.offerId}`}
                 onClick={() => {
                   localStorage.setItem("activeRole", role);
-
-                  /*
-                   * Din momentul în care utilizatorul deschide conversația,
-                   * Inbox-ul o consideră citită local.
-                   */
-                  setConversations((current) =>
-                    current.map((item) => {
-                      const sameRequest =
-                        item.requestId === conversation.requestId;
-
-                      const sameOffer =
-                        (item.offerId ?? null) ===
-                        (conversation.offerId ?? null);
-
-                      if (!sameRequest || !sameOffer) {
-                        return item;
-                      }
-
-                      return {
-                        ...item,
-                        unreadCount: 0,
-                      };
-                    }),
-                  );
 
                   router.push(
                     conversation.offerId

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import imageCompression from "browser-image-compression";
 import Lightbox from "yet-another-react-lightbox";
@@ -71,7 +72,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -87,105 +88,97 @@ export default function ChatPage() {
     workshop_slug: string | null;
   } | null>(null);
 
-  useEffect(() => {
-    const savedRole = localStorage.getItem("activeRole");
+  const belongsToCurrentConversation = useCallback(
+    (messageOfferId?: string | null) => {
+      return offerId ? messageOfferId === offerId : messageOfferId == null;
+    },
+    [offerId],
+  );
 
-    if (roleParam === "workshop") {
-      localStorage.setItem("activeRole", "workshop");
-      setActiveRole("workshop");
-    } else if (roleParam === "customer") {
-      localStorage.setItem("activeRole", "customer");
-      setActiveRole("customer");
-    } else if (savedRole) {
-      setActiveRole(savedRole);
+  const loadMessages = useCallback(async () => {
+    if (!requestId) return;
+
+    let query = supabase
+      .from("messages")
+      .select("*")
+      .eq("request_id", requestId)
+      .order("created_at", { ascending: true });
+
+    if (offerId) {
+      query = query.eq("offer_id", offerId);
+    } else {
+      query = query.is("offer_id", null);
     }
 
-    loadMessages();
-    getUser();
-    loadRequest();
-    loadWorkshopProfile();
+    const { data, error } = await query;
 
-    const channel = supabase
-      .channel(`chat-${requestId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `request_id=eq.${requestId}`,
-        },
-        (payload) => {
-          const insertedMessage = payload.new as Message;
+    if (error) {
+      setMessagesLoading(false);
+      return;
+    }
 
-          const belongsToCurrentConversation = offerId
-            ? insertedMessage.offer_id === offerId
-            : insertedMessage.offer_id == null;
+    if (data && data.length > 0) {
+      setMessages(data);
+      setMessagesLoading(false);
+      return;
+    }
 
-          if (!belongsToCurrentConversation) {
-            return;
-          }
+    const { data: authData } = await supabase.auth.getUser();
 
-          setMessages((prev) => {
-            if (prev.some((message) => message.id === insertedMessage.id)) {
-              return prev;
-            }
+    if (!authData.user) return;
 
-            return [...prev, insertedMessage].sort(
-              (a, b) =>
-                new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime(),
-            );
-          });
-        },
+    if (systemMessageCreatedRef.current) return;
+    systemMessageCreatedRef.current = true;
+
+    await supabase.from("messages").insert({
+      request_id: requestId,
+      offer_id: offerId,
+      sender_id: authData.user.id,
+      sender_role: "system",
+      message: "Conversația a fost începută din profilul service-ului.",
+      images: [],
+    });
+
+    setMessagesLoading(false);
+  }, [offerId, requestId]);
+
+  const markConversationAsRead = useCallback(async () => {
+    if (!userId || !requestId || messages.length === 0) return;
+
+    const now = new Date().toISOString();
+    const unreadMessageIds = messages
+      .filter(
+        (message) =>
+          message.request_id === requestId &&
+          belongsToCurrentConversation(message.offer_id) &&
+          message.sender_id !== userId &&
+          message.sender_role !== "system" &&
+          !message.read_at,
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "messages",
-          filter: `request_id=eq.${requestId}`,
-        },
-        (payload) => {
-          const updatedMessage = payload.new as Message;
+      .map((message) => message.id);
 
-          setMessages((prev) =>
-            prev.map((message) =>
-              message.id === updatedMessage.id ? updatedMessage : message,
-            ),
-          );
-        },
-      )
-      .on("broadcast", { event: "typing" }, (payload) => {
-        if (payload.payload?.senderId === userId) return;
+    if (unreadMessageIds.length === 0) return;
 
-        setIsOtherTyping(Boolean(payload.payload?.isTyping));
+    await supabase
+      .from("messages")
+      .update({ read_at: now })
+      .in("id", unreadMessageIds);
 
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
+    sessionStorage.setItem(
+      "last-read-conversation",
+      JSON.stringify({
+        requestId,
+        offerId: offerId ?? null,
+        readAt: Date.now(),
+      }),
+    );
 
-        typingTimeoutRef.current = setTimeout(() => {
-          setIsOtherTyping(false);
-        }, 1800);
-      })
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-
-      supabase.removeChannel(channel);
-    };
-  }, [requestId, roleParam]);
+    window.dispatchEvent(new Event("messages-read-updated"));
+  }, [belongsToCurrentConversation, messages, offerId, requestId, userId]);
 
   useEffect(() => {
     const syncMessages = () => {
-      loadMessages();
+      void loadMessages();
     };
 
     const handleVisibilityChange = () => {
@@ -197,18 +190,11 @@ export default function ChatPage() {
     window.addEventListener("focus", syncMessages);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        syncMessages();
-      }
-    }, 5000);
-
     return () => {
       window.removeEventListener("focus", syncMessages);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.clearInterval(interval);
     };
-  }, [requestId, offerId]);
+  }, [loadMessages]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -226,8 +212,8 @@ export default function ChatPage() {
   }, [messages, isOtherTyping]);
 
   useEffect(() => {
-    markConversationAsRead();
-  }, [messages, userId, requestId]);
+    void markConversationAsRead();
+  }, [markConversationAsRead]);
 
   useEffect(() => {
     const previews = selectedImages.map((file) => URL.createObjectURL(file));
@@ -246,7 +232,7 @@ export default function ChatPage() {
     }
   };
 
-  const loadRequest = async () => {
+  const loadRequest = useCallback(async () => {
     const { data, error } = await supabase
       .from("repair_requests")
       .select(
@@ -266,9 +252,9 @@ export default function ChatPage() {
     if (!error && data) {
       setRequestData(data);
     }
-  };
+  }, [requestId]);
 
-  const loadWorkshopProfile = async () => {
+  const loadWorkshopProfile = useCallback(async () => {
     const { data: request } = await supabase
       .from("repair_requests")
       .select("target_workshop_id")
@@ -316,99 +302,111 @@ export default function ChatPage() {
         profileData?.workshop_name || offerData.workshop_name || "Service",
       workshop_slug: profileData?.workshop_slug || null,
     });
-  };
+  }, [offerId, requestId]);
 
-  const loadMessages = async () => {
-    if (!requestId) return;
+  useEffect(() => {
+    const savedRole = localStorage.getItem("activeRole");
 
-    let query = supabase
-      .from("messages")
-      .select("*")
-      .eq("request_id", requestId)
-      .order("created_at", { ascending: true });
-
-    if (offerId) {
-      query = query.eq("offer_id", offerId);
-    } else {
-      query = query.is("offer_id", null);
+    if (roleParam === "workshop") {
+      localStorage.setItem("activeRole", "workshop");
+      setActiveRole("workshop");
+    } else if (roleParam === "customer") {
+      localStorage.setItem("activeRole", "customer");
+      setActiveRole("customer");
+    } else if (savedRole) {
+      setActiveRole(savedRole);
     }
 
-    const { data, error } = await query;
+    void loadMessages();
+    void getUser();
+    void loadRequest();
+    void loadWorkshopProfile();
 
-    if (error) {
-      setMessagesLoading(false);
-      return;
-    }
+    const channel = supabase
+      .channel(`chat-${requestId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `request_id=eq.${requestId}`,
+        },
+        (payload) => {
+          const insertedMessage = payload.new as Message;
 
-    if (data && data.length > 0) {
-      setMessages(data);
-      setMessagesLoading(false);
-      return;
-    }
+          if (!belongsToCurrentConversation(insertedMessage.offer_id)) {
+            return;
+          }
 
-    const { data: authData } = await supabase.auth.getUser();
+          setMessages((prev) => {
+            if (prev.some((message) => message.id === insertedMessage.id)) {
+              return prev;
+            }
 
-    if (!authData.user) return;
-
-    if (systemMessageCreatedRef.current) return;
-    systemMessageCreatedRef.current = true;
-
-    await supabase.from("messages").insert({
-      request_id: requestId,
-      offer_id: offerId,
-      sender_id: authData.user.id,
-      sender_role: "system",
-      message: "Conversația a fost începută din profilul service-ului.",
-      images: [],
-    });
-
-    setMessagesLoading(false);
-  };
-
-  const markConversationAsRead = async () => {
-    if (!userId || !requestId || messages.length === 0) return;
-
-    const now = new Date().toISOString();
-
-    await supabase.from("conversation_reads").upsert(
-      {
-        request_id: requestId,
-        user_id: userId,
-        last_read_at: now,
-        updated_at: now,
-      },
-      {
-        onConflict: "request_id,user_id",
-      },
-    );
-
-    const unreadMessageIds = messages
-      .filter(
-        (message) =>
-          message.sender_id !== userId &&
-          message.sender_role !== "system" &&
-          !message.read_at,
+            return [...prev, insertedMessage].sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime(),
+            );
+          });
+        },
       )
-      .map((message) => message.id);
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `request_id=eq.${requestId}`,
+        },
+        (payload) => {
+          const updatedMessage = payload.new as Message;
 
-    if (unreadMessageIds.length > 0) {
-      await supabase
-        .from("messages")
-        .update({ read_at: now })
-        .in("id", unreadMessageIds);
-    }
+          if (!belongsToCurrentConversation(updatedMessage.offer_id)) {
+            return;
+          }
 
-    sessionStorage.setItem(
-      "last-read-conversation",
-      JSON.stringify({
-        requestId,
-        offerId: offerId ?? null,
-        readAt: Date.now(),
-      }),
-    );
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === updatedMessage.id ? updatedMessage : message,
+            ),
+          );
+        },
+      )
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.payload?.senderId === userId) return;
 
-    window.dispatchEvent(new Event("messages-read-updated"));
-  };
+        setIsOtherTyping(Boolean(payload.payload?.isTyping));
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsOtherTyping(false);
+        }, 1800);
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    belongsToCurrentConversation,
+    loadMessages,
+    loadRequest,
+    loadWorkshopProfile,
+    requestId,
+    roleParam,
+    userId,
+  ]);
 
   const sendTypingStatus = async (isTyping: boolean) => {
     if (!channelRef.current || !userId) return;
@@ -520,9 +518,15 @@ export default function ChatPage() {
       setNewMessage("");
       setSelectedImages([]);
       sendTypingStatus(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to upload/send message:", error);
-      alert(error?.message || "Pozele sau mesajul nu au putut fi trimise.");
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Pozele sau mesajul nu au putut fi trimise.";
+
+      alert(errorMessage);
     } finally {
       setIsSending(false);
     }
