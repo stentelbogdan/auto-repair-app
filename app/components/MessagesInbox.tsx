@@ -562,7 +562,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
           const conversationMessages =
             messagesByConversation.get(getConversationKey(offer.request_id, offer.id)) || [];
 
-          const lastMessage = conversationMessages[0];
+          const lastMessage = conversationMessages.find(
+            (message) => message.sender_role !== "system",
+          );
           const unreadCount = conversationMessages.filter((message) => {
             return (
               message.sender_id !== userId &&
@@ -593,7 +595,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
         const mappedDirectRequests: Conversation[] = directRequests.map((request) => {
           const conversationMessages =
             messagesByConversation.get(getConversationKey(request.id, null)) || [];
-          const lastMessage = conversationMessages[0];
+          const lastMessage = conversationMessages.find(
+            (message) => message.sender_role !== "system",
+          );
           const unreadCount = conversationMessages.filter((message) => {
             return (
               message.sender_id !== userId &&
