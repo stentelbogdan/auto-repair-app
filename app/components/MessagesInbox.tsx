@@ -63,6 +63,18 @@ type ProfileRow = {
   workshop_name: string | null;
 };
 
+type PendingInboxMutation = {
+  requestId: string;
+  offerId: string | null;
+  message: string;
+  hasImages: boolean;
+  createdAt: string;
+};
+
+type PendingInboxMutationMap = Record<string, PendingInboxMutation>;
+
+const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
+
 function getConversationKey(requestId: string, offerId: string | null) {
   return `${requestId}::${offerId ?? "direct"}`;
 }
@@ -81,6 +93,68 @@ function getLastMessageText(message?: Pick<MessageRow, "message" | "images"> | n
   return Array.isArray(message.images) && message.images.length > 0
     ? "📷 Poză"
     : "Mesaj nou";
+}
+
+function readPendingInboxMutations(): PendingInboxMutationMap {
+  try {
+    const rawValue = sessionStorage.getItem(
+      PENDING_INBOX_MUTATIONS_STORAGE_KEY,
+    );
+
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!parsedValue || typeof parsedValue !== "object") {
+      return {};
+    }
+
+    return parsedValue as PendingInboxMutationMap;
+  } catch {
+    return {};
+  }
+}
+
+function writePendingInboxMutations(map: PendingInboxMutationMap) {
+  if (Object.keys(map).length === 0) {
+    sessionStorage.removeItem(PENDING_INBOX_MUTATIONS_STORAGE_KEY);
+    return;
+  }
+
+  sessionStorage.setItem(
+    PENDING_INBOX_MUTATIONS_STORAGE_KEY,
+    JSON.stringify(map),
+  );
+}
+
+function clearPendingInboxMutations(keys: string[]) {
+  if (keys.length === 0) return;
+
+  const currentMutations = readPendingInboxMutations();
+  let hasChanges = false;
+
+  for (const key of keys) {
+    if (key in currentMutations) {
+      delete currentMutations[key];
+      hasChanges = true;
+    }
+  }
+
+  if (hasChanges) {
+    writePendingInboxMutations(currentMutations);
+  }
+}
+
+function getPendingInboxMutationLastMessage(mutation: PendingInboxMutation) {
+  const text = mutation.message.trim();
+
+  if (text) {
+    return text;
+  }
+
+  return mutation.hasImages ? "📷 Poză" : "Mesaj nou";
 }
 
 export default function MessagesInbox({ role }: { role: Role }) {
@@ -111,6 +185,70 @@ export default function MessagesInbox({ role }: { role: Role }) {
     loadConversationsGenerationRef.current += 1;
     return loadConversationsGenerationRef.current;
   }, []);
+
+  const applyPendingInboxMutations = useCallback(
+    (currentConversations: Conversation[]) => {
+      const pendingMutations = readPendingInboxMutations();
+      const mutationEntries = Object.entries(pendingMutations);
+
+      if (mutationEntries.length === 0) {
+        return {
+          nextConversations: currentConversations,
+          appliedOrConfirmedKeys: [] as string[],
+        };
+      }
+
+      let hasChanges = false;
+      const appliedOrConfirmedKeys: string[] = [];
+      const nextConversations = currentConversations.map((conversation) => {
+        const conversationKey = getConversationKey(
+          conversation.requestId,
+          conversation.offerId,
+        );
+        const mutation = pendingMutations[conversationKey];
+
+        if (!mutation) {
+          return conversation;
+        }
+
+        const mutationTime = new Date(mutation.createdAt).getTime();
+        const conversationTime = new Date(conversation.lastMessageTime).getTime();
+
+        if (mutationTime <= conversationTime) {
+          appliedOrConfirmedKeys.push(conversationKey);
+          return conversation;
+        }
+
+        hasChanges = true;
+        appliedOrConfirmedKeys.push(conversationKey);
+
+        return {
+          ...conversation,
+          lastMessage: getPendingInboxMutationLastMessage(mutation),
+          lastMessageTime: mutation.createdAt,
+        };
+      });
+
+      if (!hasChanges) {
+        return {
+          nextConversations: currentConversations,
+          appliedOrConfirmedKeys,
+        };
+      }
+
+      nextConversations.sort(
+        (a, b) =>
+          new Date(b.lastMessageTime).getTime() -
+          new Date(a.lastMessageTime).getTime(),
+      );
+
+      return {
+        nextConversations,
+        appliedOrConfirmedKeys,
+      };
+    },
+    [],
+  );
 
   const loadConversations = useCallback(
     async (showLoader = true) => {
@@ -483,9 +621,15 @@ export default function MessagesInbox({ role }: { role: Role }) {
           return;
         }
 
-        setConversations(mapped);
+        const {
+          nextConversations,
+          appliedOrConfirmedKeys,
+        } = applyPendingInboxMutations(mapped);
+
+        setConversations(nextConversations);
+        clearPendingInboxMutations(appliedOrConfirmedKeys);
         logPerf("loadConversations:end", {
-          totalConversations: mapped.length,
+          totalConversations: nextConversations.length,
           generation,
         });
       } catch (error) {
@@ -511,7 +655,13 @@ export default function MessagesInbox({ role }: { role: Role }) {
         }
       }
     },
-    [invalidateLoadConversationsGeneration, logPerf, role, router],
+    [
+      applyPendingInboxMutations,
+      invalidateLoadConversationsGeneration,
+      logPerf,
+      role,
+      router,
+    ],
   );
 
   useEffect(() => {
@@ -620,6 +770,30 @@ export default function MessagesInbox({ role }: { role: Role }) {
       void supabase.removeChannel(channel);
     };
   }, [invalidateLoadConversationsGeneration, loadConversations, logPerf, role]);
+
+  useEffect(() => {
+    if (conversations.length === 0) {
+      return;
+    }
+
+    const {
+      nextConversations,
+      appliedOrConfirmedKeys,
+    } = applyPendingInboxMutations(conversations);
+
+    if (appliedOrConfirmedKeys.length === 0) {
+      return;
+    }
+
+    clearPendingInboxMutations(appliedOrConfirmedKeys);
+
+    if (nextConversations !== conversations) {
+      logPerf("pendingInboxMutations:appliedOnMountedState", {
+        appliedKeys: appliedOrConfirmedKeys,
+      });
+      setConversations(nextConversations);
+    }
+  }, [applyPendingInboxMutations, conversations, logPerf]);
 
   useEffect(() => {
     if (!loading) {

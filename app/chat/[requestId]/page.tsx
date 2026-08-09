@@ -44,12 +44,62 @@ type RequestData = {
   target_workshop_id: string | null;
 };
 
+type PendingInboxMutation = {
+  requestId: string;
+  offerId: string | null;
+  message: string;
+  hasImages: boolean;
+  createdAt: string;
+};
+
+type PendingInboxMutationMap = Record<string, PendingInboxMutation>;
+
+const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
+
 const quickMessages = [
   "Când pot aduce mașina?",
   "Cât durează lucrarea?",
   "Mașina este gata?",
   "Poți să îmi trimiți poze cu progresul?",
 ];
+
+function getConversationKey(requestId: string, offerId: string | null) {
+  return `${requestId}::${offerId ?? "direct"}`;
+}
+
+function readPendingInboxMutations(): PendingInboxMutationMap {
+  try {
+    const rawValue = sessionStorage.getItem(
+      PENDING_INBOX_MUTATIONS_STORAGE_KEY,
+    );
+
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!parsedValue || typeof parsedValue !== "object") {
+      return {};
+    }
+
+    return parsedValue as PendingInboxMutationMap;
+  } catch {
+    return {};
+  }
+}
+
+function writePendingInboxMutations(map: PendingInboxMutationMap) {
+  if (Object.keys(map).length === 0) {
+    sessionStorage.removeItem(PENDING_INBOX_MUTATIONS_STORAGE_KEY);
+    return;
+  }
+
+  sessionStorage.setItem(
+    PENDING_INBOX_MUTATIONS_STORAGE_KEY,
+    JSON.stringify(map),
+  );
+}
 
 export default function ChatPage() {
   const params = useParams();
@@ -121,6 +171,33 @@ export default function ChatPage() {
     markReadGenerationRef.current += 1;
     return markReadGenerationRef.current;
   }, []);
+
+  const persistPendingInboxMutation = useCallback(
+    (mutation: PendingInboxMutation) => {
+      const conversationKey = getConversationKey(
+        mutation.requestId,
+        mutation.offerId,
+      );
+      const currentMutations = readPendingInboxMutations();
+      const currentMutation = currentMutations[conversationKey];
+
+      if (
+        currentMutation &&
+        new Date(currentMutation.createdAt).getTime() >=
+          new Date(mutation.createdAt).getTime()
+      ) {
+        return;
+      }
+
+      currentMutations[conversationKey] = mutation;
+      writePendingInboxMutations(currentMutations);
+      logPerf("pendingInboxMutation:stored", {
+        conversationKey,
+        createdAt: mutation.createdAt,
+      });
+    },
+    [logPerf],
+  );
 
   const loadMessages = useCallback(async () => {
     if (!requestId) return;
@@ -662,6 +739,14 @@ export default function ChatPage() {
         alert("Mesajul nu a putut fi trimis.");
         return;
       }
+
+      persistPendingInboxMutation({
+        requestId,
+        offerId,
+        message: text,
+        hasImages: uploadedImages.length > 0,
+        createdAt: new Date().toISOString(),
+      });
 
       setNewMessage("");
       setSelectedImages([]);
