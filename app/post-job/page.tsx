@@ -27,6 +27,10 @@ import ServiceOptionGroup from "@/app/components/ServiceOptionGroup";
 import ServiceCard from "@/app/components/ServiceCard";
 import dynamic from "next/dynamic";
 import { SERVICES } from "@/lib/data/services";
+import {
+  prepareImageForUpload,
+  type PreparedImage,
+} from "@/lib/images/prepare-image-for-upload";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -61,17 +65,19 @@ type StoredImage = {
 };
 
 async function uploadRepairImage(
-  file: File,
+  preparedImage: PreparedImage,
+  originalName: string,
   userId: string,
 ): Promise<StoredImage> {
-  const fileExt = file.name.split(".").pop() || "jpg";
   const fileName = `${userId}/${Date.now()}-${Math.random()
     .toString(36)
-    .slice(2)}.${fileExt}`;
+    .slice(2)}.${preparedImage.extension}`;
 
   const { error } = await supabase.storage
     .from("repair-images")
-    .upload(fileName, file);
+    .upload(fileName, preparedImage.file, {
+      contentType: preparedImage.contentType,
+    });
 
   if (error) {
     throw error;
@@ -82,9 +88,20 @@ async function uploadRepairImage(
     .getPublicUrl(fileName);
 
   return {
-    name: file.name,
+    name: originalName,
     url: data.publicUrl,
   };
+}
+
+function logPreparedImage(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
 }
 
 export default function PostJobPage() {
@@ -254,8 +271,32 @@ function PostJobContent() {
 
       setIsSubmitting(true);
 
+      const preparedImages: Array<{
+        originalName: string;
+        preparedImage: PreparedImage;
+      }> = [];
+
+      // Process sequentially to avoid decoding several full-size photos at once.
+      for (const file of files) {
+        const preparedImage = await prepareImageForUpload(file, {
+          preset: "request",
+        });
+
+        logPreparedImage(preparedImage);
+        preparedImages.push({
+          originalName: file.name,
+          preparedImage,
+        });
+      }
+
       const storedImages: StoredImage[] = await Promise.all(
-        files.map((file) => uploadRepairImage(file, authData.user.id)),
+        preparedImages.map(({ originalName, preparedImage }) =>
+          uploadRepairImage(
+            preparedImage,
+            originalName,
+            authData.user.id,
+          ),
+        ),
       );
 
       const selectedDamageTypes = serviceDetails
