@@ -4,7 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
-import imageCompression from "browser-image-compression";
+import {
+  prepareImageForUpload,
+  type PreparedImage,
+} from "@/lib/images/prepare-image-for-upload";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
@@ -53,6 +56,17 @@ type PendingInboxMutation = {
 };
 
 type PendingInboxMutationMap = Record<string, PendingInboxMutation>;
+
+function logPreparedImage(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\ncontext: chat\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
+}
 
 const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
 
@@ -648,22 +662,34 @@ export default function ChatPage() {
   };
 
   const uploadSelectedImages = async (senderId: string) => {
-    const uploadedImages: ChatImage[] = [];
+    const preparedImages: Array<{
+      originalName: string;
+      preparedImage: PreparedImage;
+    }> = [];
 
+    // Prepare every selected image before uploading any of them.
     for (const file of selectedImages) {
-      const compressedFile = await imageCompression(file, {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1600,
-        useWebWorker: true,
+      const preparedImage = await prepareImageForUpload(file, {
+        preset: "chat",
       });
 
-      const fileName = `${crypto.randomUUID()}.jpg`;
+      logPreparedImage(preparedImage);
+      preparedImages.push({
+        originalName: file.name,
+        preparedImage,
+      });
+    }
+
+    const uploadedImages: ChatImage[] = [];
+
+    for (const { originalName, preparedImage } of preparedImages) {
+      const fileName = `${crypto.randomUUID()}.${preparedImage.extension}`;
       const filePath = `${requestId}/${senderId}/${fileName}`;
 
       const { error } = await supabase.storage
         .from("chat-images")
-        .upload(filePath, compressedFile, {
-          contentType: "image/jpeg",
+        .upload(filePath, preparedImage.file, {
+          contentType: preparedImage.contentType,
           cacheControl: "3600",
           upsert: false,
         });
@@ -679,7 +705,7 @@ export default function ChatPage() {
       uploadedImages.push({
         url: data.publicUrl,
         path: filePath,
-        name: file.name,
+        name: originalName,
       });
     }
 
