@@ -53,7 +53,7 @@ export const IMAGE_PRESETS: Record<ImagePreset, ImagePresetConfig> = {
   },
   logo: {
     maxLongEdge: 768,
-    maxSizeMB: 0.5,
+    maxSizeMB: 0.4,
     quality: 0.85,
     outputFormat: "transparentPngOtherwiseJpeg",
   },

@@ -47,6 +47,17 @@ function logPreparedImage(preparedImage: PreparedImage) {
   );
 }
 
+function logPreparedLogo(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\ncontext: workshop-logo\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ncontentType: ${preparedImage.contentType}\nextension: ${preparedImage.extension}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
+}
+
 export default function AccountPage() {
   const router = useRouter();
   const [accountMode, setAccountMode] = useState<"customer" | "workshop">(
@@ -184,13 +195,19 @@ export default function AccountPage() {
         return;
       }
 
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${authData.user.id}/logo-${Date.now()}.${fileExt}`;
+      const preparedImage = await prepareImageForUpload(file, {
+        preset: "logo",
+      });
+
+      logPreparedLogo(preparedImage);
+
+      const fileName = `${authData.user.id}/logo-${Date.now()}.${preparedImage.extension}`;
 
       const { error: uploadError } = await supabase.storage
         .from("workshop-assets")
-        .upload(fileName, file, {
+        .upload(fileName, preparedImage.file, {
           cacheControl: "3600",
+          contentType: preparedImage.contentType,
           upsert: true,
         });
 
@@ -206,7 +223,7 @@ export default function AccountPage() {
       setWorkshopLogoUrl(data.publicUrl);
     } catch (error) {
       console.error("Logo upload failed:", error);
-      alert("Logo upload failed.");
+      alert(error instanceof Error ? error.message : "Logo upload failed.");
     } finally {
       setUploadingLogo(false);
     }
