@@ -57,6 +57,11 @@ type PendingInboxMutation = {
 
 type PendingInboxMutationMap = Record<string, PendingInboxMutation>;
 
+type ResolvedMessageRequest = {
+  requestId: string;
+  createdForDraft: boolean;
+};
+
 function logPreparedImage(preparedImage: PreparedImage) {
   if (process.env.NODE_ENV !== "development") return;
 
@@ -122,6 +127,10 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const offerId = searchParams.get("offerId");
   const roleParam = searchParams.get("role");
+  const directWorkshopId = searchParams.get("directWorkshopId");
+  const isDirectDraft = requestId === "draft";
+  const hasValidDirectDraftParams =
+    searchParams.get("draft") === "1" && Boolean(directWorkshopId);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
@@ -141,6 +150,8 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const systemMessageCreatedRef = useRef(false);
+  const draftRequestResolutionRef =
+    useRef<Promise<ResolvedMessageRequest> | null>(null);
   const loadMessagesGenerationRef = useRef(0);
   const markReadGenerationRef = useRef(0);
 
@@ -214,7 +225,10 @@ export default function ChatPage() {
   );
 
   const loadMessages = useCallback(async () => {
-    if (!requestId) return;
+    if (!requestId || isDirectDraft) {
+      setMessagesLoading(false);
+      return;
+    }
     const startedAt = performance.now();
     const generation = invalidateLoadMessagesGeneration();
     logPerf("loadMessages:start", { generation });
@@ -300,10 +314,23 @@ export default function ChatPage() {
       generation,
     });
     setMessagesLoading(false);
-  }, [invalidateLoadMessagesGeneration, logPerf, offerId, requestId]);
+  }, [
+    invalidateLoadMessagesGeneration,
+    isDirectDraft,
+    logPerf,
+    offerId,
+    requestId,
+  ]);
 
   const markConversationAsRead = useCallback(async () => {
-    if (!userId || !requestId || messages.length === 0) return;
+    if (
+      isDirectDraft ||
+      !userId ||
+      !requestId ||
+      messages.length === 0
+    ) {
+      return;
+    }
 
     const startedAt = performance.now();
     const generation = invalidateMarkReadGeneration();
@@ -368,6 +395,7 @@ export default function ChatPage() {
   }, [
     belongsToCurrentConversation,
     invalidateMarkReadGeneration,
+    isDirectDraft,
     logPerf,
     messages,
     offerId,
@@ -436,6 +464,8 @@ export default function ChatPage() {
   };
 
   const loadRequest = useCallback(async () => {
+    if (isDirectDraft) return;
+
     const { data, error } = await supabase
       .from("repair_requests")
       .select(
@@ -455,9 +485,23 @@ export default function ChatPage() {
     if (!error && data) {
       setRequestData(data);
     }
-  }, [requestId]);
+  }, [isDirectDraft, requestId]);
 
   const loadWorkshopProfile = useCallback(async () => {
+    if (isDirectDraft && directWorkshopId) {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("workshop_name, workshop_slug")
+        .eq("id", directWorkshopId)
+        .single();
+
+      setWorkshopProfile({
+        workshop_name: profileData?.workshop_name || "Service",
+        workshop_slug: profileData?.workshop_slug || null,
+      });
+      return;
+    }
+
     const { data: request } = await supabase
       .from("repair_requests")
       .select("target_workshop_id")
@@ -505,7 +549,7 @@ export default function ChatPage() {
         profileData?.workshop_name || offerData.workshop_name || "Service",
       workshop_slug: profileData?.workshop_slug || null,
     });
-  }, [offerId, requestId]);
+  }, [directWorkshopId, isDirectDraft, offerId, requestId]);
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
@@ -519,6 +563,35 @@ export default function ChatPage() {
       setActiveRole("customer");
     } else if (savedRole) {
       setActiveRole(savedRole);
+    }
+
+    if (isDirectDraft) {
+      setMessages([]);
+      setMessagesLoading(false);
+      setRequestData({
+        car_brand: "Mesaj direct",
+        car_model: "Service",
+        city: "-",
+        status: "open",
+        images: [],
+        request_type: "direct_message",
+        target_workshop_id: directWorkshopId,
+      });
+      void getUser();
+      void loadWorkshopProfile();
+
+      return () => {
+        const invalidatedLoadGeneration = invalidateLoadMessagesGeneration();
+        const invalidatedMarkReadGeneration = invalidateMarkReadGeneration();
+        logPerf("unmount", {
+          invalidatedLoadGeneration,
+          invalidatedMarkReadGeneration,
+          draft: true,
+        });
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+      };
     }
 
     void loadMessages();
@@ -628,8 +701,10 @@ export default function ChatPage() {
     };
   }, [
     belongsToCurrentConversation,
+    directWorkshopId,
     invalidateLoadMessagesGeneration,
     invalidateMarkReadGeneration,
+    isDirectDraft,
     loadMessages,
     loadRequest,
     loadWorkshopProfile,
@@ -661,7 +736,155 @@ export default function ChatPage() {
     });
   };
 
-  const uploadSelectedImages = async (senderId: string) => {
+  const resolveMessageRequest = async (
+    senderId: string,
+  ): Promise<ResolvedMessageRequest> => {
+    if (!isDirectDraft) {
+      return { requestId, createdForDraft: false };
+    }
+
+    if (!hasValidDirectDraftParams || !directWorkshopId) {
+      throw new Error("Service-ul pentru conversația directă lipsește.");
+    }
+
+    if (draftRequestResolutionRef.current) {
+      return draftRequestResolutionRef.current;
+    }
+
+    const resolutionPromise = (async () => {
+      const { data: existingRequest, error: existingRequestError } =
+        await supabase
+          .from("repair_requests")
+          .select("id")
+          .eq("user_id", senderId)
+          .eq("target_workshop_id", directWorkshopId)
+          .eq("request_type", "direct_message")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+      if (existingRequestError) {
+        throw existingRequestError;
+      }
+
+      if (existingRequest?.id) {
+        return {
+          requestId: existingRequest.id,
+          createdForDraft: false,
+        };
+      }
+
+      const { data: createdRequest, error: createRequestError } = await supabase
+        .from("repair_requests")
+        .insert({
+          user_id: senderId,
+          status: "open",
+          request_type: "direct_message",
+          target_workshop_id: directWorkshopId,
+          car_brand: "Mesaj direct",
+          car_model: "Service",
+          car_year: new Date().getFullYear(),
+          damage_type: "direct_message",
+          city: "-",
+          description: "Conversație începută din profilul service-ului.",
+          images: [],
+        })
+        .select("id")
+        .single();
+
+      if (createRequestError || !createdRequest?.id) {
+        throw (
+          createRequestError ||
+          new Error("Nu am putut crea conversația directă.")
+        );
+      }
+
+      return {
+        requestId: createdRequest.id,
+        createdForDraft: true,
+      };
+    })();
+
+    draftRequestResolutionRef.current = resolutionPromise;
+
+    try {
+      return await resolutionPromise;
+    } catch (error) {
+      draftRequestResolutionRef.current = null;
+      throw error;
+    }
+  };
+
+  const cleanupFailedDraftRequest = async (
+    resolvedRequest: ResolvedMessageRequest,
+    senderId: string,
+    uploadedImages: ChatImage[] = [],
+  ) => {
+    if (!resolvedRequest.createdForDraft) return;
+
+    const { data: persistedMessage, error: persistedMessageCheckError } =
+      await supabase
+        .from("messages")
+        .select("id")
+        .eq("request_id", resolvedRequest.requestId)
+        .neq("sender_role", "system")
+        .limit(1)
+        .maybeSingle();
+
+    if (persistedMessageCheckError || persistedMessage) {
+      if (persistedMessageCheckError) {
+        console.error(
+          "Failed to verify empty direct message request before cleanup:",
+          persistedMessageCheckError,
+        );
+      }
+      return;
+    }
+
+    const uploadedPaths = uploadedImages
+      .map((image) => image.path)
+      .filter((path): path is string => Boolean(path));
+
+    if (uploadedPaths.length > 0) {
+      const { error: storageCleanupError } = await supabase.storage
+        .from("chat-images")
+        .remove(uploadedPaths);
+
+      if (storageCleanupError) {
+        console.error(
+          "Failed to clean up draft chat images:",
+          storageCleanupError,
+        );
+      }
+    }
+
+    const { error: requestCleanupError } = await supabase
+      .from("repair_requests")
+      .delete()
+      .eq("id", resolvedRequest.requestId)
+      .eq("user_id", senderId)
+      .eq("request_type", "direct_message");
+
+    if (requestCleanupError) {
+      console.error(
+        "Failed to clean up empty direct message request:",
+        requestCleanupError,
+      );
+    } else {
+      draftRequestResolutionRef.current = null;
+    }
+  };
+
+  const openPersistedDraftConversation = (persistedRequestId: string) => {
+    router.replace(`/chat/${persistedRequestId}?role=customer`, {
+      scroll: false,
+    });
+  };
+
+  const uploadSelectedImages = async (
+    senderId: string,
+    targetRequestId: string,
+  ) => {
     const preparedImages: Array<{
       originalName: string;
       preparedImage: PreparedImage;
@@ -682,31 +905,43 @@ export default function ChatPage() {
 
     const uploadedImages: ChatImage[] = [];
 
-    for (const { originalName, preparedImage } of preparedImages) {
-      const fileName = `${crypto.randomUUID()}.${preparedImage.extension}`;
-      const filePath = `${requestId}/${senderId}/${fileName}`;
+    try {
+      for (const { originalName, preparedImage } of preparedImages) {
+        const fileName = `${crypto.randomUUID()}.${preparedImage.extension}`;
+        const filePath = `${targetRequestId}/${senderId}/${fileName}`;
 
-      const { error } = await supabase.storage
-        .from("chat-images")
-        .upload(filePath, preparedImage.file, {
-          contentType: preparedImage.contentType,
-          cacheControl: "3600",
-          upsert: false,
+        const { error } = await supabase.storage
+          .from("chat-images")
+          .upload(filePath, preparedImage.file, {
+            contentType: preparedImage.contentType,
+            cacheControl: "3600",
+            upsert: false,
+          });
+
+        if (error) {
+          throw error;
+        }
+
+        const { data } = supabase.storage
+          .from("chat-images")
+          .getPublicUrl(filePath);
+
+        uploadedImages.push({
+          url: data.publicUrl,
+          path: filePath,
+          name: originalName,
         });
+      }
+    } catch (error) {
+      const uploadedPaths = uploadedImages
+        .map((image) => image.path)
+        .filter((path): path is string => Boolean(path));
 
-      if (error) {
-        throw error;
+      if (isDirectDraft && uploadedPaths.length > 0) {
+        await supabase.storage.from("chat-images").remove(uploadedPaths);
       }
 
-      const { data } = supabase.storage
-        .from("chat-images")
-        .getPublicUrl(filePath);
-
-      uploadedImages.push({
-        url: data.publicUrl,
-        path: filePath,
-        name: originalName,
-      });
+      throw error;
     }
 
     return uploadedImages;
@@ -721,16 +956,47 @@ export default function ChatPage() {
 
     if (!authData.user) return;
 
-    const { error } = await supabase.from("messages").insert({
-      request_id: requestId,
-      offer_id: offerId,
-      sender_id: authData.user.id,
-      sender_role: "user",
-      message: cleanText,
-      images,
-    });
-    if (!error) {
+    let resolvedRequest: ResolvedMessageRequest | null = null;
+    let messageInserted = false;
+
+    try {
+      resolvedRequest = await resolveMessageRequest(authData.user.id);
+
+      const { error } = await supabase.from("messages").insert({
+        request_id: resolvedRequest.requestId,
+        offer_id: isDirectDraft ? null : offerId,
+        sender_id: authData.user.id,
+        sender_role: "user",
+        message: cleanText,
+        images,
+      });
+
+      if (error) {
+        throw error;
+      }
+      messageInserted = true;
+
+      if (isDirectDraft) {
+        persistPendingInboxMutation({
+          requestId: resolvedRequest.requestId,
+          offerId: null,
+          message: cleanText,
+          hasImages: images.length > 0,
+          createdAt: new Date().toISOString(),
+        });
+        openPersistedDraftConversation(resolvedRequest.requestId);
+      }
+
       sendTypingStatus(false);
+    } catch (error) {
+      if (resolvedRequest && !messageInserted) {
+        await cleanupFailedDraftRequest(resolvedRequest, authData.user.id);
+      }
+
+      if (isDirectDraft) {
+        console.error("Failed to send first direct message:", error);
+        alert("Mesajul nu a putut fi trimis.");
+      }
     }
   };
 
@@ -746,14 +1012,22 @@ export default function ChatPage() {
       return;
     }
 
+    let resolvedRequest: ResolvedMessageRequest | null = null;
+    let uploadedImages: ChatImage[] = [];
+    let messageInserted = false;
+
     try {
       setIsSending(true);
+      resolvedRequest = await resolveMessageRequest(authData.user.id);
 
-      const uploadedImages = await uploadSelectedImages(authData.user.id);
+      uploadedImages = await uploadSelectedImages(
+        authData.user.id,
+        resolvedRequest.requestId,
+      );
 
       const { error } = await supabase.from("messages").insert({
-        request_id: requestId,
-        offer_id: offerId,
+        request_id: resolvedRequest.requestId,
+        offer_id: isDirectDraft ? null : offerId,
         sender_id: authData.user.id,
         sender_role: "user",
         message: text,
@@ -761,14 +1035,20 @@ export default function ChatPage() {
       });
 
       if (error) {
+        await cleanupFailedDraftRequest(
+          resolvedRequest,
+          authData.user.id,
+          uploadedImages,
+        );
         console.error("Failed to send message:", error);
         alert("Mesajul nu a putut fi trimis.");
         return;
       }
+      messageInserted = true;
 
       persistPendingInboxMutation({
-        requestId,
-        offerId,
+        requestId: resolvedRequest.requestId,
+        offerId: isDirectDraft ? null : offerId,
         message: text,
         hasImages: uploadedImages.length > 0,
         createdAt: new Date().toISOString(),
@@ -777,7 +1057,19 @@ export default function ChatPage() {
       setNewMessage("");
       setSelectedImages([]);
       sendTypingStatus(false);
+
+      if (isDirectDraft) {
+        openPersistedDraftConversation(resolvedRequest.requestId);
+      }
     } catch (error: unknown) {
+      if (resolvedRequest && !messageInserted) {
+        await cleanupFailedDraftRequest(
+          resolvedRequest,
+          authData.user.id,
+          uploadedImages,
+        );
+      }
+
       console.error("Failed to upload/send message:", error);
 
       const errorMessage =

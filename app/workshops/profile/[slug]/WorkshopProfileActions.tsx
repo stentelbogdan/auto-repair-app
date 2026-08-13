@@ -37,30 +37,9 @@ export default function WorkshopProfileActions({
       return;
     }
 
-    const { data: request, error } = await supabase
-      .from("repair_requests")
-      .insert({
-        user_id: authData.user.id,
-        status: "open",
-        request_type: "direct_message",
-        target_workshop_id: workshopId,
-        car_brand: "Mesaj direct",
-        car_model: "Service",
-        car_year: new Date().getFullYear(),
-        damage_type: "direct_message",
-        city: "-",
-        description: "Conversație începută din profilul service-ului.",
-        images: [],
-      })
-      .select("id")
-      .single();
-
-    if (error || !request?.id) {
-      alert(error?.message || "Nu am putut porni conversația.");
-      return;
-    }
-
-    router.push(`/chat/${request.id}?role=customer`);
+    router.push(
+      `/chat/draft?draft=1&directWorkshopId=${encodeURIComponent(workshopId)}&role=customer`,
+    );
   };
 
   return (

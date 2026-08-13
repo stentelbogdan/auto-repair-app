@@ -603,35 +603,46 @@ export default function MessagesInbox({ role }: { role: Role }) {
           ];
         });
 
-        const mappedDirectRequests: Conversation[] = directRequests.map((request) => {
-          const conversationMessages =
-            messagesByConversation.get(getConversationKey(request.id, null)) || [];
-          const lastMessage = conversationMessages.find(
-            (message) => message.sender_role !== "system",
-          );
-          const unreadCount = conversationMessages.filter((message) => {
-            return (
-              message.sender_id !== userId &&
-              message.sender_role !== "system" &&
-              message.read_at == null
+        const mappedDirectRequests: Conversation[] = directRequests.flatMap(
+          (request) => {
+            const conversationMessages =
+              messagesByConversation.get(
+                getConversationKey(request.id, null),
+              ) || [];
+            const lastMessage = conversationMessages.find(
+              (message) => message.sender_role !== "system",
             );
-          }).length;
 
-          return {
-            requestId: request.id,
-            offerId: null,
-            title: "Mesaj direct Service",
-            city: "Conversație directă",
-            status: request.status || "open",
-            image: "",
-            workshopName: request.target_workshop_id
-              ? profileMap.get(request.target_workshop_id) || "Service"
-              : "Service",
-            lastMessage: getLastMessageText(lastMessage),
-            lastMessageTime: lastMessage?.created_at || request.created_at,
-            unreadCount,
-          };
-        });
+            if (!lastMessage) {
+              return [];
+            }
+
+            const unreadCount = conversationMessages.filter((message) => {
+              return (
+                message.sender_id !== userId &&
+                message.sender_role !== "system" &&
+                message.read_at == null
+              );
+            }).length;
+
+            return [
+              {
+                requestId: request.id,
+                offerId: null,
+                title: "Mesaj direct Service",
+                city: "Conversație directă",
+                status: request.status || "open",
+                image: "",
+                workshopName: request.target_workshop_id
+                  ? profileMap.get(request.target_workshop_id) || "Service"
+                  : "Service",
+                lastMessage: getLastMessageText(lastMessage),
+                lastMessageTime: lastMessage.created_at,
+                unreadCount,
+              },
+            ];
+          },
+        );
 
         const mapped = [...mappedOffers, ...mappedDirectRequests];
 
