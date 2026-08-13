@@ -20,6 +20,10 @@ import {
   getLicensePlateError,
 } from "@/lib/utils/licensePlate";
 import ImageGallery from "@/app/components/ImageGallery";
+import {
+  prepareImageForUpload,
+  type PreparedImage,
+} from "@/lib/images/prepare-image-for-upload";
 
 type DamageType =
   | "engine"
@@ -40,17 +44,19 @@ type StoredImage = {
 };
 
 async function uploadRepairImage(
-  file: File,
+  preparedImage: PreparedImage,
+  originalName: string,
   userId: string,
 ): Promise<StoredImage> {
-  const fileExt = file.name.split(".").pop() || "jpg";
   const fileName = `${userId}/${Date.now()}-${Math.random()
     .toString(36)
-    .slice(2)}.${fileExt}`;
+    .slice(2)}.${preparedImage.extension}`;
 
   const { error } = await supabase.storage
     .from("repair-images")
-    .upload(fileName, file);
+    .upload(fileName, preparedImage.file, {
+      contentType: preparedImage.contentType,
+    });
 
   if (error) {
     throw error;
@@ -61,9 +67,20 @@ async function uploadRepairImage(
     .getPublicUrl(fileName);
 
   return {
-    name: file.name,
+    name: originalName,
     url: data.publicUrl,
   };
+}
+
+function logPreparedImage(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
 }
 
 const mechanicalServices: {
@@ -136,7 +153,13 @@ const mechanicalServices: {
 
 export default function PostJobPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense
+      fallback={
+        <main className="flex min-h-[calc(100svh-236px)] items-center justify-center bg-black text-white">
+          <p className="text-sm text-white/65">Se incarca...</p>
+        </main>
+      }
+    >
       <PostJobContent />
     </Suspense>
   );
@@ -216,8 +239,32 @@ function PostJobContent() {
 
       setIsSubmitting(true);
 
+      const preparedImages: Array<{
+        originalName: string;
+        preparedImage: PreparedImage;
+      }> = [];
+
+      // Process sequentially to avoid decoding several full-size photos at once.
+      for (const file of files) {
+        const preparedImage = await prepareImageForUpload(file, {
+          preset: "request",
+        });
+
+        logPreparedImage(preparedImage);
+        preparedImages.push({
+          originalName: file.name,
+          preparedImage,
+        });
+      }
+
       const storedImages: StoredImage[] = await Promise.all(
-        files.map((file) => uploadRepairImage(file, authData.user.id)),
+        preparedImages.map(({ originalName, preparedImage }) =>
+          uploadRepairImage(
+            preparedImage,
+            originalName,
+            authData.user.id,
+          ),
+        ),
       );
 
       await createRepairRequest({

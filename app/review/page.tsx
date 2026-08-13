@@ -5,6 +5,10 @@ import { ImagePlus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
+import {
+  prepareImageForUpload,
+  type PreparedImage,
+} from "@/lib/images/prepare-image-for-upload";
 
 type RequestRow = {
   id: string;
@@ -25,6 +29,17 @@ type ReviewPreviewImage = {
   file: File;
   previewUrl: string;
 };
+
+function logPreparedImage(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\ncontext: review\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
+}
 
 export default function ReviewPage() {
   return (
@@ -138,16 +153,28 @@ function ReviewContent() {
   };
 
   const uploadReviewImages = async (userId: string) => {
+    const preparedImages: PreparedImage[] = [];
+
+    // Prepare every image before uploading any of them.
+    for (const image of reviewImages) {
+      const preparedImage = await prepareImageForUpload(image.file, {
+        preset: "review",
+      });
+
+      logPreparedImage(preparedImage);
+      preparedImages.push(preparedImage);
+    }
+
     const uploadedUrls: string[] = [];
 
-    for (const image of reviewImages) {
-      const fileExtension = image.file.name.split(".").pop() || "jpg";
-      const filePath = `${userId}/${requestId}/${Date.now()}-${crypto.randomUUID()}.${fileExtension}`;
+    for (const preparedImage of preparedImages) {
+      const filePath = `${userId}/${requestId}/${Date.now()}-${crypto.randomUUID()}.${preparedImage.extension}`;
 
       const { error: uploadError } = await supabase.storage
         .from("review-images")
-        .upload(filePath, image.file, {
+        .upload(filePath, preparedImage.file, {
           cacheControl: "3600",
+          contentType: preparedImage.contentType,
           upsert: false,
         });
 
@@ -197,9 +224,13 @@ function ReviewContent() {
       }
 
       router.push("/customer/my-jobs");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Review save error:", error);
-      alert(error.message || "Nu am putut salva review-ul.");
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Nu am putut salva review-ul.",
+      );
     } finally {
       setSaving(false);
     }

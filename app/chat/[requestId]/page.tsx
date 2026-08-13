@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
-import imageCompression from "browser-image-compression";
+import {
+  prepareImageForUpload,
+  type PreparedImage,
+} from "@/lib/images/prepare-image-for-upload";
 import Lightbox from "yet-another-react-lightbox";
 import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
@@ -43,12 +47,73 @@ type RequestData = {
   target_workshop_id: string | null;
 };
 
+type PendingInboxMutation = {
+  requestId: string;
+  offerId: string | null;
+  message: string;
+  hasImages: boolean;
+  createdAt: string;
+};
+
+type PendingInboxMutationMap = Record<string, PendingInboxMutation>;
+
+function logPreparedImage(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\ncontext: chat\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
+}
+
+const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
+
 const quickMessages = [
   "Când pot aduce mașina?",
   "Cât durează lucrarea?",
   "Mașina este gata?",
   "Poți să îmi trimiți poze cu progresul?",
 ];
+
+function getConversationKey(requestId: string, offerId: string | null) {
+  return `${requestId}::${offerId ?? "direct"}`;
+}
+
+function readPendingInboxMutations(): PendingInboxMutationMap {
+  try {
+    const rawValue = sessionStorage.getItem(
+      PENDING_INBOX_MUTATIONS_STORAGE_KEY,
+    );
+
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!parsedValue || typeof parsedValue !== "object") {
+      return {};
+    }
+
+    return parsedValue as PendingInboxMutationMap;
+  } catch {
+    return {};
+  }
+}
+
+function writePendingInboxMutations(map: PendingInboxMutationMap) {
+  if (Object.keys(map).length === 0) {
+    sessionStorage.removeItem(PENDING_INBOX_MUTATIONS_STORAGE_KEY);
+    return;
+  }
+
+  sessionStorage.setItem(
+    PENDING_INBOX_MUTATIONS_STORAGE_KEY,
+    JSON.stringify(map),
+  );
+}
 
 export default function ChatPage() {
   const params = useParams();
@@ -71,11 +136,13 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<RealtimeChannel | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const systemMessageCreatedRef = useRef(false);
+  const loadMessagesGenerationRef = useRef(0);
+  const markReadGenerationRef = useRef(0);
 
   const [selectedChatGallery, setSelectedChatGallery] = useState<{
     images: ChatImage[];
@@ -86,110 +153,238 @@ export default function ChatPage() {
     workshop_name: string | null;
     workshop_slug: string | null;
   } | null>(null);
+  const perfStartRef = useRef<number>(performance.now());
 
-  useEffect(() => {
-    const savedRole = localStorage.getItem("activeRole");
+  const logPerf = useCallback(
+    (event: string, details?: Record<string, unknown>) => {
+      const elapsed = (performance.now() - perfStartRef.current).toFixed(1);
+      console.log("[MSG-PERF][Chat]", {
+        event,
+        elapsedMs: Number(elapsed),
+        requestId,
+        offerId: offerId ?? null,
+        ...details,
+      });
+    },
+    [offerId, requestId],
+  );
 
-    if (roleParam === "workshop") {
-      localStorage.setItem("activeRole", "workshop");
-      setActiveRole("workshop");
-    } else if (roleParam === "customer") {
-      localStorage.setItem("activeRole", "customer");
-      setActiveRole("customer");
-    } else if (savedRole) {
-      setActiveRole(savedRole);
-    }
+  const belongsToCurrentConversation = useCallback(
+    (messageOfferId?: string | null) => {
+      return offerId ? messageOfferId === offerId : messageOfferId == null;
+    },
+    [offerId],
+  );
 
-    loadMessages();
-    getUser();
-    loadRequest();
-    loadWorkshopProfile();
+  const invalidateLoadMessagesGeneration = useCallback(() => {
+    loadMessagesGenerationRef.current += 1;
+    return loadMessagesGenerationRef.current;
+  }, []);
 
-    const channel = supabase
-      .channel(`chat-${requestId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `request_id=eq.${requestId}`,
-        },
-        (payload) => {
-          const insertedMessage = payload.new as Message;
+  const invalidateMarkReadGeneration = useCallback(() => {
+    markReadGenerationRef.current += 1;
+    return markReadGenerationRef.current;
+  }, []);
 
-          const belongsToCurrentConversation = offerId
-            ? insertedMessage.offer_id === offerId
-            : insertedMessage.offer_id == null;
+  const persistPendingInboxMutation = useCallback(
+    (mutation: PendingInboxMutation) => {
+      const conversationKey = getConversationKey(
+        mutation.requestId,
+        mutation.offerId,
+      );
+      const currentMutations = readPendingInboxMutations();
+      const currentMutation = currentMutations[conversationKey];
 
-          if (!belongsToCurrentConversation) {
-            return;
-          }
-
-          setMessages((prev) => {
-            if (prev.some((message) => message.id === insertedMessage.id)) {
-              return prev;
-            }
-
-            return [...prev, insertedMessage].sort(
-              (a, b) =>
-                new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime(),
-            );
-          });
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "messages",
-          filter: `request_id=eq.${requestId}`,
-        },
-        (payload) => {
-          const updatedMessage = payload.new as Message;
-
-          setMessages((prev) =>
-            prev.map((message) =>
-              message.id === updatedMessage.id ? updatedMessage : message,
-            ),
-          );
-        },
-      )
-      .on("broadcast", { event: "typing" }, (payload) => {
-        if (payload.payload?.senderId === userId) return;
-
-        setIsOtherTyping(Boolean(payload.payload?.isTyping));
-
-        if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-        }
-
-        typingTimeoutRef.current = setTimeout(() => {
-          setIsOtherTyping(false);
-        }, 1800);
-      })
-      .subscribe();
-
-    channelRef.current = channel;
-
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
+      if (
+        currentMutation &&
+        new Date(currentMutation.createdAt).getTime() >=
+          new Date(mutation.createdAt).getTime()
+      ) {
+        return;
       }
 
-      supabase.removeChannel(channel);
-    };
-  }, [requestId, roleParam]);
+      currentMutations[conversationKey] = mutation;
+      writePendingInboxMutations(currentMutations);
+      logPerf("pendingInboxMutation:stored", {
+        conversationKey,
+        createdAt: mutation.createdAt,
+      });
+    },
+    [logPerf],
+  );
+
+  const loadMessages = useCallback(async () => {
+    if (!requestId) return;
+    const startedAt = performance.now();
+    const generation = invalidateLoadMessagesGeneration();
+    logPerf("loadMessages:start", { generation });
+
+    let query = supabase
+      .from("messages")
+      .select("*")
+      .eq("request_id", requestId)
+      .order("created_at", { ascending: true });
+
+    if (offerId) {
+      query = query.eq("offer_id", offerId);
+    } else {
+      query = query.is("offer_id", null);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      if (loadMessagesGenerationRef.current !== generation) {
+        logPerf("loadMessages:staleIgnored", {
+          generation,
+          phase: "error",
+        });
+        return;
+      }
+
+      logPerf("loadMessages:error", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        error: error.message,
+        generation,
+      });
+      setMessagesLoading(false);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      if (loadMessagesGenerationRef.current !== generation) {
+        logPerf("loadMessages:staleIgnored", {
+          generation,
+          phase: "setMessages",
+          count: data.length,
+        });
+        return;
+      }
+
+      logPerf("loadMessages:setMessages", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        count: data.length,
+        generation,
+      });
+      setMessages(data);
+      setMessagesLoading(false);
+      return;
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+
+    if (!authData.user) return;
+
+    if (systemMessageCreatedRef.current) return;
+    systemMessageCreatedRef.current = true;
+
+    await supabase.from("messages").insert({
+      request_id: requestId,
+      offer_id: offerId,
+      sender_id: authData.user.id,
+      sender_role: "system",
+      message: "Conversația a fost începută din profilul service-ului.",
+      images: [],
+    });
+
+    if (loadMessagesGenerationRef.current !== generation) {
+      logPerf("loadMessages:staleIgnored", {
+        generation,
+        phase: "emptyInsertedSystemMessage",
+      });
+      return;
+    }
+
+    logPerf("loadMessages:emptyInsertedSystemMessage", {
+      durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      generation,
+    });
+    setMessagesLoading(false);
+  }, [invalidateLoadMessagesGeneration, logPerf, offerId, requestId]);
+
+  const markConversationAsRead = useCallback(async () => {
+    if (!userId || !requestId || messages.length === 0) return;
+
+    const startedAt = performance.now();
+    const generation = invalidateMarkReadGeneration();
+    logPerf("markConversationAsRead:start", {
+      totalMessagesInState: messages.length,
+      generation,
+    });
+    const now = new Date().toISOString();
+    const unreadMessageIds = messages
+      .filter(
+        (message) =>
+          message.request_id === requestId &&
+          belongsToCurrentConversation(message.offer_id) &&
+          message.sender_id !== userId &&
+          message.sender_role !== "system" &&
+          !message.read_at,
+      )
+      .map((message) => message.id);
+
+    if (unreadMessageIds.length === 0) {
+      logPerf("markConversationAsRead:noop", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        generation,
+      });
+      return;
+    }
+
+    await supabase
+      .from("messages")
+      .update({ read_at: now })
+      .in("id", unreadMessageIds);
+
+    if (markReadGenerationRef.current !== generation) {
+      logPerf("markConversationAsRead:staleIgnored", {
+        durationMs: Number((performance.now() - startedAt).toFixed(1)),
+        generation,
+        updatedCount: unreadMessageIds.length,
+      });
+      return;
+    }
+
+    logPerf("markConversationAsRead:end", {
+      durationMs: Number((performance.now() - startedAt).toFixed(1)),
+      updatedCount: unreadMessageIds.length,
+      generation,
+    });
+
+    sessionStorage.setItem(
+      "last-read-conversation",
+      JSON.stringify({
+        requestId,
+        offerId: offerId ?? null,
+        readAt: Date.now(),
+      }),
+    );
+
+    logPerf("dispatch:messages-read-updated", {
+      updatedCount: unreadMessageIds.length,
+      generation,
+    });
+    window.dispatchEvent(new Event("messages-read-updated"));
+  }, [
+    belongsToCurrentConversation,
+    invalidateMarkReadGeneration,
+    logPerf,
+    messages,
+    offerId,
+    requestId,
+    userId,
+  ]);
 
   useEffect(() => {
+    logPerf("focusVisibilitySync:subscribe");
     const syncMessages = () => {
-      loadMessages();
+      logPerf("focusVisibilitySync:trigger");
+      void loadMessages();
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
+        logPerf("visibilitychange:visible");
         syncMessages();
       }
     };
@@ -197,18 +392,12 @@ export default function ChatPage() {
     window.addEventListener("focus", syncMessages);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        syncMessages();
-      }
-    }, 5000);
-
     return () => {
+      logPerf("focusVisibilitySync:unsubscribe");
       window.removeEventListener("focus", syncMessages);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.clearInterval(interval);
     };
-  }, [requestId, offerId]);
+  }, [loadMessages, logPerf]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -226,8 +415,8 @@ export default function ChatPage() {
   }, [messages, isOtherTyping]);
 
   useEffect(() => {
-    markConversationAsRead();
-  }, [messages, userId, requestId]);
+    void markConversationAsRead();
+  }, [markConversationAsRead]);
 
   useEffect(() => {
     const previews = selectedImages.map((file) => URL.createObjectURL(file));
@@ -246,7 +435,7 @@ export default function ChatPage() {
     }
   };
 
-  const loadRequest = async () => {
+  const loadRequest = useCallback(async () => {
     const { data, error } = await supabase
       .from("repair_requests")
       .select(
@@ -266,9 +455,9 @@ export default function ChatPage() {
     if (!error && data) {
       setRequestData(data);
     }
-  };
+  }, [requestId]);
 
-  const loadWorkshopProfile = async () => {
+  const loadWorkshopProfile = useCallback(async () => {
     const { data: request } = await supabase
       .from("repair_requests")
       .select("target_workshop_id")
@@ -316,99 +505,147 @@ export default function ChatPage() {
         profileData?.workshop_name || offerData.workshop_name || "Service",
       workshop_slug: profileData?.workshop_slug || null,
     });
-  };
+  }, [offerId, requestId]);
 
-  const loadMessages = async () => {
-    if (!requestId) return;
+  useEffect(() => {
+    const savedRole = localStorage.getItem("activeRole");
+    logPerf("mount", { roleParam });
 
-    let query = supabase
-      .from("messages")
-      .select("*")
-      .eq("request_id", requestId)
-      .order("created_at", { ascending: true });
-
-    if (offerId) {
-      query = query.eq("offer_id", offerId);
-    } else {
-      query = query.is("offer_id", null);
+    if (roleParam === "workshop") {
+      localStorage.setItem("activeRole", "workshop");
+      setActiveRole("workshop");
+    } else if (roleParam === "customer") {
+      localStorage.setItem("activeRole", "customer");
+      setActiveRole("customer");
+    } else if (savedRole) {
+      setActiveRole(savedRole);
     }
 
-    const { data, error } = await query;
+    void loadMessages();
+    void getUser();
+    void loadRequest();
+    void loadWorkshopProfile();
 
-    if (error) {
-      setMessagesLoading(false);
-      return;
-    }
+    const channel = supabase
+      .channel(`chat-${requestId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `request_id=eq.${requestId}`,
+        },
+        (payload) => {
+          const insertedMessage = payload.new as Message;
+          logPerf("realtime:INSERT", {
+            messageId: insertedMessage.id,
+            messageOfferId: insertedMessage.offer_id ?? null,
+            readAt: insertedMessage.read_at ?? null,
+          });
 
-    if (data && data.length > 0) {
-      setMessages(data);
-      setMessagesLoading(false);
-      return;
-    }
+          if (!belongsToCurrentConversation(insertedMessage.offer_id)) {
+            logPerf("realtime:INSERT:ignoredOtherConversation", {
+              messageId: insertedMessage.id,
+              messageOfferId: insertedMessage.offer_id ?? null,
+            });
+            return;
+          }
 
-    const { data: authData } = await supabase.auth.getUser();
+          setMessages((prev) => {
+            if (prev.some((message) => message.id === insertedMessage.id)) {
+              return prev;
+            }
 
-    if (!authData.user) return;
-
-    if (systemMessageCreatedRef.current) return;
-    systemMessageCreatedRef.current = true;
-
-    await supabase.from("messages").insert({
-      request_id: requestId,
-      offer_id: offerId,
-      sender_id: authData.user.id,
-      sender_role: "system",
-      message: "Conversația a fost începută din profilul service-ului.",
-      images: [],
-    });
-
-    setMessagesLoading(false);
-  };
-
-  const markConversationAsRead = async () => {
-    if (!userId || !requestId || messages.length === 0) return;
-
-    const now = new Date().toISOString();
-
-    await supabase.from("conversation_reads").upsert(
-      {
-        request_id: requestId,
-        user_id: userId,
-        last_read_at: now,
-        updated_at: now,
-      },
-      {
-        onConflict: "request_id,user_id",
-      },
-    );
-
-    const unreadMessageIds = messages
-      .filter(
-        (message) =>
-          message.sender_id !== userId &&
-          message.sender_role !== "system" &&
-          !message.read_at,
+            return [...prev, insertedMessage].sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime(),
+            );
+          });
+        },
       )
-      .map((message) => message.id);
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `request_id=eq.${requestId}`,
+        },
+        (payload) => {
+          const updatedMessage = payload.new as Message;
+          logPerf("realtime:UPDATE", {
+            messageId: updatedMessage.id,
+            messageOfferId: updatedMessage.offer_id ?? null,
+            readAt: updatedMessage.read_at ?? null,
+          });
 
-    if (unreadMessageIds.length > 0) {
-      await supabase
-        .from("messages")
-        .update({ read_at: now })
-        .in("id", unreadMessageIds);
+          if (!belongsToCurrentConversation(updatedMessage.offer_id)) {
+            logPerf("realtime:UPDATE:ignoredOtherConversation", {
+              messageId: updatedMessage.id,
+              messageOfferId: updatedMessage.offer_id ?? null,
+            });
+            return;
+          }
+
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === updatedMessage.id ? updatedMessage : message,
+            ),
+          );
+        },
+      )
+      .on("broadcast", { event: "typing" }, (payload) => {
+        if (payload.payload?.senderId === userId) return;
+
+        setIsOtherTyping(Boolean(payload.payload?.isTyping));
+
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+          setIsOtherTyping(false);
+        }, 1800);
+      })
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      const invalidatedLoadGeneration = invalidateLoadMessagesGeneration();
+      const invalidatedMarkReadGeneration = invalidateMarkReadGeneration();
+      logPerf("unmount", {
+        invalidatedLoadGeneration,
+        invalidatedMarkReadGeneration,
+      });
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    belongsToCurrentConversation,
+    invalidateLoadMessagesGeneration,
+    invalidateMarkReadGeneration,
+    loadMessages,
+    loadRequest,
+    loadWorkshopProfile,
+    logPerf,
+    requestId,
+    roleParam,
+    userId,
+  ]);
+
+  useEffect(() => {
+    if (!messagesLoading) {
+      logPerf("messagesVisible", {
+        count: messages.length,
+      });
     }
-
-    sessionStorage.setItem(
-      "last-read-conversation",
-      JSON.stringify({
-        requestId,
-        offerId: offerId ?? null,
-        readAt: Date.now(),
-      }),
-    );
-
-    window.dispatchEvent(new Event("messages-read-updated"));
-  };
+  }, [logPerf, messages.length, messagesLoading]);
 
   const sendTypingStatus = async (isTyping: boolean) => {
     if (!channelRef.current || !userId) return;
@@ -425,22 +662,34 @@ export default function ChatPage() {
   };
 
   const uploadSelectedImages = async (senderId: string) => {
-    const uploadedImages: ChatImage[] = [];
+    const preparedImages: Array<{
+      originalName: string;
+      preparedImage: PreparedImage;
+    }> = [];
 
+    // Prepare every selected image before uploading any of them.
     for (const file of selectedImages) {
-      const compressedFile = await imageCompression(file, {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1600,
-        useWebWorker: true,
+      const preparedImage = await prepareImageForUpload(file, {
+        preset: "chat",
       });
 
-      const fileName = `${crypto.randomUUID()}.jpg`;
+      logPreparedImage(preparedImage);
+      preparedImages.push({
+        originalName: file.name,
+        preparedImage,
+      });
+    }
+
+    const uploadedImages: ChatImage[] = [];
+
+    for (const { originalName, preparedImage } of preparedImages) {
+      const fileName = `${crypto.randomUUID()}.${preparedImage.extension}`;
       const filePath = `${requestId}/${senderId}/${fileName}`;
 
       const { error } = await supabase.storage
         .from("chat-images")
-        .upload(filePath, compressedFile, {
-          contentType: "image/jpeg",
+        .upload(filePath, preparedImage.file, {
+          contentType: preparedImage.contentType,
           cacheControl: "3600",
           upsert: false,
         });
@@ -456,7 +705,7 @@ export default function ChatPage() {
       uploadedImages.push({
         url: data.publicUrl,
         path: filePath,
-        name: file.name,
+        name: originalName,
       });
     }
 
@@ -517,12 +766,26 @@ export default function ChatPage() {
         return;
       }
 
+      persistPendingInboxMutation({
+        requestId,
+        offerId,
+        message: text,
+        hasImages: uploadedImages.length > 0,
+        createdAt: new Date().toISOString(),
+      });
+
       setNewMessage("");
       setSelectedImages([]);
       sendTypingStatus(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to upload/send message:", error);
-      alert(error?.message || "Pozele sau mesajul nu au putut fi trimise.");
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Pozele sau mesajul nu au putut fi trimise.";
+
+      alert(errorMessage);
     } finally {
       setIsSending(false);
     }

@@ -4,6 +4,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
+import {
+  prepareImageForUpload,
+  type PreparedImage,
+} from "@/lib/images/prepare-image-for-upload";
 
 const bodyworkProgressSteps = [
   "Received",
@@ -35,6 +39,17 @@ const statusLabels: Record<string, string> = {
   Testing: "Testare",
   Ready: "Gata",
 };
+
+function logPreparedImage(preparedImage: PreparedImage) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  const formatSize = (bytes: number) =>
+    `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+
+  console.info(
+    `[IMAGE-PREP]\ncontext: work-progress\noriginal: ${preparedImage.originalWidth}x${preparedImage.originalHeight} / ${formatSize(preparedImage.originalSize)}\nfinal: ${preparedImage.width}x${preparedImage.height} / ${formatSize(preparedImage.finalSize)}\ntargetSizeMet: ${preparedImage.targetSizeMet}`,
+  );
+}
 
 export default function WonJobDetailPage() {
   const params = useParams();
@@ -106,14 +121,30 @@ export default function WonJobDetailPage() {
       setUploading(true);
       setSuccessMessage("");
 
+      const preparedImages: PreparedImage[] = [];
+
+      // Prepare every image before uploading any of them.
+      for (const file of progressImages) {
+        const preparedImage = await prepareImageForUpload(file, {
+          preset: "workProgress",
+        });
+
+        logPreparedImage(preparedImage);
+        preparedImages.push(preparedImage);
+      }
+
       const uploadedUrls: string[] = [];
 
-      for (const file of progressImages) {
-        const filePath = `${requestId}/${Date.now()}-${file.name}`;
+      for (const preparedImage of preparedImages) {
+        const filePath = `${requestId}/${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}.${preparedImage.extension}`;
 
         const { error: uploadError } = await supabase.storage
           .from("work-progress")
-          .upload(filePath, file);
+          .upload(filePath, preparedImage.file, {
+            contentType: preparedImage.contentType,
+          });
 
         if (uploadError) {
           console.error(uploadError);
@@ -196,6 +227,11 @@ export default function WonJobDetailPage() {
       setUploadedPreviewUrls([]);
     } catch (error) {
       console.error(error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Nu am putut pregăti imaginile pentru upload.",
+      );
     } finally {
       setUploading(false);
     }

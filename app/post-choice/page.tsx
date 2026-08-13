@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 
 export default function PostChoicePage() {
@@ -19,6 +19,7 @@ export default function PostChoicePage() {
 }
 
 function PostChoiceContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
 
   const { navigate, isNavigating } = useSafeNavigation({
@@ -27,16 +28,24 @@ function PostChoiceContent() {
 
   const targetWorkshopId = searchParams.get("targetWorkshopId");
 
-  const createTargetUrl = (pathname: string) => {
-    if (!targetWorkshopId) {
-      return pathname;
-    }
+  const createTargetUrl = useCallback(
+    (pathname: string) => {
+      if (!targetWorkshopId) {
+        return pathname;
+      }
 
-    const params = new URLSearchParams();
-    params.set("targetWorkshopId", targetWorkshopId);
+      const params = new URLSearchParams();
+      params.set("targetWorkshopId", targetWorkshopId);
 
-    return `${pathname}?${params.toString()}`;
-  };
+      return `${pathname}?${params.toString()}`;
+    },
+    [targetWorkshopId],
+  );
+
+  useEffect(() => {
+    router.prefetch(createTargetUrl("/post-job"));
+    router.prefetch(createTargetUrl("/post-mechanical"));
+  }, [router, createTargetUrl]);
 
   const goToBodywork = () => {
     navigate(createTargetUrl("/post-job"));
@@ -109,7 +118,7 @@ function Card({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 md:p-6 md:hover:scale-[1.02] md:hover:shadow-2xl"
+      className="relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition-transform duration-75 active:scale-[0.995] disabled:cursor-not-allowed md:p-6 md:hover:scale-[1.02] md:hover:shadow-2xl"
     >
       <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-100 text-2xl font-bold md:h-14 md:w-14 md:text-3xl">
         {icon}
