@@ -63,6 +63,12 @@ type ProfileRow = {
   workshop_name: string | null;
 };
 
+type ConversationInboxStateRow = {
+  request_id: string;
+  offer_id: string | null;
+  hidden_at: string;
+};
+
 type PendingInboxMutation = {
   requestId: string;
   offerId: string | null;
@@ -83,6 +89,18 @@ const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
 
 function getConversationKey(requestId: string, offerId: string | null) {
   return `${requestId}::${offerId ?? "direct"}`;
+}
+
+function isHiddenAtLastMessage(
+  lastMessageCreatedAt: string | undefined,
+  hiddenAt: string | undefined,
+) {
+  if (!hiddenAt) return false;
+  if (!lastMessageCreatedAt) return true;
+
+  return (
+    new Date(lastMessageCreatedAt).getTime() <= new Date(hiddenAt).getTime()
+  );
 }
 
 function getLastMessageText(message?: Pick<MessageRow, "message" | "images"> | null) {
@@ -193,6 +211,12 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
   const [loading, setLoading] = useState(true);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [openConversationMenuKey, setOpenConversationMenuKey] = useState<
+    string | null
+  >(null);
+  const [hidingConversationKey, setHidingConversationKey] = useState<
+    string | null
+  >(null);
   const currentUserIdRef = useRef<string>("");
   const perfStartRef = useRef<number>(performance.now());
   const loadConversationsGenerationRef = useRef(0);
@@ -493,7 +517,8 @@ export default function MessagesInbox({ role }: { role: Role }) {
             workshopIds: directWorkshopIds.length,
           });
         }
-        const [messagesResult, profilesResult] = await Promise.all([
+        const [messagesResult, profilesResult, inboxStatesResult] =
+          await Promise.all([
           allRequestIds.length > 0
             ? supabase
                 .from("messages")
@@ -509,6 +534,10 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 .select("id, workshop_name")
                 .in("id", directWorkshopIds)
             : Promise.resolve({ data: [], error: null }),
+          supabase
+            .from("conversation_inbox_states")
+            .select("request_id, offer_id, hidden_at")
+            .eq("user_id", userId),
         ]);
         if (allRequestIds.length > 0) {
           logPerf("query:messages_grouped:end", {
@@ -539,12 +568,21 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
         if (messagesResult.error) throw messagesResult.error;
         if (profilesResult.error) throw profilesResult.error;
+        if (inboxStatesResult.error) throw inboxStatesResult.error;
 
         const messages = (messagesResult.data || []) as MessageRow[];
         const profiles = (profilesResult.data || []) as ProfileRow[];
+        const inboxStates = (inboxStatesResult.data ||
+          []) as ConversationInboxStateRow[];
 
         const profileMap = new Map(
           profiles.map((profile) => [profile.id, profile.workshop_name || "Service"]),
+        );
+        const hiddenAtByConversation = new Map(
+          inboxStates.map((state) => [
+            getConversationKey(state.request_id, state.offer_id ?? null),
+            state.hidden_at,
+          ]),
         );
 
         const relevantConversationKeys = new Set<string>([
@@ -576,6 +614,20 @@ export default function MessagesInbox({ role }: { role: Role }) {
           const lastMessage = conversationMessages.find(
             (message) => message.sender_role !== "system",
           );
+          const conversationKey = getConversationKey(
+            offer.request_id,
+            offer.id,
+          );
+
+          if (
+            isHiddenAtLastMessage(
+              lastMessage?.created_at,
+              hiddenAtByConversation.get(conversationKey),
+            )
+          ) {
+            return [];
+          }
+
           const unreadCount = conversationMessages.filter((message) => {
             return (
               message.sender_id !== userId &&
@@ -614,6 +666,17 @@ export default function MessagesInbox({ role }: { role: Role }) {
             );
 
             if (!lastMessage) {
+              return [];
+            }
+
+            const conversationKey = getConversationKey(request.id, null);
+
+            if (
+              isHiddenAtLastMessage(
+                lastMessage.created_at,
+                hiddenAtByConversation.get(conversationKey),
+              )
+            ) {
               return [];
             }
 
@@ -791,6 +854,41 @@ export default function MessagesInbox({ role }: { role: Role }) {
       router,
     ],
   );
+
+  const hideConversation = async (conversation: Conversation) => {
+    const confirmed = window.confirm(
+      "Conversația va fi eliminată din Inbox-ul tău. Va reapărea dacă este trimis un mesaj nou.",
+    );
+
+    if (!confirmed) return;
+
+    const conversationKey = getConversationKey(
+      conversation.requestId,
+      conversation.offerId,
+    );
+
+    setOpenConversationMenuKey(null);
+    setHidingConversationKey(conversationKey);
+    invalidateLoadConversationsGeneration();
+    setConversations((current) =>
+      current.filter(
+        (item) =>
+          getConversationKey(item.requestId, item.offerId) !== conversationKey,
+      ),
+    );
+
+    const { error } = await supabase.rpc("hide_conversation_from_inbox", {
+      p_request_id: conversation.requestId,
+      p_offer_id: conversation.offerId,
+    });
+
+    if (error) {
+      window.alert("Conversația nu a putut fi eliminată din Inbox.");
+    }
+
+    setHidingConversationKey(null);
+    await loadConversations(false);
+  };
 
   useEffect(() => {
     const instanceId = inboxInstanceIdRef.current;
@@ -1060,21 +1158,34 @@ export default function MessagesInbox({ role }: { role: Role }) {
           </div>
         ) : (
           <div className="space-y-3">
-            {conversations.map((conversation) => (
-              <button
-                key={`${conversation.requestId}-${conversation.offerId}`}
-                onClick={() => {
-                  localStorage.setItem("activeRole", role);
+            {conversations.map((conversation) => {
+              const conversationKey = getConversationKey(
+                conversation.requestId,
+                conversation.offerId,
+              );
+              const isMenuOpen = openConversationMenuKey === conversationKey;
+              const isHiding = hidingConversationKey === conversationKey;
 
-                  router.push(
-                    conversation.offerId
-                      ? `/chat/${conversation.requestId}?offerId=${conversation.offerId}&role=${role}`
-                      : `/chat/${conversation.requestId}?role=${role}`,
-                  );
-                }}
-                className="flex w-full items-center gap-4 rounded-[26px] border border-white/10 bg-white/[0.04] p-4 text-left transition active:scale-[0.99] hover:bg-white/[0.07]"
-              >
-                <div className="relative h-16 w-16 shrink-0 overflow-visible">
+              return (
+                <div
+                  key={conversationKey}
+                  className="relative flex w-full items-center rounded-[26px] border border-white/10 bg-white/[0.04] transition hover:bg-white/[0.07]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenConversationMenuKey(null);
+                      localStorage.setItem("activeRole", role);
+
+                      router.push(
+                        conversation.offerId
+                          ? `/chat/${conversation.requestId}?offerId=${conversation.offerId}&role=${role}`
+                          : `/chat/${conversation.requestId}?role=${role}`,
+                      );
+                    }}
+                    className="flex min-w-0 flex-1 items-center gap-4 rounded-l-[26px] p-4 pr-2 text-left transition active:scale-[0.99]"
+                  >
+                    <div className="relative h-16 w-16 shrink-0 overflow-visible">
                   <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white/10">
                     {conversation.image ? (
                       <img
@@ -1096,9 +1207,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
                         : conversation.unreadCount}
                     </span>
                   )}
-                </div>
+                    </div>
 
-                <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-black">
@@ -1128,9 +1239,39 @@ export default function MessagesInbox({ role }: { role: Role }) {
                   <p className="mt-1 text-xs text-orange-400/80">
                     {conversation.workshopName}
                   </p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-label="Opțiuni conversație"
+                    aria-expanded={isMenuOpen}
+                    disabled={isHiding}
+                    onClick={() =>
+                      setOpenConversationMenuKey((current) =>
+                        current === conversationKey ? null : conversationKey,
+                      )
+                    }
+                    className="mr-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-xl font-black text-white/60 transition hover:bg-white/10 hover:text-white disabled:opacity-40"
+                  >
+                    ⋯
+                  </button>
+
+                  {isMenuOpen && (
+                    <div className="absolute right-3 top-[calc(100%-0.5rem)] z-20 min-w-52 rounded-2xl border border-white/10 bg-neutral-900 p-2 shadow-2xl shadow-black/50">
+                      <button
+                        type="button"
+                        disabled={isHiding}
+                        onClick={() => void hideConversation(conversation)}
+                        className="w-full rounded-xl px-4 py-3 text-left text-sm font-bold text-red-300 transition hover:bg-red-500/10 disabled:opacity-40"
+                      >
+                        Șterge conversația
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
