@@ -15,6 +15,24 @@ import { BadgeEuro } from "lucide-react";
 
 type Role = "customer" | "workshop";
 
+type UnreadMessageRow = {
+  request_id: string;
+  offer_id: string | null;
+  created_at: string;
+  sender_id: string;
+  sender_role: string;
+};
+
+type ConversationInboxStateRow = {
+  request_id: string;
+  offer_id: string | null;
+  hidden_at: string;
+};
+
+function getConversationKey(requestId: string, offerId: string | null) {
+  return `${requestId}::${offerId ?? "direct"}`;
+}
+
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -363,19 +381,58 @@ export default function AppNavbar() {
           return;
         }
 
-        const unreadMessagesQuery = supabase
-          .from("messages")
-          .select("id", { count: "exact", head: true })
-          .in("request_id", requestIds)
-          .neq("sender_id", currentUserId)
-          .neq("sender_role", "system")
-          .is("read_at", null);
+        const [unreadMessagesResult, inboxStatesResult] = await Promise.all([
+          supabase
+            .from("messages")
+            .select(
+              "request_id, offer_id, created_at, sender_id, sender_role",
+            )
+            .in("request_id", requestIds)
+            .neq("sender_id", currentUserId)
+            .neq("sender_role", "system")
+            .is("read_at", null),
+          supabase
+            .from("conversation_inbox_states")
+            .select("request_id, offer_id, hidden_at")
+            .eq("user_id", currentUserId)
+            .in("request_id", requestIds),
+        ]);
 
-        const { count: unreadCountResult, error: unreadMessagesError } =
-          await unreadMessagesQuery;
+        const unreadMessagesError = unreadMessagesResult.error;
+        const inboxStatesError = inboxStatesResult.error;
+        const unreadMessages = (unreadMessagesResult.data ||
+          []) as UnreadMessageRow[];
+        const inboxStates = (inboxStatesResult.data ||
+          []) as ConversationInboxStateRow[];
+        const hiddenAtByConversation = new Map(
+          inboxStates.map((state) => [
+            getConversationKey(state.request_id, state.offer_id ?? null),
+            state.hidden_at,
+          ]),
+        );
+        const unreadCountResult = unreadMessages.filter((message) => {
+          if (message.sender_id === currentUserId) return false;
+          if (message.sender_role === "system") return false;
+
+          const hiddenAt = hiddenAtByConversation.get(
+            getConversationKey(
+              message.request_id,
+              message.offer_id ?? null,
+            ),
+          );
+
+          if (!hiddenAt) return true;
+
+          return (
+            new Date(message.created_at).getTime() >
+            new Date(hiddenAt).getTime()
+          );
+        }).length;
 
         logPerf("loadUnreadMessages:countResult", {
-          calculatedUnreadCount: unreadCountResult || 0,
+          calculatedUnreadCount: unreadCountResult,
+          unreadRowsBeforeHiddenCutoff: unreadMessages.length,
+          hiddenConversationStates: inboxStates.length,
           reason,
           generation,
           requestId,
@@ -396,11 +453,14 @@ export default function AppNavbar() {
           return;
         }
 
-        if (unreadMessagesError) {
-          console.error("Failed to load unread messages:", unreadMessagesError);
+        if (unreadMessagesError || inboxStatesError) {
+          console.error(
+            "Failed to load unread messages:",
+            unreadMessagesError || inboxStatesError,
+          );
           logPerf("loadUnreadMessages:error", {
             durationMs: Number((performance.now() - startedAt).toFixed(1)),
-            error: unreadMessagesError.message,
+            error: (unreadMessagesError || inboxStatesError)?.message,
             reason,
             generation,
           });
@@ -410,21 +470,21 @@ export default function AppNavbar() {
 
         logPerf("loadUnreadMessages:end", {
           durationMs: Number((performance.now() - startedAt).toFixed(1)),
-          calculatedUnreadCount: unreadCountResult || 0,
+          calculatedUnreadCount: unreadCountResult,
           reason,
           generation,
           requestId,
           schedulerSession,
         });
         logPerf("loadUnreadMessages:setUnreadCount", {
-          nextUnreadCount: unreadCountResult || 0,
+          nextUnreadCount: unreadCountResult,
           reason,
           generation,
           requestId,
           schedulerSession,
           lastBrowserNavigationEvent: lastBrowserNavigationEventRef.current,
         });
-        setUnreadCount(unreadCountResult || 0);
+        setUnreadCount(unreadCountResult);
       } finally {
         if (unreadMessagesSchedulerSessionRef.current !== schedulerSession) {
           return;
@@ -879,6 +939,11 @@ export default function AppNavbar() {
       refreshMessageBadgeOnly("messages-read-updated");
     };
 
+    const handleConversationInboxStateUpdated = () => {
+      logPerf("event:conversation-inbox-state-updated");
+      refreshMessageBadgeOnly("conversation-inbox-state-updated");
+    };
+
     const handleProgressReadUpdated = () => {
       loadUnreadProgress();
     };
@@ -902,6 +967,10 @@ export default function AppNavbar() {
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("popstate", handlePopState);
     window.addEventListener("messages-read-updated", handleMessagesReadUpdated);
+    window.addEventListener(
+      "conversation-inbox-state-updated",
+      handleConversationInboxStateUpdated,
+    );
     window.addEventListener("progress-read-updated", handleProgressReadUpdated);
     window.addEventListener("offers-read-updated", handleOffersReadUpdated);
     window.addEventListener(
@@ -926,6 +995,10 @@ export default function AppNavbar() {
       window.removeEventListener(
         "messages-read-updated",
         handleMessagesReadUpdated,
+      );
+      window.removeEventListener(
+        "conversation-inbox-state-updated",
+        handleConversationInboxStateUpdated,
       );
       window.removeEventListener(
         "progress-read-updated",

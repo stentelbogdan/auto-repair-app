@@ -884,6 +884,8 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
     if (error) {
       window.alert("Conversația nu a putut fi eliminată din Inbox.");
+    } else {
+      window.dispatchEvent(new Event("conversation-inbox-state-updated"));
     }
 
     setHidingConversationKey(null);
