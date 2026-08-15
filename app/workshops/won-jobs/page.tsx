@@ -454,7 +454,8 @@ export default function WorkshopWonJobsPage() {
       const { error } = await supabase
         .from("repair_requests")
         .update({ status: "in_progress" })
-        .eq("id", job.requestId);
+        .eq("id", job.requestId)
+        .eq("status", "matched");
 
       if (error) throw error;
 
@@ -921,8 +922,14 @@ export default function WorkshopWonJobsPage() {
                       `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,
                     );
                   }}
-                  onOpenJob={() => {
-                    router.push(`/workshops/in-workshop/${job.requestId}`);
+                  onStartJob={() => {
+                    if (
+                      confirm(
+                        "Ești sigur că vrei să începi această lucrare?",
+                      )
+                    ) {
+                      startJob(job);
+                    }
                   }}
                 />
               );

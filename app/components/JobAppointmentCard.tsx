@@ -38,7 +38,7 @@ type JobAppointmentCardProps = {
   message?: string | null;
 
   onChat: () => void;
-  onOpenJob: () => void;
+  onStartJob: () => void;
 };
 
 export default function JobAppointmentCard({
@@ -61,7 +61,7 @@ export default function JobAppointmentCard({
   badgeColor = "blue",
   message,
   onChat,
-  onOpenJob,
+  onStartJob,
 }: JobAppointmentCardProps) {
   return (
     <article className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl">
@@ -128,11 +128,11 @@ export default function JobAppointmentCard({
 
         <button
           type="button"
-          onClick={onOpenJob}
+          onClick={onStartJob}
           className={`${interactiveButton} inline-flex items-center justify-center gap-2 rounded-[20px] bg-black px-4 py-5 text-sm font-bold text-white`}
         >
           <Wrench size={18} strokeWidth={2.4} />
-          Deschide lucrarea
+          Începe lucrarea
         </button>
       </div>
     </article>
