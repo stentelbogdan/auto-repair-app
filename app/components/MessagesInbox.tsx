@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -86,6 +87,21 @@ type PendingInboxMutationReference = {
 };
 
 const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
+const SUPABASE_STORAGE_HOSTNAME = "ouoiykudvcoqbkybkqvs.supabase.co";
+
+function isOptimizableInboxImage(src: string) {
+  try {
+    const url = new URL(src);
+
+    return (
+      url.protocol === "https:" &&
+      url.hostname === SUPABASE_STORAGE_HOSTNAME &&
+      url.pathname.startsWith("/storage/v1/object/public/")
+    );
+  } catch {
+    return false;
+  }
+}
 
 function getConversationKey(requestId: string, offerId: string | null) {
   return `${requestId}::${offerId ?? "direct"}`;
@@ -1292,13 +1308,14 @@ export default function MessagesInbox({ role }: { role: Role }) {
           </div>
         ) : (
           <div className="space-y-3">
-            {conversations.map((conversation) => {
+            {conversations.map((conversation, index) => {
               const conversationKey = getConversationKey(
                 conversation.requestId,
                 conversation.offerId,
               );
               const isMenuOpen = openConversationMenuKey === conversationKey;
               const isHiding = hidingConversationKey === conversationKey;
+              const isAboveFoldThumbnail = index < 3;
 
               return (
                 <div
@@ -1322,9 +1339,16 @@ export default function MessagesInbox({ role }: { role: Role }) {
                     <div className="relative h-16 w-16 shrink-0 overflow-visible">
                   <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white/10">
                     {conversation.image ? (
-                      <img
+                      <Image
                         src={conversation.image}
                         alt={conversation.title}
+                        width={64}
+                        height={64}
+                        sizes="64px"
+                        loading={isAboveFoldThumbnail ? "eager" : "lazy"}
+                        unoptimized={
+                          !isOptimizableInboxImage(conversation.image)
+                        }
                         className="h-full w-full object-cover"
                       />
                     ) : (
