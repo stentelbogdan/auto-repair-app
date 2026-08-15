@@ -3,12 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import ImageGallery from "@/app/components/ImageGallery";
 import CarHeader from "@/app/components/CarHeader";
+import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
+import {
+  getAffectedPartLabels,
+  getDamageTypeLabels,
+} from "@/lib/car-damage";
+import { getDamageTypeLabel } from "@/lib/displayLabels";
+import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import { interactiveButton } from "@/lib/ui";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -64,6 +71,7 @@ type WonJob = {
     city: string;
     licensePlate: string | null;
     damageType: string;
+    serviceDetails: RepairServiceDetails | null;
     description: string;
     images: JobImage[];
     status: string;
@@ -71,6 +79,22 @@ type WonJob = {
     createdAt: string;
   };
 };
+
+function getJobDamageDetails(request: WonJob["request"]) {
+  const affectedPartLabels = getAffectedPartLabels(request.serviceDetails);
+  const detailedDamageTypeLabels = getDamageTypeLabels(request.serviceDetails);
+  const fallbackDamageTypeLabel = getDamageTypeLabel(request.damageType);
+
+  return {
+    affectedPartLabels,
+    displayedDamageTypeLabels:
+      detailedDamageTypeLabels.length > 0
+        ? detailedDamageTypeLabels
+        : fallbackDamageTypeLabel
+          ? [fallbackDamageTypeLabel]
+          : [],
+  };
+}
 
 export default function WorkshopWonJobsPage() {
   const router = useRouter();
@@ -297,6 +321,7 @@ export default function WorkshopWonJobsPage() {
             city,
             license_plate,
             damage_type,
+            service_details,
             description,
             images,
             status,
@@ -334,7 +359,8 @@ export default function WorkshopWonJobsPage() {
             carYear: request?.car_year || "-",
             city: request?.city || "-",
             licensePlate: request?.license_plate || null,
-            damageType: formatDamageType(request?.damage_type || "other"),
+            damageType: request?.damage_type || "other",
+            serviceDetails: request?.service_details ?? null,
             description:
               request?.description ||
               "Această lucrare acceptată este acum disponibilă aici.",
@@ -733,69 +759,102 @@ export default function WorkshopWonJobsPage() {
         ) : activeTab === "workshop" ? (
           <div className="space-y-4">
             {filteredJobs.map((job) => {
+              const { affectedPartLabels, displayedDamageTypeLabels } =
+                getJobDamageDetails(job.request);
+              const appointment = job.appointment;
+              const displayDate =
+                appointment?.proposed_date ||
+                appointment?.appointment_date ||
+                null;
+              const displayTime =
+                appointment?.proposed_time ||
+                appointment?.appointment_time ||
+                null;
+              const handoverText =
+                appointment?.handover_method === "workshop_pickup"
+                  ? "Predare: Service-ul ridică mașina"
+                  : "Predare: Clientul aduce mașina";
+
               return (
-                <div
+                <article
                   key={job.offerId}
-                  className="flex w-full items-center gap-4 rounded-[28px] border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-white/20 hover:bg-white/[0.07]"
+                  className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
-                  <div className="h-24 w-24 shrink-0 overflow-hidden rounded-3xl bg-white/5">
-                    {job.request.images.length > 0 ? (
-                      <ImageGallery
-                        images={job.request.images}
-                        alt={`${job.request.carBrand} ${job.request.carModel}`}
-                        className="h-24 w-24 object-cover"
-                        wrapperClassName="block h-24 w-24 overflow-hidden rounded-3xl"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-3xl">
-                        🚗
-                      </div>
-                    )}
+                  <CarHeader
+                    images={job.request.images}
+                    plate={job.request.licensePlate}
+                    platePosition="bottom"
+                    brand={job.request.carBrand}
+                    model={job.request.carModel}
+                    year={job.request.carYear}
+                    city={job.request.city}
+                    variant="listLarge"
+                    affectedParts={affectedPartLabels}
+                    damageTypes={displayedDamageTypeLabels}
+                    details={[
+                      {
+                        text: "În lucru",
+                        color: "orange",
+                      },
+                      ...(job.latestProgressStatus
+                        ? [
+                            {
+                              text: formatJobStatus(job.latestProgressStatus),
+                              color: "blue" as const,
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+
+                  <div className="mt-5">
+                    <OfferSummaryCard
+                      title="Lucrare în lucru"
+                      price={job.price}
+                      days={job.days}
+                      appointmentDate={displayDate}
+                      appointmentTime={displayTime}
+                      handoverText={handoverText}
+                      statusText="În lucru"
+                    />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/workshops/in-workshop/${job.requestId}`)
-                    }
-                    className="flex min-w-0 flex-1 items-center justify-between gap-4 text-left"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="rounded-full bg-blue-500 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-white">
-                          În lucru
-                        </span>
+                  <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                    <p className="mb-2 text-xs font-semibold text-black/45">
+                      📝 Descriere
+                    </p>
 
-                        {job.latestProgressStatus && (
-                          <span className="truncate rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/70">
-                            {formatJobStatus(job.latestProgressStatus)}
-                          </span>
-                        )}
-                      </div>
+                    <p className="text-sm leading-6 text-black/70">
+                      {job.request.description || "Fără descriere."}
+                    </p>
+                  </div>
 
-                      <h2 className="truncate text-xl font-black text-white">
-                        {job.request.carBrand} {job.request.carModel}
-                      </h2>
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        localStorage.setItem("activeRole", "workshop");
+                        router.push(
+                          `/chat/${job.requestId}?offerId=${job.offerId}&role=workshop`,
+                        );
+                      }}
+                      className={`${interactiveButton} rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white`}
+                    >
+                      💬 Chat
+                    </button>
 
-                      <p className="mt-1 text-sm text-white/55">
-                        {job.request.carYear} • {job.request.city}
-                      </p>
-
-                      <p className="mt-2 line-clamp-1 text-sm text-white/45">
-                        {job.request.description}
-                      </p>
-                    </div>
-
-                    <div className="hidden shrink-0 text-right sm:block">
-                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">
-                        Preț
-                      </p>
-                      <p className="text-xl font-black text-white">
-                        €{job.price}
-                      </p>
-                    </div>
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/workshops/in-workshop/${job.requestId}`)
+                      }
+                      className={`${interactiveButton} inline-flex items-center justify-center gap-2 rounded-[20px] bg-black px-4 py-5 text-center text-sm font-bold text-white`}
+                    >
+                      <Wrench size={17} strokeWidth={2.4} />
+                      Actualizează
+                    </button>
+                  </div>
+                </article>
               );
             })}
           </div>
@@ -804,6 +863,8 @@ export default function WorkshopWonJobsPage() {
             {filteredJobs.map((job) => {
               const jobState = getJobState(job);
               const appointment = job.appointment;
+              const { affectedPartLabels, displayedDamageTypeLabels } =
+                getJobDamageDetails(job.request);
 
               const displayDate =
                 appointment?.proposed_date ||
@@ -831,7 +892,8 @@ export default function WorkshopWonJobsPage() {
                   carModel={job.request.carModel}
                   carYear={job.request.carYear}
                   city={job.request.city}
-                  damageType={job.request.damageType}
+                  affectedParts={affectedPartLabels}
+                  damageTypes={displayedDamageTypeLabels}
                   description={job.request.description}
                   price={job.price}
                   days={job.days}
@@ -870,6 +932,8 @@ export default function WorkshopWonJobsPage() {
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredJobs.map((job) => {
               const jobState = getJobState(job);
+              const { affectedPartLabels, displayedDamageTypeLabels } =
+                getJobDamageDetails(job.request);
 
               return (
                 <article
@@ -885,6 +949,8 @@ export default function WorkshopWonJobsPage() {
                     city={job.request.city}
                     variant="listLarge"
                     platePosition="bottom"
+                    affectedParts={affectedPartLabels}
+                    damageTypes={displayedDamageTypeLabels}
                     details={[
                       {
                         text: jobState.label,
@@ -912,10 +978,6 @@ export default function WorkshopWonJobsPage() {
                   >
                     <div className="pt-5">
                       <div className="mb-4 flex flex-wrap gap-2">
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">
-                          {job.request.damageType}
-                        </span>
-
                         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
                           {job.days}
                         </span>
@@ -1334,23 +1396,6 @@ function getJobState(job: WonJob): {
     label: "Programare",
     message: "Verifică detaliile programării.",
   };
-}
-
-function formatDamageType(value: string) {
-  switch (value) {
-    case "scratch":
-      return "Zgârietură";
-    case "dent":
-      return "Îndoitură";
-    case "bumper":
-      return "Bară avariată";
-    case "paint":
-      return "Vopsea afectată";
-    case "cracked_part":
-      return "Piesă crăpată";
-    default:
-      return "Altele";
-  }
 }
 
 function formatAppointmentDate(date: string) {

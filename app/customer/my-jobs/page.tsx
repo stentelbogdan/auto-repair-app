@@ -18,6 +18,11 @@ import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import { interactiveButton } from "@/lib/ui";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
+import {
+  getAffectedPartLabels,
+  getDamageTypeLabels,
+} from "@/lib/car-damage";
+import { getDamageTypeLabel } from "@/lib/displayLabels";
 
 type RepairAppointment = {
   id: string;
@@ -429,6 +434,21 @@ export default function MyJobsPage() {
               </div>
             )}
             {visibleJobs.map(({ request, acceptedOffer, appointment }) => {
+              const affectedPartLabels = getAffectedPartLabels(
+                request.service_details,
+              );
+              const detailedDamageTypeLabels = getDamageTypeLabels(
+                request.service_details,
+              );
+              const fallbackDamageTypeLabel = getDamageTypeLabel(
+                request.damage_type,
+              );
+              const displayedDamageTypeLabels =
+                detailedDamageTypeLabels.length > 0
+                  ? detailedDamageTypeLabels
+                  : fallbackDamageTypeLabel
+                    ? [fallbackDamageTypeLabel]
+                    : [];
               const isAppointmentConfirmed =
                 appointment?.status === "confirmed";
               const isAppointmentRequested =
@@ -451,6 +471,8 @@ export default function MyJobsPage() {
                         year={request.car_year}
                         city={request.city}
                         variant="listLarge"
+                        affectedParts={affectedPartLabels}
+                        damageTypes={displayedDamageTypeLabels}
                         details={[
                           {
                             text:

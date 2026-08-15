@@ -21,7 +21,8 @@ type JobAppointmentCardProps = {
   carModel?: string | null;
   carYear?: string | null;
   city?: string | null;
-  damageType?: string | null;
+  affectedParts?: string[];
+  damageTypes?: string[];
   description?: string | null;
 
   price?: string | number | null;
@@ -47,7 +48,8 @@ export default function JobAppointmentCard({
   carModel,
   carYear,
   city,
-  damageType,
+  affectedParts = [],
+  damageTypes = [],
   description,
   price,
   days,
@@ -72,19 +74,13 @@ export default function JobAppointmentCard({
         year={carYear || ""}
         city={city || ""}
         variant="listLarge"
+        affectedParts={affectedParts}
+        damageTypes={damageTypes}
         details={[
           {
             text: badgeText,
             color: badgeColor,
           },
-          ...(damageType
-            ? [
-                {
-                  text: damageType,
-                  color: "yellow" as const,
-                },
-              ]
-            : []),
         ]}
       />
 
