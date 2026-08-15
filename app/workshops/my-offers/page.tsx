@@ -8,6 +8,12 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import { markNotificationsAsRead } from "@/lib/notifications";
+import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  getAffectedPartLabels,
+  getDamageTypeLabels,
+} from "@/lib/car-damage";
+import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 
 type ProfileRow = {
   role: string[] | null;
@@ -27,6 +33,7 @@ type RepairRequest = {
   city: string | null;
   license_plate: string | null;
   damage_type: string | null;
+  service_details?: RepairServiceDetails | null;
   description: string | null;
   status?: string | null;
   accepted_offer_id?: string | null;
@@ -106,6 +113,7 @@ export default function WorkshopMyOffersPage() {
             city,
             license_plate,
             damage_type,
+            service_details,
             description,
             status,
             accepted_offer_id,
@@ -156,6 +164,7 @@ export default function WorkshopMyOffersPage() {
               city: row.repair_requests.city ?? null,
               license_plate: row.repair_requests.license_plate ?? null,
               damage_type: row.repair_requests.damage_type ?? null,
+              service_details: row.repair_requests.service_details ?? null,
               description: row.repair_requests.description ?? null,
               status: row.repair_requests.status ?? null,
               accepted_offer_id: row.repair_requests.accepted_offer_id ?? null,
@@ -461,6 +470,21 @@ export default function WorkshopMyOffersPage() {
             {normalizedOffers.map((offer) => {
               const request = offer.repair_requests;
               const appointment = offer.repair_appointments?.[0];
+              const affectedPartLabels = getAffectedPartLabels(
+                request?.service_details,
+              );
+              const detailedDamageTypeLabels = getDamageTypeLabels(
+                request?.service_details,
+              );
+              const fallbackDamageTypeLabel = getDamageTypeLabel(
+                request?.damage_type,
+              );
+              const displayedDamageTypeLabels =
+                detailedDamageTypeLabels.length > 0
+                  ? detailedDamageTypeLabels
+                  : fallbackDamageTypeLabel
+                    ? [fallbackDamageTypeLabel]
+                    : [];
 
               const workshopBadge =
                 appointment?.status === "confirmed"
@@ -515,13 +539,9 @@ export default function WorkshopMyOffersPage() {
                     city={request?.city || ""}
                     variant="listLarge"
                     platePosition="bottom"
-                    details={[
-                      workshopBadge,
-                      {
-                        text: request?.damage_type || "Daună",
-                        color: "yellow",
-                      },
-                    ]}
+                    affectedParts={affectedPartLabels}
+                    damageTypes={displayedDamageTypeLabels}
+                    details={[workshopBadge]}
                   />
 
                   <OfferSummaryCard

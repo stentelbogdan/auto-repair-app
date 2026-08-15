@@ -1,3 +1,5 @@
+import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+
 export type CustomerOfferImage = {
   name: string;
   url?: string;
@@ -12,6 +14,7 @@ export type CustomerOfferRepairRequest = {
   carYear: string;
   city: string;
   damageType: string;
+  serviceDetails?: RepairServiceDetails | null;
   description: string;
   images: CustomerOfferImage[];
   status?: string;

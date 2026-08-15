@@ -2,6 +2,7 @@ import type {
   RepairServiceDetails,
   StructuredServiceDetails,
 } from "@/lib/supabase/repair-requests";
+import { getDetailedDamageTypeLabel } from "@/lib/displayLabels";
 
 export function isStructuredServiceDetails(
   serviceDetails: RepairServiceDetails | null | undefined,
@@ -51,7 +52,7 @@ export function getAffectedPartLabels(
 export function getDamageTypeLabels(
   serviceDetails: RepairServiceDetails | null | undefined,
 ): string[] {
-  return getSelectedDamages(serviceDetails).map(formatDamageLabel);
+  return getSelectedDamages(serviceDetails).map(getDetailedDamageTypeLabel);
 }
 
 export function formatCarPartLabel(value: string): string {
@@ -96,22 +97,6 @@ export function formatCarPartLabel(value: string): string {
     front_right_wheel: "Roată față dreapta",
     rear_left_wheel: "Roată spate stânga",
     rear_right_wheel: "Roată spate dreapta",
-  };
-
-  return labels[value] ?? formatFallbackLabel(value);
-}
-
-export function formatDamageLabel(value: string): string {
-  const labels: Record<string, string> = {
-    scratch: "Zgârietură",
-    dent: "Îndoitură",
-    cracked: "Crăpătură",
-    broken: "Element spart",
-    deformed: "Element deformat",
-    painting: "Necesită vopsire",
-    paint_damage: "Vopsea deteriorată",
-    paint_peeling: "Vopsea exfoliată",
-    rust: "Rugină",
   };
 
   return labels[value] ?? formatFallbackLabel(value);

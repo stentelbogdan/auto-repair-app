@@ -218,6 +218,7 @@ function createRequestMap(
       carYear: request.car_year,
       city: request.city,
       damageType: request.damage_type,
+      serviceDetails: request.service_details,
       description: request.description || "",
 
       images: Array.isArray(request.images) ? request.images : [],

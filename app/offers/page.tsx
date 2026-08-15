@@ -12,6 +12,11 @@ import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import type { CustomerOfferItem } from "@/lib/services/offers/customer-offers.types";
 import { loadCustomerOffers } from "@/lib/services/offers/customer-offers.service";
 import { confirmCustomerAppointment } from "@/lib/services/offers/customer-appointments.service";
+import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  getAffectedPartLabels,
+  getDamageTypeLabels,
+} from "@/lib/car-damage";
 
 type ProfileRow = {
   role: string[] | null;
@@ -205,39 +210,6 @@ export default function OffersPage() {
     });
   };
 
-  const formatDamageType = (value?: string) => {
-    if (!value) return "Daună";
-
-    const labels: Record<string, string> = {
-      cosmetic: "Daună estetică",
-      mechanical: "Daună mecanică",
-      detailing: "Detailing",
-      body: "Caroserie",
-      bodywork: "Caroserie",
-
-      scratch: "Zgârietură",
-      dent: "Îndoitură",
-      crack: "Fisură",
-      paint: "Vopsire",
-      bumper: "Bară",
-      hood: "Capotă",
-
-      detailing_interior: "Detailing interior",
-      detailing_exterior: "Detailing exterior",
-      polish: "Polish profesional",
-      ceramic: "Protecție ceramică",
-      ppf: "Folie PPF",
-      wrapping: "Colantare",
-      window_tint: "Folii geamuri",
-      dechroming: "Dechroming",
-      wheel_refurbishment: "Recondiționare jante",
-      smart_repair: "Smart Repair",
-      pdr: "Îndreptare fără vopsire",
-    };
-
-    return labels[value] || value;
-  };
-
   if (checkingAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -266,6 +238,21 @@ export default function OffersPage() {
           <div className="space-y-4">
             {items.map(({ offer, request, appointment }) => {
               const appointmentStatus = appointment?.status;
+              const affectedPartLabels = getAffectedPartLabels(
+                request.serviceDetails,
+              );
+              const detailedDamageTypeLabels = getDamageTypeLabels(
+                request.serviceDetails,
+              );
+              const fallbackDamageTypeLabel = getDamageTypeLabel(
+                request.damageType,
+              );
+              const displayedDamageTypeLabels =
+                detailedDamageTypeLabels.length > 0
+                  ? detailedDamageTypeLabels
+                  : fallbackDamageTypeLabel
+                    ? [fallbackDamageTypeLabel]
+                    : [];
 
               const isCustomerProposed =
                 appointmentStatus === "customer_proposed";
@@ -325,13 +312,9 @@ export default function OffersPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
-                    details={[
-                      customerBadge,
-                      {
-                        text: formatDamageType(request.damageType),
-                        color: "yellow",
-                      },
-                    ]}
+                    affectedParts={affectedPartLabels}
+                    damageTypes={displayedDamageTypeLabels}
+                    details={[customerBadge]}
                   />
 
                   <WorkshopSummaryCard

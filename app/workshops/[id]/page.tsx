@@ -8,6 +8,7 @@ import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
+import { getDamageTypeLabel } from "@/lib/displayLabels";
 
 type RepairImage = {
   name?: string;
@@ -251,7 +252,7 @@ export default function WorkshopRequestDetailsPage() {
                 color: isClosed ? "red" : "yellow",
               },
               {
-                text: formatDamageType(request.damage_type),
+                text: getDamageTypeLabel(request.damage_type) || "Daună",
                 color: "orange",
               },
             ]}
@@ -369,21 +370,4 @@ export default function WorkshopRequestDetailsPage() {
       </div>
     </main>
   );
-}
-
-function formatDamageType(value: string) {
-  switch (value) {
-    case "scratch":
-      return "Zgârietură";
-    case "dent":
-      return "Îndoitură";
-    case "bumper":
-      return "Bară avariată";
-    case "paint":
-      return "Problemă vopsea";
-    case "cracked_part":
-      return "Element crăpat";
-    default:
-      return "Altă daună";
-  }
 }

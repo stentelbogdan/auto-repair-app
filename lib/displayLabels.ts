@@ -1,10 +1,53 @@
 export const damageTypeLabels: Record<string, string> = {
   scratch: "Zgârietură",
   dent: "Îndoitură",
-  crack: "Fisură",
-  paint: "Vopsire",
+  detailing_interior: "Detailing interior",
+  detailing_exterior: "Detailing exterior",
+  polish: "Polish",
+  ceramic_coating: "Protecție ceramică",
+  ppf: "Folie PPF",
+  wrap: "Colantare",
+  window_tint: "Folii geamuri",
+  dechroming: "Dechroming",
+  wheel_refurbishment: "Recondiționare jante",
+  smart_repair: "Smart Repair",
+  pdr: "Îndreptare fără vopsire",
+  engine: "Motor",
+  gearbox: "Cutie de viteze",
+  brakes: "Frâne",
+  suspension: "Suspensie",
+  steering: "Direcție",
+  electrical: "Electrică",
+  ac: "Aer condiționat",
+  diagnostic: "Diagnoză",
+  service: "Revizie",
+  other: "Alt tip de problemă",
   bumper: "Bară",
-  hood: "Capotă",
+  paint: "Vopsitorie",
+  cracked_part: "Element crăpat",
+  cosmetic: "Daună estetică",
+  mechanical: "Problemă mecanică",
+  detailing: "Detailing",
+  body: "Caroserie",
+  bodywork: "Caroserie",
+  // Legacy aliases used by older request records.
+  ceramic: "Protecție ceramică",
+  wrapping: "Colantare",
+};
+
+export const detailedDamageTypeLabels: Record<string, string> = {
+  scratch: "Zgârietură",
+  dent: "Îndoitură",
+  crack: "Crăpătură",
+  broken: "Element spart",
+  deformed: "Element deformat",
+  paint_damage: "Vopsea deteriorată",
+  paint_peeling: "Vopsea exfoliată",
+  rust: "Rugină / Coroziune",
+  stone_chips: "Ciobituri de pietre",
+  replacement: "Necesită înlocuire",
+  painting: "Necesită vopsire",
+  other: "Alt tip de daună",
 };
 
 export const serviceTypeLabels: Record<string, string> = {
@@ -50,8 +93,13 @@ function fallbackLabel(value?: string | null) {
 }
 
 export function getDamageTypeLabel(value?: string | null) {
-  if (!value) return "";
+  if (!value || value === "direct_message") return "";
   return damageTypeLabels[value] || fallbackLabel(value);
+}
+
+export function getDetailedDamageTypeLabel(value?: string | null) {
+  if (!value) return "";
+  return detailedDamageTypeLabels[value] || fallbackLabel(value);
 }
 
 export function getServiceTypeLabel(value?: string | null) {
