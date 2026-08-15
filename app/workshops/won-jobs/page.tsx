@@ -450,14 +450,33 @@ export default function WorkshopWonJobsPage() {
   }, [jobs]);
 
   const startJob = async (job: WonJob) => {
+    const staleJobMessage =
+      "Lucrarea nu poate fi pornită deoarece starea ei s-a schimbat. Reîncarcă pagina și încearcă din nou.";
+
+    if (
+      job.offerStatus !== "accepted" ||
+      job.appointment?.status !== "confirmed" ||
+      job.request.status !== "matched"
+    ) {
+      alert(staleJobMessage);
+      return;
+    }
+
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("repair_requests")
         .update({ status: "in_progress" })
         .eq("id", job.requestId)
-        .eq("status", "matched");
+        .eq("status", "matched")
+        .select("id, status")
+        .maybeSingle();
 
       if (error) throw error;
+
+      if (!data) {
+        alert(staleJobMessage);
+        return;
+      }
 
       setJobs((prev) =>
         prev.map((j) =>
