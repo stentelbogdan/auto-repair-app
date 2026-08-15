@@ -217,6 +217,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
   const [hidingConversationKey, setHidingConversationKey] = useState<
     string | null
   >(null);
+  const [realtimeUserId, setRealtimeUserId] = useState<string | null>(null);
   const currentUserIdRef = useRef<string>("");
   const perfStartRef = useRef<number>(performance.now());
   const loadConversationsGenerationRef = useRef(0);
@@ -383,6 +384,7 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
         const userId = authData.user.id;
         currentUserIdRef.current = userId;
+        setRealtimeUserId((current) => (current === userId ? current : userId));
 
         let offersQuery = supabase
           .from("repair_offers")
@@ -1075,6 +1077,123 @@ export default function MessagesInbox({ role }: { role: Role }) {
       });
     };
   }, [invalidateLoadConversationsGeneration, loadConversations, logPerf, role]);
+
+  useEffect(() => {
+    if (!realtimeUserId) return;
+
+    const instanceId = inboxInstanceIdRef.current;
+    const channelName = `conversation-inbox-states-${realtimeUserId}-${instanceId}`;
+    let active = true;
+    let refreshInFlight = false;
+    let pendingRefresh = false;
+    let realtimeDegraded = false;
+
+    const runReconciliation = async () => {
+      refreshInFlight = true;
+
+      do {
+        pendingRefresh = false;
+        await loadConversations(false);
+      } while (active && pendingRefresh);
+
+      refreshInFlight = false;
+    };
+
+    const scheduleReconciliation = (reason: string) => {
+      if (!active) return;
+
+      logPerf("inboxStateRealtime:scheduleReconciliation", {
+        channelName,
+        reason,
+        refreshInFlight,
+        pendingRefresh,
+      });
+
+      if (refreshInFlight) {
+        pendingRefresh = true;
+        return;
+      }
+
+      void runReconciliation();
+    };
+
+    const handleInboxStateChange = (payload: {
+      eventType: "INSERT" | "UPDATE";
+    }) => {
+      logPerf("inboxStateRealtime:change", {
+        channelName,
+        eventType: payload.eventType,
+      });
+      scheduleReconciliation(
+        `realtime:conversation-inbox-state:${payload.eventType}`,
+      );
+    };
+
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "conversation_inbox_states",
+          filter: `user_id=eq.${realtimeUserId}`,
+        },
+        (payload) => {
+          handleInboxStateChange(payload);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_inbox_states",
+          filter: `user_id=eq.${realtimeUserId}`,
+        },
+        (payload) => {
+          handleInboxStateChange(payload);
+        },
+      )
+      .subscribe((status, error) => {
+        if (!active) return;
+
+        logPerf("inboxStateRealtime:status", {
+          channelName,
+          status,
+        });
+
+        if (process.env.NODE_ENV === "development" && error) {
+          console.error("[MSG-PERF][Inbox] Realtime subscription error", {
+            status,
+            name: error.name,
+            message: error.message,
+          });
+        }
+
+        if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          realtimeDegraded = true;
+          return;
+        }
+
+        if (status === "SUBSCRIBED" && realtimeDegraded) {
+          realtimeDegraded = false;
+          scheduleReconciliation("realtime:conversation-inbox-state:recovered");
+        }
+      });
+
+    return () => {
+      active = false;
+      pendingRefresh = false;
+      realtimeDegraded = false;
+      logPerf("inboxStateRealtime:cleanup", { channelName });
+      void supabase.removeChannel(channel);
+    };
+  }, [loadConversations, logPerf, realtimeUserId]);
 
   useLayoutEffect(() => {
     if (conversations.length === 0) {

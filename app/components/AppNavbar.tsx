@@ -706,6 +706,15 @@ export default function AppNavbar() {
     loadUnreadDirectRequests();
     loadUnreadAppointmentNotifications();
 
+    const handleConversationInboxStateChange = (payload: {
+      eventType: "INSERT" | "UPDATE";
+    }) => {
+      logPerf("realtime:conversation-inbox-state", {
+        eventType: payload.eventType,
+      });
+      scheduleUnreadMessagesRefresh("realtime:conversation-inbox-state");
+    };
+
     const channel = supabase
       .channel(`navbar-live-badges-${userId}`)
 
@@ -759,6 +768,32 @@ export default function AppNavbar() {
             readAt: messagePayload?.read_at ?? null,
           });
           scheduleUnreadMessagesRefresh(`realtime:${payload.eventType}`);
+        },
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "conversation_inbox_states",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          handleConversationInboxStateChange(payload);
+        },
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_inbox_states",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          handleConversationInboxStateChange(payload);
         },
       )
 
@@ -838,8 +873,17 @@ export default function AppNavbar() {
         },
       )
 
-      .subscribe((status) => {
+      .subscribe((status, error) => {
         logPerf("channel:status", { status });
+
+        if (process.env.NODE_ENV === "development" && error) {
+          console.error("[MSG-PERF][Navbar] Realtime subscription error", {
+            status,
+            name: error.name,
+            message: error.message,
+          });
+        }
+
         if (
           status === "CHANNEL_ERROR" ||
           status === "TIMED_OUT" ||
