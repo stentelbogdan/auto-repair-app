@@ -498,7 +498,13 @@ export default function MessagesInbox({ role }: { role: Role }) {
         const allRequests = [...requests, ...directRequests];
         const requestMap = new Map(allRequests.map((request) => [request.id, request]));
 
-        const allRequestIds = [...new Set(allRequests.map((request) => request.id))];
+        const allRequestIds = [
+          ...new Set([
+            ...requests.map((request) => request.id),
+            ...offerRequestIds,
+            ...directRequests.map((request) => request.id),
+          ]),
+        ];
         const directWorkshopIds = [
           ...new Set(
             directRequests
@@ -608,14 +614,19 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
         const mappedOffers: Conversation[] = offers.flatMap((offer) => {
           const request = requestMap.get(offer.request_id);
-          if (!request) return [];
-
           const conversationMessages =
-            messagesByConversation.get(getConversationKey(offer.request_id, offer.id)) || [];
+            messagesByConversation.get(
+              getConversationKey(offer.request_id, offer.id),
+            ) || [];
 
           const lastMessage = conversationMessages.find(
             (message) => message.sender_role !== "system",
           );
+
+          if (!lastMessage) {
+            return [];
+          }
+
           const conversationKey = getConversationKey(
             offer.request_id,
             offer.id,
@@ -639,19 +650,21 @@ export default function MessagesInbox({ role }: { role: Role }) {
           }).length;
 
           const image =
-            request.images?.[0]?.url || request.images?.[0]?.dataUrl || "";
+            request?.images?.[0]?.url || request?.images?.[0]?.dataUrl || "";
 
           return [
             {
-              requestId: request.id,
+              requestId: offer.request_id,
               offerId: offer.id,
-              title: `${request.car_brand || "Lucrare"} ${request.car_model || ""}`,
-              city: request.city || "-",
-              status: request.status || "matched",
+              title: request
+                ? `${request.car_brand || "Lucrare"} ${request.car_model || ""}`
+                : "Conversație ofertă",
+              city: request?.city || "-",
+              status: request?.status || offer.status || "pending",
               image,
               workshopName: offer.workshop_name || "Service",
               lastMessage: getLastMessageText(lastMessage),
-              lastMessageTime: lastMessage?.created_at || offer.created_at,
+              lastMessageTime: lastMessage.created_at,
               unreadCount,
             },
           ];

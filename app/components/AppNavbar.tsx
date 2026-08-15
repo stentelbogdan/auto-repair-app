@@ -273,6 +273,7 @@ export default function AppNavbar() {
 
       const currentUserId = userId;
       let requestIds: string[] = [];
+      let validWorkshopConversationKeys: Set<string> | null = null;
       const startedAt = performance.now();
       const generation = unreadMessagesGenerationRef.current + 1;
       const requestId = unreadMessagesRequestIdRef.current + 1;
@@ -299,7 +300,7 @@ export default function AppNavbar() {
               .eq("target_workshop_id", currentUserId),
             supabase
               .from("repair_offers")
-              .select("request_id")
+              .select("id, request_id")
               .eq("workshop_user_id", currentUserId)
               .in("status", ["pending", "accepted"]),
           ]);
@@ -322,6 +323,14 @@ export default function AppNavbar() {
             ...(directRequests || []).map((request) => request.id),
             ...(workshopOffers || []).map((offer) => offer.request_id),
           ];
+          validWorkshopConversationKeys = new Set([
+            ...(directRequests || []).map((request) =>
+              getConversationKey(request.id, null),
+            ),
+            ...(workshopOffers || []).map((offer) =>
+              getConversationKey(offer.request_id, offer.id),
+            ),
+          ]);
           logPerf("loadUnreadMessages:workshopRequestSources", {
             reason,
             generation,
@@ -414,12 +423,19 @@ export default function AppNavbar() {
           if (message.sender_id === currentUserId) return false;
           if (message.sender_role === "system") return false;
 
-          const hiddenAt = hiddenAtByConversation.get(
-            getConversationKey(
-              message.request_id,
-              message.offer_id ?? null,
-            ),
+          const conversationKey = getConversationKey(
+            message.request_id,
+            message.offer_id ?? null,
           );
+
+          if (
+            isWorkshopMode &&
+            !validWorkshopConversationKeys?.has(conversationKey)
+          ) {
+            return false;
+          }
+
+          const hiddenAt = hiddenAtByConversation.get(conversationKey);
 
           if (!hiddenAt) return true;
 
