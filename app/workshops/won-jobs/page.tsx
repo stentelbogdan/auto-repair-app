@@ -13,6 +13,10 @@ import {
   getAffectedPartLabels,
   getDamageTypeLabels,
 } from "@/lib/car-damage";
+import {
+  formatProgressStatus,
+  normalizeProgressStatus,
+} from "@/lib/work-progress/workflows";
 import { getDamageTypeLabel } from "@/lib/displayLabels";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { interactiveButton } from "@/lib/ui";
@@ -1461,58 +1465,16 @@ function getNextDays(count: number) {
 }
 
 function formatJobStatus(value?: string | null) {
+  if (normalizeProgressStatus(value)) {
+    return formatProgressStatus(value);
+  }
+
   switch (value) {
     case "completed":
       return "Finalizată";
 
     case "in_progress":
       return "În lucru";
-
-    case "Received":
-    case "received":
-      return "Primită";
-
-    case "Disassembly":
-    case "disassembly":
-      return "Demontare";
-
-    case "Body repair":
-    case "body_repair":
-      return "Tinichigerie";
-
-    case "Paint preparation":
-    case "paint_preparation":
-      return "Pregătire vopsire";
-
-    case "Painting":
-    case "painting":
-      return "Vopsire";
-
-    case "Polishing":
-    case "polishing":
-      return "Polish";
-
-    case "Ready":
-    case "ready":
-    case "Gata":
-      return "Gata";
-
-    case "Diagnosis":
-    case "Diagnoză":
-      return "Diagnoză";
-
-    case "Parts ordered":
-    case "Piese comandate":
-      return "Piese comandate";
-
-    case "In repair":
-    case "in repair":
-    case "În reparație":
-      return "În reparație";
-
-    case "Testing":
-    case "Testare":
-      return "Testare";
 
     case "matched":
       return "Programată";

@@ -8,39 +8,13 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
-
-const bodyworkProgressSteps = [
-  "Received",
-  "Disassembly",
-  "Body repair",
-  "Paint preparation",
-  "Painting",
-  "Polishing",
-  "Ready",
-];
-
-const mechanicalProgressSteps = [
-  "Received",
-  "Diagnosis",
-  "Parts ordered",
-  "In repair",
-  "Testing",
-  "Ready",
-];
-
-const statusLabels: Record<string, string> = {
-  Received: "Primită",
-  Disassembly: "Demontare",
-  "Body repair": "Tinichigerie",
-  "Paint preparation": "Pregătire vopsire",
-  Painting: "Vopsire",
-  Polishing: "Polish",
-  Diagnosis: "Diagnoză",
-  "Parts ordered": "Piese comandate",
-  "In repair": "În reparație",
-  Testing: "Testare",
-  Ready: "Gata",
-};
+import { saveWorkProgressUpdate } from "@/lib/supabase/work-progress";
+import {
+  formatProgressStatus,
+  getProgressWorkflow,
+  normalizeProgressStatus,
+  type ProgressServiceType,
+} from "@/lib/work-progress/workflows";
 
 function logPreparedImage(preparedImage: PreparedImage) {
   if (process.env.NODE_ENV !== "development") return;
@@ -66,9 +40,8 @@ export default function WonJobDetailPage() {
   const [uploadedPreviewUrls, setUploadedPreviewUrls] = useState<string[]>([]);
   const uploadedPreviewUrlsRef = useRef<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
-  const [serviceType, setServiceType] = useState<"bodywork" | "mechanical">(
-    "bodywork",
-  );
+  const [serviceType, setServiceType] =
+    useState<ProgressServiceType>("bodywork");
 
   useEffect(() => {
     const loadRequestStatus = async () => {
@@ -87,7 +60,10 @@ export default function WonJobDetailPage() {
         .maybeSingle();
 
       if (latestProgress?.status) {
-        setSelectedStatus(latestProgress.status);
+        setSelectedStatus(
+          normalizeProgressStatus(latestProgress.status) ??
+            latestProgress.status,
+        );
       } else if (requestData?.status) {
         setSelectedStatus(requestData.status);
       }
@@ -110,10 +86,7 @@ export default function WonJobDetailPage() {
     };
   }, []);
 
-  const activeProgressSteps =
-    serviceType === "mechanical"
-      ? mechanicalProgressSteps
-      : bodyworkProgressSteps;
+  const activeProgressSteps = getProgressWorkflow(serviceType);
 
   const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -196,41 +169,19 @@ export default function WonJobDetailPage() {
         return;
       }
 
-      const { error: insertError } = await supabase
-        .from("work_progress_updates")
-        .insert({
-          request_id: requestId,
-
-          sender_id: authData.user.id,
-
-          sender_role: "workshop",
-
+      try {
+        await saveWorkProgressUpdate({
+          requestId,
+          senderId: authData.user.id,
           status: selectedStatus,
-
           message,
-
           images: uploadedUrls,
         });
-
-      if (insertError) {
-        console.error(insertError);
-
+      } catch (error) {
+        console.error(error);
         alert("Nu am putut salva update-ul.");
-
         return;
       }
-
-      const requestStatus =
-        selectedStatus === "Ready" || selectedStatus === "Gata"
-          ? "completed"
-          : "in_progress";
-
-      await supabase
-        .from("repair_requests")
-        .update({
-          status: requestStatus,
-        })
-        .eq("id", requestId);
 
       const { data: verifyData } = await supabase
         .from("repair_requests")
@@ -297,7 +248,7 @@ export default function WonJobDetailPage() {
                 Current status
               </p>
               <h2 className="mt-2 text-2xl font-black">
-                {statusLabels[selectedStatus] ?? selectedStatus}
+                {formatProgressStatus(selectedStatus)}
               </h2>
               <p className="mt-2 text-sm text-black/60">
                 Clientul va vedea progresul lucrării și pozele încărcate de
@@ -307,15 +258,19 @@ export default function WonJobDetailPage() {
 
             <div className="mt-6 space-y-4">
               {activeProgressSteps.map((step, index) => {
-                const activeIndex = activeProgressSteps.indexOf(selectedStatus);
+                const activeIndex = activeProgressSteps.findIndex(
+                  (progressStep) =>
+                    progressStep.status ===
+                    normalizeProgressStatus(selectedStatus),
+                );
                 const done = index <= activeIndex;
-                const isSelected = step === selectedStatus;
+                const isSelected = step.status === selectedStatus;
 
                 return (
                   <button
-                    key={step}
+                    key={step.status}
                     type="button"
-                    onClick={() => setSelectedStatus(step)}
+                    onClick={() => setSelectedStatus(step.status)}
                     aria-pressed={isSelected}
                     className={`flex w-full gap-4 rounded-2xl p-2 text-left transition ${
                       isSelected
@@ -345,7 +300,7 @@ export default function WonJobDetailPage() {
 
                     <div>
                       <p className="font-semibold">
-                        {statusLabels[step] ?? step}
+                        {step.label}
                       </p>
                       <p className="text-sm text-white/45">
                         {isSelected
@@ -364,7 +319,7 @@ export default function WonJobDetailPage() {
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <h2 className="text-xl font-bold">Upload progres</h2>
             <p className="mt-2 text-sm text-white/50">
-              Trimite clientului status, mesaj și poze din atelier.
+              Trimite clientului mesaj și poze din atelier.
             </p>
 
             <textarea

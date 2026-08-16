@@ -5,10 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import {
   Camera,
   Clock,
-  FileText,
   Images,
   MessageCircle,
-  RefreshCw,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
@@ -190,10 +188,20 @@ export default function InWorkshopCarPage() {
         </section>
 
         <div className="mt-6 grid grid-cols-2 gap-4 md:gap-5">
-          <ActionCard icon={<FileText size={28} />} title="Documente" />
-          <ActionCard icon={<Images size={28} />} title="Poze dosar" />
-          <ActionCard icon={<Clock size={28} />} title="Ceas" />
-          <ActionCard icon={<Camera size={28} />} title="Fă poză" />
+          <ActionCard
+            icon={<Clock size={28} />}
+            title="Ceas"
+            onClick={() =>
+              router.push(`/workshops/in-workshop/${request.id}/status`)
+            }
+          />
+          <ActionCard
+            icon={<Camera size={28} />}
+            title="Fă poză"
+            onClick={() =>
+              router.push(`/workshops/in-workshop/${request.id}/photos`)
+            }
+          />
           <ActionCard
             icon={<MessageCircle size={28} />}
             title="Chat client"
@@ -209,9 +217,11 @@ export default function InWorkshopCarPage() {
             }}
           />
           <ActionCard
-            icon={<RefreshCw size={28} />}
-            title="Update lucrare"
-            onClick={() => router.push(`/workshops/won-jobs/${request.id}`)}
+            icon={<Images size={28} />}
+            title="Poze dosar"
+            onClick={() =>
+              router.push(`/workshops/in-workshop/${request.id}/photos-folder`)
+            }
           />
         </div>
 

@@ -23,6 +23,10 @@ import {
   getDamageTypeLabels,
 } from "@/lib/car-damage";
 import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  formatProgressStatus,
+  normalizeProgressStatus,
+} from "@/lib/work-progress/workflows";
 
 type RepairAppointment = {
   id: string;
@@ -770,53 +774,11 @@ function formatAppointmentDate(date: string) {
 }
 
 function formatJobStatus(status?: string | null) {
+  if (normalizeProgressStatus(status)) {
+    return formatProgressStatus(status);
+  }
+
   switch (status) {
-    case "Received":
-    case "received":
-      return "Primită";
-
-    case "Disassembly":
-    case "disassembly":
-      return "Demontare";
-
-    case "Body repair":
-    case "body_repair":
-      return "Tinichigerie";
-
-    case "Paint preparation":
-    case "paint_preparation":
-      return "Pregătire vopsire";
-
-    case "Painting":
-    case "painting":
-      return "Vopsire";
-
-    case "Polishing":
-    case "polishing":
-      return "Polish";
-
-    case "Diagnosis":
-    case "diagnosis":
-      return "Diagnoză";
-
-    case "Parts ordered":
-    case "parts_ordered":
-      return "Piese comandate";
-
-    case "In repair":
-    case "in repair":
-    case "in_repair":
-      return "În reparație";
-
-    case "Testing":
-    case "testing":
-      return "Testare";
-
-    case "Ready":
-    case "ready":
-    case "Gata":
-      return "Gata";
-
     case "in_progress":
       return "În lucru";
 

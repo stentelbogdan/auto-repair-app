@@ -3,6 +3,10 @@
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import CarHeader from "@/app/components/CarHeader";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
+import {
+  formatProgressStatus,
+  normalizeProgressStatus,
+} from "@/lib/work-progress/workflows";
 
 type RepairRequestCardProps = {
   request: RepairRequestRow;
@@ -141,6 +145,10 @@ export default function RepairRequestCard({
 function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
   if (acceptedOfferId) return "Service selectat";
 
+  if (normalizeProgressStatus(status)) {
+    return formatProgressStatus(status);
+  }
+
   switch (status) {
     case "open":
       return "Deschisă";
@@ -152,18 +160,6 @@ function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
       return "Finalizată";
     case "closed":
       return "Închisă";
-    case "Received":
-      return "Primită";
-    case "Diagnosis":
-      return "Diagnoză";
-    case "Parts ordered":
-      return "Piese comandate";
-    case "In repair":
-      return "În reparație";
-    case "Testing":
-      return "Testare";
-    case "Ready":
-      return "Gata";
     default:
       return status || "-";
   }

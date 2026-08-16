@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import ImageGallery from "@/app/components/ImageGallery";
+import { formatProgressStatus } from "@/lib/work-progress/workflows";
 
 type WorkProgressUpdate = {
   id: string;
@@ -47,21 +48,6 @@ export default function CustomerJobDetailPage() {
     request?.status === "completed" ||
     latestStatus === "Ready" ||
     latestStatus === "Gata";
-
-  const statusLabels: Record<string, string> = {
-    Received: "Primită",
-    Disassembly: "Demontare",
-    "Body repair": "Tinichigerie",
-    "Paint preparation": "Pregătire vopsire",
-    paint_preparation: "Pregătire vopsire",
-    Painting: "Vopsire",
-    Polishing: "Polish",
-    Diagnosis: "Diagnoză",
-    "Parts ordered": "Piese comandate",
-    "In repair": "În reparație",
-    Testing: "Testare",
-    Ready: "Gata",
-  };
 
   const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
@@ -381,9 +367,7 @@ export default function CustomerJobDetailPage() {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
-                              {statusLabels[update.status ?? ""] ??
-                                update.status ??
-                                "Update"}
+                              {formatProgressStatus(update.status) || "Update"}
                             </p>
 
                             <div className="mt-1 flex items-center gap-2 text-xs text-black/45">
