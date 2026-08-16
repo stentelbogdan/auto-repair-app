@@ -1480,6 +1480,10 @@ function formatJobStatus(value?: string | null) {
     case "body_repair":
       return "Tinichigerie";
 
+    case "Paint preparation":
+    case "paint_preparation":
+      return "Pregătire vopsire";
+
     case "Painting":
     case "painting":
       return "Vopsire";

@@ -52,6 +52,8 @@ export default function CustomerJobDetailPage() {
     Received: "Primită",
     Disassembly: "Demontare",
     "Body repair": "Tinichigerie",
+    "Paint preparation": "Pregătire vopsire",
+    paint_preparation: "Pregătire vopsire",
     Painting: "Vopsire",
     Polishing: "Polish",
     Diagnosis: "Diagnoză",
@@ -69,6 +71,9 @@ export default function CustomerJobDetailPage() {
         return "bg-orange-500";
       case "body repair":
         return "bg-purple-500";
+      case "paint preparation":
+      case "paint_preparation":
+        return "bg-red-500";
       case "painting":
         return "bg-red-500";
       case "polishing":
