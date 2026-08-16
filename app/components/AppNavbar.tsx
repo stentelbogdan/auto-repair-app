@@ -274,6 +274,7 @@ export default function AppNavbar() {
       const currentUserId = userId;
       let requestIds: string[] = [];
       let validWorkshopConversationKeys: Set<string> | null = null;
+      let validCustomerConversationKeys: Set<string> | null = null;
       const startedAt = performance.now();
       const generation = unreadMessagesGenerationRef.current + 1;
       const requestId = unreadMessagesRequestIdRef.current + 1;
@@ -344,12 +345,47 @@ export default function AppNavbar() {
             ),
           });
         } else {
-          const { data: customerRequests } = await supabase
+          const { data: customerRequests, error: customerRequestsError } =
+            await supabase
             .from("repair_requests")
-            .select("id")
+            .select("id, request_type")
             .eq("user_id", currentUserId);
 
+          if (customerRequestsError) {
+            console.error(
+              "Failed to load customer message requests:",
+              customerRequestsError,
+            );
+          }
+
           requestIds = (customerRequests || []).map((request) => request.id);
+
+          const { data: customerOffers, error: customerOffersError } =
+            requestIds.length > 0
+              ? await supabase
+                  .from("repair_offers")
+                  .select("id, request_id")
+                  .in("request_id", requestIds)
+                  .in("status", ["pending", "accepted"])
+              : { data: [], error: null };
+
+          if (customerOffersError) {
+            console.error(
+              "Failed to load customer message conversations:",
+              customerOffersError,
+            );
+          }
+
+          validCustomerConversationKeys = new Set([
+            ...(customerRequests || [])
+              .filter(
+                (request) => request.request_type === "direct_message",
+              )
+              .map((request) => getConversationKey(request.id, null)),
+            ...(customerOffers || []).map((offer) =>
+              getConversationKey(offer.request_id, offer.id),
+            ),
+          ]);
         }
 
         requestIds = Array.from(new Set(requestIds)).filter(Boolean);
@@ -431,6 +467,13 @@ export default function AppNavbar() {
           if (
             isWorkshopMode &&
             !validWorkshopConversationKeys?.has(conversationKey)
+          ) {
+            return false;
+          }
+
+          if (
+            isClientMode &&
+            !validCustomerConversationKeys?.has(conversationKey)
           ) {
             return false;
           }

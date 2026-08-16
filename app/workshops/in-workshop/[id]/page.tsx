@@ -31,6 +31,7 @@ type RequestData = {
   description: string | null;
   images: JobImage[];
   status: string | null;
+  accepted_offer_id: string | null;
 };
 
 const statusLabels: Record<string, string> = {
@@ -71,7 +72,7 @@ export default function InWorkshopCarPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status",
+            "id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status, accepted_offer_id",
           )
           .eq("id", requestId)
           .maybeSingle();
@@ -94,6 +95,7 @@ export default function InWorkshopCarPage() {
           description: data.description,
           images: Array.isArray(data.images) ? data.images : [],
           status: data.status,
+          accepted_offer_id: data.accepted_offer_id,
         });
       } catch (error: any) {
         console.log(error);
@@ -195,7 +197,16 @@ export default function InWorkshopCarPage() {
           <ActionCard
             icon={<MessageCircle size={28} />}
             title="Chat client"
-            onClick={() => router.push(`/chat/${request.id}?role=workshop`)}
+            onClick={() => {
+              if (!request.accepted_offer_id) {
+                alert("Oferta acceptată pentru această lucrare nu a fost găsită.");
+                return;
+              }
+
+              router.push(
+                `/chat/${request.id}?offerId=${request.accepted_offer_id}&role=workshop`,
+              );
+            }}
           />
           <ActionCard
             icon={<RefreshCw size={28} />}
