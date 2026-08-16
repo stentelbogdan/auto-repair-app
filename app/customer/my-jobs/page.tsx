@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -268,6 +268,48 @@ export default function MyJobsPage() {
         },
       )
       .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const refreshJobsFromWorkProgress = useEffectEvent(() => {
+    void loadJobs();
+  });
+
+  useEffect(() => {
+    let hasReconciledOnSubscribe = false;
+
+    const channel = supabase
+      .channel("customer-work-progress-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "work_progress_updates",
+        },
+        () => {
+          refreshJobsFromWorkProgress();
+        },
+      )
+      .subscribe((status, error) => {
+        if (process.env.NODE_ENV === "development") {
+          if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            console.warn(`[WORK-PROGRESS-RT] ${status}`, error ?? undefined);
+          }
+        }
+
+        if (status === "SUBSCRIBED" && !hasReconciledOnSubscribe) {
+          hasReconciledOnSubscribe = true;
+          refreshJobsFromWorkProgress();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
