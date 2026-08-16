@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
 import {
@@ -64,6 +64,7 @@ export default function WonJobDetailPage() {
   const [progressImages, setProgressImages] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadedPreviewUrls, setUploadedPreviewUrls] = useState<string[]>([]);
+  const uploadedPreviewUrlsRef = useRef<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
   const [serviceType, setServiceType] = useState<"bodywork" | "mechanical">(
     "bodywork",
@@ -101,6 +102,14 @@ export default function WonJobDetailPage() {
     }
   }, [requestId]);
 
+  useEffect(() => {
+    return () => {
+      uploadedPreviewUrlsRef.current.forEach((url) =>
+        URL.revokeObjectURL(url),
+      );
+    };
+  }, []);
+
   const activeProgressSteps =
     serviceType === "mechanical"
       ? mechanicalProgressSteps
@@ -110,12 +119,32 @@ export default function WonJobDetailPage() {
     if (!e.target.files) return;
 
     const files = Array.from(e.target.files);
-
-    setProgressImages(files);
-
     const previews = files.map((file) => URL.createObjectURL(file));
 
-    setUploadedPreviewUrls(previews);
+    setProgressImages((current) => [...current, ...files]);
+    setUploadedPreviewUrls((current) => {
+      const next = [...current, ...previews];
+      uploadedPreviewUrlsRef.current = next;
+      return next;
+    });
+    e.target.value = "";
+  };
+
+  const removeProgressImage = (index: number) => {
+    const previewUrl = uploadedPreviewUrlsRef.current[index];
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setProgressImages((current) =>
+      current.filter((_, imageIndex) => imageIndex !== index),
+    );
+    setUploadedPreviewUrls((current) => {
+      const next = current.filter((_, imageIndex) => imageIndex !== index);
+      uploadedPreviewUrlsRef.current = next;
+      return next;
+    });
   };
 
   const uploadProgressImages = async () => {
@@ -222,6 +251,10 @@ export default function WonJobDetailPage() {
       setSuccessMessage("Update trimis către client.");
       setMessage("");
       setProgressImages([]);
+      uploadedPreviewUrlsRef.current.forEach((url) =>
+        URL.revokeObjectURL(url),
+      );
+      uploadedPreviewUrlsRef.current = [];
       setUploadedPreviewUrls([]);
 
       setMessage("");
@@ -363,7 +396,7 @@ export default function WonJobDetailPage() {
             </label>
 
             {uploadedPreviewUrls.length > 0 && (
-              <div className="mt-4 overflow-hidden rounded-2xl">
+              <div className="mt-4">
                 <ImageGallery
                   images={uploadedPreviewUrls.map((url, index) => ({
                     name: `progress-preview-${index}`,
@@ -373,6 +406,30 @@ export default function WonJobDetailPage() {
                   className="h-48 w-full object-cover"
                   wrapperClassName="block w-full overflow-hidden rounded-2xl"
                 />
+
+                <div className="mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6">
+                  {uploadedPreviewUrls.map((url, index) => (
+                    <div
+                      key={url}
+                      className="relative aspect-square overflow-hidden rounded-xl border border-white/10 bg-white/5"
+                    >
+                      <div
+                        className="h-full w-full bg-cover bg-center"
+                        style={{ backgroundImage: `url(${url})` }}
+                        role="img"
+                        aria-label={`Previzualizare imagine ${index + 1}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeProgressImage(index)}
+                        className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/80 text-sm font-bold text-white"
+                        aria-label={`Șterge imaginea ${index + 1}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
