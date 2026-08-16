@@ -449,6 +449,11 @@ export default function MyJobsPage() {
                   : fallbackDamageTypeLabel
                     ? [fallbackDamageTypeLabel]
                     : [];
+              const latestProgressStatus =
+                progressByRequestId[request.id]?.latestStatus ?? null;
+              const latestProgressLabel = latestProgressStatus
+                ? formatJobStatus(latestProgressStatus)
+                : null;
               const isAppointmentConfirmed =
                 appointment?.status === "confirmed";
               const isAppointmentRequested =
@@ -496,6 +501,16 @@ export default function MyJobsPage() {
                                   ? "orange"
                                   : "green",
                           },
+                          ...(activeTab === "in_progress" &&
+                          latestProgressLabel &&
+                          latestProgressLabel !== "În lucru"
+                            ? [
+                                {
+                                  text: latestProgressLabel,
+                                  color: "blue" as const,
+                                },
+                              ]
+                            : []),
                         ]}
                       />
                     </div>
@@ -718,6 +733,22 @@ function formatJobStatus(status?: string | null) {
     case "received":
       return "Primită";
 
+    case "Disassembly":
+    case "disassembly":
+      return "Demontare";
+
+    case "Body repair":
+    case "body_repair":
+      return "Tinichigerie";
+
+    case "Painting":
+    case "painting":
+      return "Vopsire";
+
+    case "Polishing":
+    case "polishing":
+      return "Polish";
+
     case "Diagnosis":
     case "diagnosis":
       return "Diagnoză";
@@ -742,12 +773,6 @@ function formatJobStatus(status?: string | null) {
 
     case "in_progress":
       return "În lucru";
-
-    case "painting":
-      return "La vopsit";
-
-    case "polishing":
-      return "La polish";
 
     case "completed":
       return "Finalizată";
