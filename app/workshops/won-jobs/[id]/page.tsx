@@ -291,9 +291,6 @@ export default function WonJobDetailPage() {
         <div className="mt-6 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
           <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
             <p className="text-sm text-white/50">Lucrare</p>
-            <p className="mt-2 break-all font-mono text-xs text-white/80">
-              {requestId}
-            </p>
 
             <div className="mt-6 rounded-3xl bg-white p-5 text-black">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-500">
@@ -312,16 +309,27 @@ export default function WonJobDetailPage() {
               {activeProgressSteps.map((step, index) => {
                 const activeIndex = activeProgressSteps.indexOf(selectedStatus);
                 const done = index <= activeIndex;
+                const isSelected = step === selectedStatus;
 
                 return (
-                  <div key={step} className="flex gap-4">
+                  <button
+                    key={step}
+                    type="button"
+                    onClick={() => setSelectedStatus(step)}
+                    aria-pressed={isSelected}
+                    className={`flex w-full gap-4 rounded-2xl p-2 text-left transition ${
+                      isSelected
+                        ? "bg-orange-500/10 ring-1 ring-orange-400/70"
+                        : "hover:bg-white/[0.03]"
+                    }`}
+                  >
                     <div className="flex flex-col items-center">
                       <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
+                        className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold transition ${
                           done
                             ? "bg-orange-500 text-black"
                             : "bg-white/10 text-white/40"
-                        }`}
+                        } ${isSelected ? "ring-2 ring-orange-200 ring-offset-2 ring-offset-black" : ""}`}
                       >
                         {done ? "✓" : index + 1}
                       </div>
@@ -340,10 +348,14 @@ export default function WonJobDetailPage() {
                         {statusLabels[step] ?? step}
                       </p>
                       <p className="text-sm text-white/45">
-                        {done ? "Completed / active" : "Waiting"}
+                        {isSelected
+                          ? "Selectată"
+                          : done
+                            ? "Parcursă"
+                            : "Disponibilă"}
                       </p>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -354,18 +366,6 @@ export default function WonJobDetailPage() {
             <p className="mt-2 text-sm text-white/50">
               Trimite clientului status, mesaj și poze din atelier.
             </p>
-
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="mt-5 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
-            >
-              {activeProgressSteps.map((step) => (
-                <option key={step} value={step}>
-                  {statusLabels[step] ?? step}
-                </option>
-              ))}
-            </select>
 
             <textarea
               value={message}
