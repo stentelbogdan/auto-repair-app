@@ -781,6 +781,9 @@ export default function WorkshopWonJobsPage() {
             {filteredJobs.map((job) => {
               const { affectedPartLabels, displayedDamageTypeLabels } =
                 getJobDamageDetails(job.request);
+              const latestProgressLabel = job.latestProgressStatus
+                ? formatJobStatus(job.latestProgressStatus)
+                : null;
               const appointment = job.appointment;
               const displayDate =
                 appointment?.proposed_date ||
@@ -816,10 +819,10 @@ export default function WorkshopWonJobsPage() {
                         text: "În lucru",
                         color: "orange",
                       },
-                      ...(job.latestProgressStatus
+                      ...(latestProgressLabel && latestProgressLabel !== "În lucru"
                         ? [
                             {
-                              text: formatJobStatus(job.latestProgressStatus),
+                              text: latestProgressLabel,
                               color: "blue" as const,
                             },
                           ]
@@ -1460,8 +1463,6 @@ function getNextDays(count: number) {
 function formatJobStatus(value?: string | null) {
   switch (value) {
     case "completed":
-    case "Ready":
-    case "Gata":
       return "Finalizată";
 
     case "in_progress":
@@ -1470,6 +1471,27 @@ function formatJobStatus(value?: string | null) {
     case "Received":
     case "received":
       return "Primită";
+
+    case "Disassembly":
+    case "disassembly":
+      return "Demontare";
+
+    case "Body repair":
+    case "body_repair":
+      return "Tinichigerie";
+
+    case "Painting":
+    case "painting":
+      return "Vopsire";
+
+    case "Polishing":
+    case "polishing":
+      return "Polish";
+
+    case "Ready":
+    case "ready":
+    case "Gata":
+      return "Gata";
 
     case "Diagnosis":
     case "Diagnoză":

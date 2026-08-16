@@ -1249,7 +1249,11 @@ export default function AppNavbar() {
       }
 
       localStorage.setItem("activeRole", "customer");
-      navigate("/customer/my-jobs");
+      navigate(
+        progressUnreadCount > 0
+          ? "/customer/my-jobs?tab=in_progress"
+          : "/customer/my-jobs",
+      );
     });
   };
 
