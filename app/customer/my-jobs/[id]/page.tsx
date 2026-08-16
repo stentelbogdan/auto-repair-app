@@ -159,13 +159,14 @@ export default function CustomerJobDetailPage() {
     };
 
     loadJob();
+    let hasReconciledOnSubscribe = false;
 
     const channel = supabase
       .channel(`customer-job-progress-${requestId}`)
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "INSERT",
           schema: "public",
           table: "work_progress_updates",
           filter: `request_id=eq.${requestId}`,
@@ -174,7 +175,24 @@ export default function CustomerJobDetailPage() {
           await loadJob();
         },
       )
-      .subscribe();
+      .subscribe((status, error) => {
+        if (process.env.NODE_ENV === "development") {
+          if (status === "SUBSCRIBED") {
+            console.info("[WORK-PROGRESS-RT] SUBSCRIBED");
+          } else if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            console.warn(`[WORK-PROGRESS-RT] ${status}`, error ?? undefined);
+          }
+        }
+
+        if (status === "SUBSCRIBED" && !hasReconciledOnSubscribe) {
+          hasReconciledOnSubscribe = true;
+          void loadJob();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
