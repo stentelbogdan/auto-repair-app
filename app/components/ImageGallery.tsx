@@ -93,6 +93,11 @@ export default function ImageGallery({
         slides={slides}
         index={selectedIndex}
         plugins={[Zoom]}
+        portal={{
+          container: {
+            onClick: (event) => event.stopPropagation(),
+          },
+        }}
         controller={{
           closeOnBackdropClick: true,
           closeOnPullDown: true,
