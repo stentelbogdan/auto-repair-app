@@ -368,23 +368,26 @@ export default function OffersPage() {
                   key={request.id}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
-                  <CarHeader
-                    images={request.images}
-                    plate={request.licensePlate}
-                    platePosition="bottom"
-                    brand={request.carBrand}
-                    model={request.carModel}
-                    year={request.carYear}
-                    city={request.city}
-                    variant="listLarge"
-                    affectedParts={affectedPartLabels}
-                    damageTypes={displayedDamageTypeLabels}
-                  />
+                  <div className="relative pb-11">
+                    <CarHeader
+                      images={request.images}
+                      plate={request.licensePlate}
+                      platePosition="bottom"
+                      brand={request.carBrand}
+                      model={request.carModel}
+                      year={request.carYear}
+                      city={request.city}
+                      variant="listLarge"
+                      affectedParts={affectedPartLabels}
+                      damageTypes={displayedDamageTypeLabels}
+                    />
 
-                  <div className="mt-3 flex justify-end">
-                    <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
-                      {group.items.length} {group.items.length === 1 ? "ofertă" : "oferte"}
-                    </span>
+                    <div className="absolute left-0 top-[196px] flex w-[150px] justify-center">
+                      <span className="rounded-full bg-orange-50 px-4 py-1.5 text-sm font-bold text-orange-700">
+                        {group.items.length}{" "}
+                        {group.items.length === 1 ? "ofertă" : "oferte"}
+                      </span>
+                    </div>
                   </div>
 
                   <div
