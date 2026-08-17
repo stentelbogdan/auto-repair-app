@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -178,6 +178,35 @@ export default function WorkshopsPage() {
       setLoadingRequests(false);
     }
   };
+
+  const refreshRequestsFromRealtime = useEffectEvent(() => {
+    void loadRequests();
+  });
+
+  useEffect(() => {
+    if (!authorized) {
+      return;
+    }
+
+    const channel = supabase
+      .channel("workshop-mechanical-repair-request-updates")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "repair_requests",
+        },
+        () => {
+          refreshRequestsFromRealtime();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [authorized]);
 
   if (checkingAccess) {
     return (

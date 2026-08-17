@@ -270,6 +270,17 @@ export default function WorkshopMyOffersPage() {
               void loadWorkshopOffers(workshopUserId);
             },
           )
+          .on(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "repair_requests",
+            },
+            () => {
+              void loadWorkshopOffers(workshopUserId);
+            },
+          )
           .subscribe();
       } catch (error) {
         if (cancelled) {
