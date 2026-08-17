@@ -57,7 +57,14 @@ export default function MyJobsPage() {
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
   const [offers, setOffers] = useState<RepairOfferRow[]>([]);
   const [progressByRequestId, setProgressByRequestId] = useState<
-    Record<string, { latestStatus: string | null; count: number }>
+    Record<
+      string,
+      {
+        latestStatus: string | null;
+        count: number;
+        completionTimestamp: string | null;
+      }
+    >
   >({});
   const [loading, setLoading] = useState(true);
   const [unreadByRequestId, setUnreadByRequestId] = useState<
@@ -156,7 +163,11 @@ export default function MyJobsPage() {
 
       const progressMap: Record<
         string,
-        { latestStatus: string | null; count: number }
+        {
+          latestStatus: string | null;
+          count: number;
+          completionTimestamp: string | null;
+        }
       > = {};
 
       const { data: unreadData } = await supabase.rpc(
@@ -228,6 +239,11 @@ export default function MyJobsPage() {
           progressMap[request.id] = {
             latestStatus: data?.[0]?.status || null,
             count: data?.length || 0,
+            completionTimestamp:
+              data?.find(
+                (update) =>
+                  normalizeProgressStatus(update.status) === "Ready",
+              )?.created_at ?? null,
           };
         }),
       );
@@ -374,9 +390,27 @@ export default function MyJobsPage() {
     ({ request }) => request.status === "in_progress",
   );
 
-  const completedJobs = jobsWithAppointments.filter(
-    ({ request }) => request.status === "completed",
-  );
+  const completedJobs = jobsWithAppointments
+    .filter(({ request }) => request.status === "completed")
+    .sort((first, second) => {
+      const firstCompletion = getValidTimestamp(
+        progressByRequestId[first.request.id]?.completionTimestamp,
+      );
+      const secondCompletion = getValidTimestamp(
+        progressByRequestId[second.request.id]?.completionTimestamp,
+      );
+
+      if (firstCompletion !== null && secondCompletion !== null) {
+        return secondCompletion - firstCompletion;
+      }
+
+      if (firstCompletion !== null) return -1;
+      if (secondCompletion !== null) return 1;
+
+      return (
+        getValidTimestamp(second.request.created_at) ?? 0
+      ) - (getValidTimestamp(first.request.created_at) ?? 0);
+    });
 
   const visibleJobs =
     activeTab === "scheduled"
@@ -735,7 +769,7 @@ export default function MyJobsPage() {
                           event.stopPropagation();
                           router.push(`/review?id=${request.id}`);
                         }}
-                        className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
+                        className="mx-auto mt-3 block rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
                       >
                         ⭐ Lasă review
                       </button>
@@ -771,6 +805,13 @@ function formatAppointmentDate(date: string) {
     month: "long",
     year: "numeric",
   });
+}
+
+function getValidTimestamp(value?: string | null): number | null {
+  if (!value) return null;
+
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
 
 function formatJobStatus(status?: string | null) {

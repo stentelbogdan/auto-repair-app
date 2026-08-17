@@ -66,6 +66,7 @@ type WonJob = {
   offerStatus: string;
   createdAt: string;
   latestProgressStatus?: string | null;
+  completionTimestamp: string | null;
   appointment?: RepairAppointment | null;
   request: {
     id: string;
@@ -296,6 +297,7 @@ export default function WorkshopWonJobsPage() {
       let requestsMap = new Map<string, any>();
 
       let latestProgressMap = new Map<string, string>();
+      let completionTimestampMap = new Map<string, string>();
 
       if (requestIds.length > 0) {
         const { data: progressData } = await supabase
@@ -305,10 +307,18 @@ export default function WorkshopWonJobsPage() {
           .order("created_at", { ascending: false });
 
         latestProgressMap = new Map();
+        completionTimestampMap = new Map();
 
         (progressData || []).forEach((item: any) => {
           if (!latestProgressMap.has(item.request_id)) {
             latestProgressMap.set(item.request_id, item.status);
+          }
+
+          if (
+            normalizeProgressStatus(item.status) === "Ready" &&
+            !completionTimestampMap.has(item.request_id)
+          ) {
+            completionTimestampMap.set(item.request_id, item.created_at);
           }
         });
       }
@@ -354,6 +364,8 @@ export default function WorkshopWonJobsPage() {
           message: row.message || "",
           offerStatus: row.status || "accepted",
           latestProgressStatus: latestProgressMap.get(row.request_id) || null,
+          completionTimestamp:
+            completionTimestampMap.get(row.request_id) || null,
           createdAt: row.created_at,
           appointment: appointmentsMap.get(row.request_id) || null,
           request: {
@@ -405,7 +417,7 @@ export default function WorkshopWonJobsPage() {
   const filteredJobs = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return jobs.filter((job) => {
+    const matchingJobs = jobs.filter((job) => {
       const jobState = getJobState(job);
 
       const shouldShowInWonJobs =
@@ -434,6 +446,31 @@ export default function WorkshopWonJobsPage() {
       const matchesSearch = query ? haystack.includes(query) : true;
 
       return shouldShowInWonJobs && matchesTab && matchesSearch;
+    });
+
+    if (activeTab !== "completed") return matchingJobs;
+
+    return [...matchingJobs].sort((first, second) => {
+      const firstCompletion = getValidTimestamp(first.completionTimestamp);
+      const secondCompletion = getValidTimestamp(second.completionTimestamp);
+
+      if (firstCompletion !== null && secondCompletion !== null) {
+        return secondCompletion - firstCompletion;
+      }
+
+      if (firstCompletion !== null) return -1;
+      if (secondCompletion !== null) return 1;
+
+      const firstFallback =
+        getValidTimestamp(first.request.createdAt) ??
+        getValidTimestamp(first.createdAt) ??
+        0;
+      const secondFallback =
+        getValidTimestamp(second.request.createdAt) ??
+        getValidTimestamp(second.createdAt) ??
+        0;
+
+      return secondFallback - firstFallback;
     });
   }, [jobs, search, activeTab]);
 
@@ -1482,4 +1519,11 @@ function formatJobStatus(value?: string | null) {
     default:
       return "Deschisă";
   }
+}
+
+function getValidTimestamp(value?: string | null): number | null {
+  if (!value) return null;
+
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
 }
