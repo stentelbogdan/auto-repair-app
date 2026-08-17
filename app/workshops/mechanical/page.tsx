@@ -128,8 +128,12 @@ export default function WorkshopsPage() {
     checkUserAndLoad();
   }, [router]);
 
-  const loadRequests = async () => {
-    setLoadingRequests(true);
+  const loadRequests = async (
+    { silent = false }: { silent?: boolean } = {},
+  ) => {
+    if (!silent) {
+      setLoadingRequests(true);
+    }
 
     try {
       const rows = await getWorkshopRepairRequests();
@@ -173,14 +177,18 @@ export default function WorkshopsPage() {
       setRequests(mapped);
     } catch (error) {
       console.error("Failed to load repair requests:", error);
-      setRequests([]);
+      if (!silent) {
+        setRequests([]);
+      }
     } finally {
-      setLoadingRequests(false);
+      if (!silent) {
+        setLoadingRequests(false);
+      }
     }
   };
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
-    void loadRequests();
+    void loadRequests({ silent: true });
   });
 
   useEffect(() => {
