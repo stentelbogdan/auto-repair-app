@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
@@ -9,7 +10,10 @@ import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
-import type { CustomerOfferItem } from "@/lib/services/offers/customer-offers.types";
+import type {
+  CustomerOfferItem,
+  CustomerOfferRepairRequest,
+} from "@/lib/services/offers/customer-offers.types";
 import { loadCustomerOffers } from "@/lib/services/offers/customer-offers.service";
 import { confirmCustomerAppointment } from "@/lib/services/offers/customer-appointments.service";
 import { getDamageTypeLabel } from "@/lib/displayLabels";
@@ -20,6 +24,11 @@ import {
 
 type ProfileRow = {
   role: string[] | null;
+};
+
+type OfferGroup = {
+  request: CustomerOfferRepairRequest;
+  items: CustomerOfferItem[];
 };
 
 export default function OffersPage() {
@@ -41,6 +50,31 @@ export default function OffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
+  const [activeOfferIdByRequestId, setActiveOfferIdByRequestId] = useState<
+    Record<string, string>
+  >({});
+  const carouselRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const offerGroups = useMemo(() => {
+    const groups = new Map<string, OfferGroup>();
+
+    items.forEach((item) => {
+      const requestId = item.request.id;
+      const existingGroup = groups.get(requestId);
+
+      if (existingGroup) {
+        existingGroup.items.push(item);
+        return;
+      }
+
+      groups.set(requestId, {
+        request: item.request,
+        items: [item],
+      });
+    });
+
+    return Array.from(groups.values());
+  }, [items]);
 
   useEffect(() => {
     const resetScroll = () => {
@@ -167,6 +201,65 @@ export default function OffersPage() {
     navigate(`/workshops/profile/${workshopSlug}`);
   };
 
+  const setActiveOffer = (requestId: string, offerId: string) => {
+    setActiveOfferIdByRequestId((current) => {
+      if (current[requestId] === offerId) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [requestId]: offerId,
+      };
+    });
+  };
+
+  const handleCarouselScroll = (
+    requestId: string,
+    groupItems: CustomerOfferItem[],
+    event: UIEvent<HTMLDivElement>,
+  ) => {
+    const carousel = event.currentTarget;
+
+    if (carousel.clientWidth === 0) {
+      return;
+    }
+
+    const nextIndex = Math.min(
+      groupItems.length - 1,
+      Math.max(0, Math.round(carousel.scrollLeft / carousel.clientWidth)),
+    );
+    const nextOffer = groupItems[nextIndex];
+
+    if (nextOffer) {
+      setActiveOffer(requestId, nextOffer.offer.id);
+    }
+  };
+
+  const moveCarousel = (
+    requestId: string,
+    groupItems: CustomerOfferItem[],
+    activeIndex: number,
+    direction: -1 | 1,
+  ) => {
+    const nextIndex = Math.min(
+      groupItems.length - 1,
+      Math.max(0, activeIndex + direction),
+    );
+    const nextOffer = groupItems[nextIndex];
+    const carousel = carouselRefs.current[requestId];
+
+    if (!nextOffer || !carousel) {
+      return;
+    }
+
+    setActiveOffer(requestId, nextOffer.offer.id);
+    carousel.scrollTo({
+      left: nextIndex * carousel.clientWidth,
+      behavior: "smooth",
+    });
+  };
+
   const handleConfirmAppointment = (offerId: string) => {
     if (acceptingOfferId || isNavigating) {
       return;
@@ -236,8 +329,24 @@ export default function OffersPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {items.map(({ offer, request, appointment }) => {
-              const appointmentStatus = appointment?.status;
+            {offerGroups.map((group) => {
+              const { request } = group;
+              const configuredActiveOfferId =
+                activeOfferIdByRequestId[request.id];
+              const configuredActiveIndex = group.items.findIndex(
+                (item) => item.offer.id === configuredActiveOfferId,
+              );
+              const activeIndex =
+                configuredActiveIndex >= 0 ? configuredActiveIndex : 0;
+              const activeItem = group.items[activeIndex];
+
+              if (!activeItem) {
+                return null;
+              }
+
+              const activeAppointmentStatus = activeItem.appointment?.status;
+              const activeIsCustomerProposed =
+                activeAppointmentStatus === "customer_proposed";
               const affectedPartLabels = getAffectedPartLabels(
                 request.serviceDetails,
               );
@@ -251,56 +360,12 @@ export default function OffersPage() {
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
                   : fallbackDamageTypeLabel
-                    ? [fallbackDamageTypeLabel]
-                    : [];
-
-              const isCustomerProposed =
-                appointmentStatus === "customer_proposed";
-
-              const isWorkshopProposed =
-                appointmentStatus === "workshop_proposed" ||
-                appointmentStatus === "requested";
-
-              const customerBadge =
-                appointmentStatus === "confirmed"
-                  ? {
-                      text: "Programare confirmată",
-                      color: "green" as const,
-                    }
-                  : appointmentStatus === "customer_proposed"
-                    ? {
-                        text: "În așteptare",
-                        color: "yellow" as const,
-                      }
-                    : appointmentStatus === "workshop_proposed"
-                      ? {
-                          text: "Service-ul a propus altă dată",
-                          color: "orange" as const,
-                        }
-                      : {
-                          text: "Necesită programare",
-                          color: "orange" as const,
-                        };
-
-              const displayedAppointmentDate =
-                appointment?.proposedDate ||
-                appointment?.appointmentDate ||
-                offer.availableDate;
-
-              const displayedAppointmentTime =
-                appointment?.proposedTime ||
-                appointment?.appointmentTime ||
-                offer.availableTime;
-
-              const appointmentStatusText = isCustomerProposed
-                ? "Așteaptă confirmarea service-ului"
-                : isWorkshopProposed
-                  ? "Așteaptă confirmarea ta"
-                  : "Așteaptă confirmare";
+                  ? [fallbackDamageTypeLabel]
+                  : [];
 
               return (
                 <div
-                  key={offer.id}
+                  key={request.id}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <CarHeader
@@ -314,54 +379,170 @@ export default function OffersPage() {
                     variant="listLarge"
                     affectedParts={affectedPartLabels}
                     damageTypes={displayedDamageTypeLabels}
-                    details={[customerBadge]}
                   />
 
-                  <WorkshopSummaryCard
-                    workshopUserId={offer.workshopUserId}
-                    workshopName={offer.workshopName}
-                    workshopLogoUrl={offer.workshopLogoUrl}
-                    workshopSlug={offer.workshopSlug}
-                    onClick={() => openWorkshopProfile(offer.workshopSlug)}
-                  />
+                  <div className="mt-3 flex justify-end">
+                    <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">
+                      {group.items.length} {group.items.length === 1 ? "ofertă" : "oferte"}
+                    </span>
+                  </div>
 
-                  <OfferSummaryCard
-                    title="Oferta service-ului"
-                    price={offer.price}
-                    days={offer.days}
-                    appointmentDate={displayedAppointmentDate}
-                    appointmentTime={displayedAppointmentTime}
-                    handoverText="Predare la service"
-                    statusText={appointmentStatusText}
-                  />
+                  <div
+                    ref={(node) => {
+                      carouselRefs.current[request.id] = node;
+                    }}
+                    onScroll={(event) =>
+                      handleCarouselScroll(request.id, group.items, event)
+                    }
+                    className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                  >
+                    {group.items.map((item) => {
+                      const { offer, appointment } = item;
+                      const appointmentStatus = appointment?.status;
+                      const isCustomerProposed =
+                        appointmentStatus === "customer_proposed";
+                      const isWorkshopProposed =
+                        appointmentStatus === "workshop_proposed" ||
+                        appointmentStatus === "requested";
+                      const customerBadgeText =
+                        appointmentStatus === "confirmed"
+                          ? "Programare confirmată"
+                          : appointmentStatus === "customer_proposed"
+                            ? "În așteptare"
+                            : appointmentStatus === "workshop_proposed"
+                              ? "Service-ul a propus altă dată"
+                              : "Necesită programare";
+                      const customerBadgeClass =
+                        appointmentStatus === "confirmed"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : appointmentStatus === "customer_proposed"
+                            ? "bg-yellow-50 text-yellow-700"
+                            : "bg-orange-50 text-orange-700";
+                      const displayedAppointmentDate =
+                        appointment?.proposedDate ||
+                        appointment?.appointmentDate ||
+                        offer.availableDate;
+                      const displayedAppointmentTime =
+                        appointment?.proposedTime ||
+                        appointment?.appointmentTime ||
+                        offer.availableTime;
+                      const appointmentStatusText = isCustomerProposed
+                        ? "Așteaptă confirmarea service-ului"
+                        : isWorkshopProposed
+                          ? "Așteaptă confirmarea ta"
+                          : "Așteaptă confirmare";
 
-                  {offer.message && (
-                    <div className="mt-3 rounded-2xl bg-gray-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-black/60">
-                        Mesaj service
+                      return (
+                        <div
+                          key={offer.id}
+                          className="min-w-full shrink-0 snap-start px-px"
+                        >
+                          <div className="mt-4 flex justify-start">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-bold ${customerBadgeClass}`}
+                            >
+                              {customerBadgeText}
+                            </span>
+                          </div>
+
+                          <WorkshopSummaryCard
+                            workshopUserId={offer.workshopUserId}
+                            workshopName={offer.workshopName}
+                            workshopLogoUrl={offer.workshopLogoUrl}
+                            workshopSlug={offer.workshopSlug}
+                            onClick={() =>
+                              openWorkshopProfile(offer.workshopSlug)
+                            }
+                          />
+
+                          <OfferSummaryCard
+                            title="Oferta service-ului"
+                            price={offer.price}
+                            days={offer.days}
+                            appointmentDate={displayedAppointmentDate}
+                            appointmentTime={displayedAppointmentTime}
+                            handoverText="Predare la service"
+                            statusText={appointmentStatusText}
+                          />
+
+                          {offer.message && (
+                            <div className="mt-3 rounded-2xl bg-gray-50 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-black/60">
+                                Mesaj service
+                              </p>
+                              <p className="mt-2 text-sm leading-relaxed text-black/90">
+                                {offer.message}
+                              </p>
+                            </div>
+                          )}
+
+                          <p className="mt-5 text-center text-[13px] font-medium text-black/60">
+                            {isCustomerProposed
+                              ? "Așteaptă confirmarea service-ului."
+                              : "Confirmă programarea sau modifică data propusă."}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {group.items.length > 1 && (
+                    <div className="mt-3 flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          moveCarousel(
+                            request.id,
+                            group.items,
+                            activeIndex,
+                            -1,
+                          )
+                        }
+                        disabled={activeIndex === 0}
+                        className="hidden h-9 w-9 items-center justify-center rounded-full bg-black text-white transition disabled:cursor-not-allowed disabled:opacity-25 md:inline-flex"
+                        aria-label="Oferta anterioară"
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+
+                      <p className="min-w-24 text-center text-xs font-bold text-black/50">
+                        {activeIndex + 1} / {group.items.length} oferte
                       </p>
-                      <p className="mt-2 text-sm leading-relaxed text-black/90">
-                        {offer.message}
-                      </p>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          moveCarousel(
+                            request.id,
+                            group.items,
+                            activeIndex,
+                            1,
+                          )
+                        }
+                        disabled={activeIndex === group.items.length - 1}
+                        className="hidden h-9 w-9 items-center justify-center rounded-full bg-black text-white transition disabled:cursor-not-allowed disabled:opacity-25 md:inline-flex"
+                        aria-label="Oferta următoare"
+                      >
+                        <ChevronRight size={18} />
+                      </button>
                     </div>
                   )}
-                  <p className="mt-5 text-center text-[13px] font-medium text-black/60">
-                    {isCustomerProposed
-                      ? "Așteaptă confirmarea service-ului."
-                      : "Confirmă programarea sau modifică data propusă."}
-                  </p>
 
                   <AppointmentActions
-                    showConfirm={!isCustomerProposed}
-                    confirming={acceptingOfferId === offer.id}
+                    showConfirm={!activeIsCustomerProposed}
+                    confirming={acceptingOfferId === activeItem.offer.id}
                     confirmDisabled={acceptingOfferId !== null || isNavigating}
-                    onConfirm={() => handleConfirmAppointment(offer.id)}
+                    onConfirm={() =>
+                      handleConfirmAppointment(activeItem.offer.id)
+                    }
                     onChat={() =>
-                      navigate(`/chat/${request.id}?offerId=${offer.id}`)
+                      navigate(
+                        `/chat/${activeItem.request.id}?offerId=${activeItem.offer.id}`,
+                      )
                     }
                     onChangeDate={() =>
                       navigate(
-                        `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=customer`,
+                        `/customer/schedule-damage/${activeItem.request.id}?offerId=${activeItem.offer.id}&from=customer`,
                       )
                     }
                   />
