@@ -21,6 +21,11 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
+import {
+  createWorkshopSlug,
+  ensureAuthenticatedWorkshopSlug,
+  hasWorkshopSlug,
+} from "@/lib/workshops/workshop-slug";
 
 type ProfileRow = {
   email: string | null;
@@ -81,6 +86,7 @@ export default function AccountPage() {
   const [saving, setSaving] = useState(false);
 
   const [workshopName, setWorkshopName] = useState("");
+  const [workshopSlug, setWorkshopSlug] = useState("");
   const [workshopPhone, setWorkshopPhone] = useState("");
   const [workshopAddress, setWorkshopAddress] = useState("");
   const [workshopCity, setWorkshopCity] = useState("");
@@ -134,7 +140,7 @@ export default function AccountPage() {
         const { data: profile, error } = await supabase
           .from("profiles")
           .select(
-            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url, workshop_gallery_urls",
+            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url, workshop_gallery_urls, workshop_slug",
           )
           .eq("id", authData.user.id)
           .single<ProfileRow>();
@@ -145,10 +151,29 @@ export default function AccountPage() {
           return;
         }
 
+        const profileRoles = Array.isArray(profile?.role) ? profile.role : [];
+        let persistedWorkshopSlug = profile?.workshop_slug || null;
+
+        if (
+          profileRoles.includes("workshop") &&
+          !hasWorkshopSlug(persistedWorkshopSlug)
+        ) {
+          try {
+            persistedWorkshopSlug =
+              await ensureAuthenticatedWorkshopSlug(authData.user.id);
+          } catch (slugError) {
+            console.error(
+              "Failed to initialize workshop public profile:",
+              slugError,
+            );
+          }
+        }
+
         setEmail(profile?.email || authData.user.email || "");
-        setRoles(Array.isArray(profile?.role) ? profile.role : []);
+        setRoles(profileRoles);
 
         setWorkshopName(profile?.workshop_name || "");
+        setWorkshopSlug(persistedWorkshopSlug || "");
         setWorkshopPhone(profile?.workshop_phone || "");
         setWorkshopAddress(profile?.workshop_address || "");
         setWorkshopCity(profile?.workshop_city || "");
@@ -301,21 +326,6 @@ export default function AccountPage() {
     setWorkshopGalleryUrls((prev) => prev.filter((item) => item !== url));
   };
 
-  const createSlug = (value: string) => {
-    return value
-      .toLowerCase()
-      .trim()
-      .replace(/ă/g, "a")
-      .replace(/â/g, "a")
-      .replace(/î/g, "i")
-      .replace(/ș/g, "s")
-      .replace(/ş/g, "s")
-      .replace(/ț/g, "t")
-      .replace(/ţ/g, "t")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  };
-
   const buildWorkshopHours = () => {
     const parts = [`Luni–Vineri: ${weekOpen}–${weekClose}`];
 
@@ -347,7 +357,11 @@ export default function AccountPage() {
 
       const safeRoles = roles.length ? roles : ["customer"];
 
-      const workshopSlug = workshopName ? createSlug(workshopName) : null;
+      const nextWorkshopSlug = hasWorkshopSlug(workshopSlug)
+        ? workshopSlug
+        : safeRoles.includes("workshop")
+          ? createWorkshopSlug(workshopName || "Service", authData.user.id)
+          : null;
 
       const formattedWorkshopHours = buildWorkshopHours();
 
@@ -363,7 +377,7 @@ export default function AccountPage() {
           workshop_description: workshopDescription,
           workshop_logo_url: workshopLogoUrl,
           workshop_gallery_urls: workshopGalleryUrls,
-          workshop_slug: workshopSlug,
+          workshop_slug: nextWorkshopSlug,
         })
         .eq("id", authData.user.id);
 
@@ -371,6 +385,8 @@ export default function AccountPage() {
         alert(error.message);
         return;
       }
+
+      setWorkshopSlug(nextWorkshopSlug || "");
 
       alert("Account updated successfully.");
 
@@ -442,8 +458,14 @@ export default function AccountPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const slug = createSlug(workshopName);
-                  router.push(`/workshops/profile/${slug}`);
+                  if (!hasWorkshopSlug(workshopSlug)) {
+                    alert(
+                      "Profilul public nu este încă disponibil. Salvează profilul și încearcă din nou.",
+                    );
+                    return;
+                  }
+
+                  router.push(`/workshops/profile/${workshopSlug}`);
                 }}
                 className="w-full rounded-2xl border border-white/15 bg-white/[0.04] px-6 py-3 font-semibold text-white transition hover:bg-white/10 md:w-auto"
               >

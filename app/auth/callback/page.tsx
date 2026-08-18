@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
+import {
+  createWorkshopSlug,
+  ensureAuthenticatedWorkshopSlug,
+} from "@/lib/workshops/workshop-slug";
 
 type UserRole = "customer" | "workshop";
 
@@ -64,6 +68,7 @@ export default function AuthCallbackPage() {
                 full_name: fullName,
                 display_name: fullName,
                 workshop_name: fullName,
+                workshop_slug: createWorkshopSlug(fullName, user.id),
                 gdpr_accepted: true,
                 gdpr_accepted_at: new Date().toISOString(),
               }
@@ -88,6 +93,14 @@ export default function AuthCallbackPage() {
         }
 
         roles = [selectedRole];
+      }
+
+      if (roles.includes("workshop")) {
+        try {
+          await ensureAuthenticatedWorkshopSlug(user.id);
+        } catch (error) {
+          console.error("Failed to initialize workshop public profile:", error);
+        }
       }
 
       localStorage.removeItem("pendingRegisterRole");

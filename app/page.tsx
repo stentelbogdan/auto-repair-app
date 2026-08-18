@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import {
+  createWorkshopSlug,
+  ensureAuthenticatedWorkshopSlug,
+  hasWorkshopSlug,
+} from "@/lib/workshops/workshop-slug";
 
 type UserRole = "customer" | "workshop";
 
 type ProfileRow = {
   role: string[] | null;
+  workshop_slug?: string | null;
 };
 
 export default function LoginPage() {
@@ -35,6 +41,12 @@ export default function LoginPage() {
       if (roles.includes("admin")) {
         router.push("/admin");
       } else if (roles.includes("workshop")) {
+        try {
+          await ensureAuthenticatedWorkshopSlug(data.user.id);
+        } catch (error) {
+          console.error("Failed to initialize workshop public profile:", error);
+        }
+
         router.push("/workshops/my-offers");
       } else {
         router.push("/customer/dashboard");
@@ -69,7 +81,7 @@ export default function LoginPage() {
         const { data: existingProfile, error: fetchProfileError } =
           await supabase
             .from("profiles")
-            .select("role")
+            .select("role, workshop_slug")
             .eq("id", userId)
             .maybeSingle<ProfileRow>();
 
@@ -84,11 +96,21 @@ export default function LoginPage() {
 
         const mergedRoles = Array.from(new Set([...existingRoles, role]));
 
-        const { error: profileError } = await supabase.from("profiles").upsert({
-          id: userId,
-          email,
-          role: mergedRoles,
-        });
+        const workshopSlug =
+          role === "workshop" &&
+          data.session &&
+          !hasWorkshopSlug(existingProfile?.workshop_slug)
+            ? createWorkshopSlug("Service", userId)
+            : undefined;
+
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .upsert({
+            id: userId,
+            email,
+            role: mergedRoles,
+            ...(workshopSlug ? { workshop_slug: workshopSlug } : {}),
+          });
 
         if (profileError) {
           alert(profileError.message);
@@ -100,6 +122,15 @@ export default function LoginPage() {
         alert("Account created and logged in successfully.");
 
         if (role === "workshop") {
+          try {
+            await ensureAuthenticatedWorkshopSlug(data.session.user.id);
+          } catch (error) {
+            console.error(
+              "Failed to initialize workshop public profile:",
+              error,
+            );
+          }
+
           router.push("/workshops/my-offers");
         } else {
           router.push("/customer/dashboard");
@@ -148,6 +179,14 @@ export default function LoginPage() {
       }
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+      if (roles.includes("workshop")) {
+        try {
+          await ensureAuthenticatedWorkshopSlug(userId);
+        } catch (error) {
+          console.error("Failed to initialize workshop public profile:", error);
+        }
+      }
 
       if (roles.includes("admin")) {
         router.push("/admin");

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
+import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
 
 type UserRole = "customer" | "workshop";
 
@@ -34,6 +35,14 @@ export default function LoginPage() {
         .single<ProfileRow>();
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+      if (roles.includes("workshop")) {
+        try {
+          await ensureAuthenticatedWorkshopSlug(session.user.id);
+        } catch (error) {
+          console.error("Failed to initialize workshop public profile:", error);
+        }
+      }
 
       if (roles.includes("admin")) {
         router.push("/admin");
@@ -111,6 +120,14 @@ export default function LoginPage() {
       }
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+      if (roles.includes("workshop")) {
+        try {
+          await ensureAuthenticatedWorkshopSlug(data.user.id);
+        } catch (error) {
+          console.error("Failed to initialize workshop public profile:", error);
+        }
+      }
 
       const savedRole = localStorage.getItem("activeRole") as UserRole | null;
 

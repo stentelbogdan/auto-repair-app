@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
+import { createWorkshopSlug } from "@/lib/workshops/workshop-slug";
 
 type UserRole = "customer" | "workshop";
 
@@ -67,6 +68,9 @@ export default function RegisterPage() {
               city,
               workshop_name: name,
               workshop_city: city,
+              ...(data.session
+                ? { workshop_slug: createWorkshopSlug(name, userId) }
+                : {}),
               gdpr_accepted: true,
               gdpr_accepted_at: new Date().toISOString(),
             }
