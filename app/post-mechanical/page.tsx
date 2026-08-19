@@ -417,7 +417,9 @@ function PostJobContent() {
                           ? `?targetWorkshopId=${encodeURIComponent(targetWorkshopId)}`
                           : "";
 
-                        router.push(`/post-mechanical/${category.id}${query}`);
+                        router.replace(
+                          `/post-mechanical/${category.id}${query}`,
+                        );
                       }}
                       className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
                         damageType === category.id
