@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Camera,
   Check,
   Clock,
   ImagePlus,
@@ -26,10 +25,14 @@ import {
   ensureAuthenticatedWorkshopSlug,
   hasWorkshopSlug,
 } from "@/lib/workshops/workshop-slug";
+import { useAuth } from "@/lib/auth-provider";
 
 type ProfileRow = {
   email: string | null;
   role: string[] | null;
+  full_name?: string | null;
+  display_name?: string | null;
+  city?: string | null;
   workshop_name?: string | null;
   workshop_phone?: string | null;
   workshop_address?: string | null;
@@ -40,6 +43,8 @@ type ProfileRow = {
   workshop_gallery_urls?: string[] | null;
   workshop_slug?: string | null;
 };
+
+type EditableProfile = "customer" | "workshop";
 
 function logPreparedImage(preparedImage: PreparedImage) {
   if (process.env.NODE_ENV !== "development") return;
@@ -65,32 +70,25 @@ function logPreparedLogo(preparedImage: PreparedImage) {
 
 export default function AccountPage() {
   const router = useRouter();
-  const [accountMode, setAccountMode] = useState<"customer" | "workshop">(
-    "customer",
-  );
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const role = params.get("role");
-
-    if (role === "workshop") {
-      setAccountMode("workshop");
-    } else {
-      setAccountMode("customer");
-    }
-  }, []);
+  const { activeRole, loading: authLoading } = useAuth();
+  const [editingProfile, setEditingProfile] =
+    useState<EditableProfile | null>(null);
+  const isWorkshopMode = editingProfile === "workshop";
 
   const [email, setEmail] = useState("");
   const [roles, setRoles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [customerFullName, setCustomerFullName] = useState("");
+  const [customerDisplayName, setCustomerDisplayName] = useState("");
+  const [customerCity, setCustomerCity] = useState("");
+
   const [workshopName, setWorkshopName] = useState("");
   const [workshopSlug, setWorkshopSlug] = useState("");
   const [workshopPhone, setWorkshopPhone] = useState("");
   const [workshopAddress, setWorkshopAddress] = useState("");
   const [workshopCity, setWorkshopCity] = useState("");
-  const [workshopHours, setWorkshopHours] = useState("");
   const [weekOpen, setWeekOpen] = useState("08:00");
   const [weekClose, setWeekClose] = useState("17:00");
   const [saturdayOpen, setSaturdayOpen] = useState(false);
@@ -106,6 +104,10 @@ export default function AccountPage() {
   const [sunClose, setSunClose] = useState("13:00");
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
     const parseWorkshopHours = (value: string | null | undefined) => {
       if (!value) return;
 
@@ -140,7 +142,7 @@ export default function AccountPage() {
         const { data: profile, error } = await supabase
           .from("profiles")
           .select(
-            "email, role, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url, workshop_gallery_urls, workshop_slug",
+            "email, role, full_name, display_name, city, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url, workshop_gallery_urls, workshop_slug",
           )
           .eq("id", authData.user.id)
           .single<ProfileRow>();
@@ -171,13 +173,33 @@ export default function AccountPage() {
 
         setEmail(profile?.email || authData.user.email || "");
         setRoles(profileRoles);
+        setEditingProfile((current) => {
+          if (current && profileRoles.includes(current)) {
+            return current;
+          }
+
+          if (
+            (activeRole === "customer" || activeRole === "workshop") &&
+            profileRoles.includes(activeRole)
+          ) {
+            return activeRole;
+          }
+
+          if (profileRoles.includes("customer")) {
+            return "customer";
+          }
+
+          return profileRoles.includes("workshop") ? "workshop" : null;
+        });
+        setCustomerFullName(profile?.full_name || "");
+        setCustomerDisplayName(profile?.display_name || "");
+        setCustomerCity(profile?.city || "");
 
         setWorkshopName(profile?.workshop_name || "");
         setWorkshopSlug(persistedWorkshopSlug || "");
         setWorkshopPhone(profile?.workshop_phone || "");
         setWorkshopAddress(profile?.workshop_address || "");
         setWorkshopCity(profile?.workshop_city || "");
-        setWorkshopHours(profile?.workshop_hours || "");
         parseWorkshopHours(profile?.workshop_hours);
         setWorkshopDescription(profile?.workshop_description || "");
         setWorkshopLogoUrl(profile?.workshop_logo_url || "");
@@ -196,17 +218,28 @@ export default function AccountPage() {
     };
 
     loadAccount();
-  }, [router]);
+  }, [activeRole, authLoading, router]);
 
   const toggleRole = (role: "customer" | "workshop") => {
-    setRoles((prev) => {
-      if (prev.includes(role)) {
-        const next = prev.filter((r) => r !== role);
-        return next.length ? next : ["customer"];
-      }
+    const nextRoles = roles.includes(role)
+      ? (() => {
+          const remainingRoles = roles.filter((current) => current !== role);
+          return remainingRoles.length ? remainingRoles : ["customer"];
+        })()
+      : Array.from(new Set([...roles, role]));
 
-      return Array.from(new Set([...prev, role]));
-    });
+    setRoles(nextRoles);
+
+    if (editingProfile && nextRoles.includes(editingProfile)) {
+      return;
+    }
+
+    if (nextRoles.includes("customer")) {
+      setEditingProfile("customer");
+      return;
+    }
+
+    setEditingProfile(nextRoles.includes("workshop") ? "workshop" : null);
   };
 
   const handleLogoUpload = async (file: File) => {
@@ -345,6 +378,11 @@ export default function AccountPage() {
   };
 
   const handleSave = async () => {
+    if (!editingProfile) {
+      alert("Nu există un profil activ care poate fi salvat.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -357,28 +395,41 @@ export default function AccountPage() {
 
       const safeRoles = roles.length ? roles : ["customer"];
 
-      const nextWorkshopSlug = hasWorkshopSlug(workshopSlug)
-        ? workshopSlug
-        : safeRoles.includes("workshop")
-          ? createWorkshopSlug(workshopName || "Service", authData.user.id)
-          : null;
+      let nextWorkshopSlug = workshopSlug;
+      const updatePayload = isWorkshopMode
+        ? (() => {
+            nextWorkshopSlug = hasWorkshopSlug(workshopSlug)
+              ? workshopSlug
+              : safeRoles.includes("workshop")
+                ? createWorkshopSlug(
+                    workshopName || "Service",
+                    authData.user.id,
+                  )
+                : "";
 
-      const formattedWorkshopHours = buildWorkshopHours();
+            return {
+              role: safeRoles,
+              workshop_name: workshopName,
+              workshop_phone: workshopPhone,
+              workshop_address: workshopAddress,
+              workshop_city: workshopCity,
+              workshop_hours: buildWorkshopHours(),
+              workshop_description: workshopDescription,
+              workshop_logo_url: workshopLogoUrl,
+              workshop_gallery_urls: workshopGalleryUrls,
+              workshop_slug: nextWorkshopSlug || null,
+            };
+          })()
+        : {
+            role: safeRoles,
+            full_name: customerFullName,
+            display_name: customerDisplayName,
+            city: customerCity,
+          };
 
       const { error } = await supabase
         .from("profiles")
-        .update({
-          role: safeRoles,
-          workshop_name: workshopName,
-          workshop_phone: workshopPhone,
-          workshop_address: workshopAddress,
-          workshop_city: workshopCity,
-          workshop_hours: formattedWorkshopHours,
-          workshop_description: workshopDescription,
-          workshop_logo_url: workshopLogoUrl,
-          workshop_gallery_urls: workshopGalleryUrls,
-          workshop_slug: nextWorkshopSlug,
-        })
+        .update(updatePayload)
         .eq("id", authData.user.id);
 
       if (error) {
@@ -386,22 +437,11 @@ export default function AccountPage() {
         return;
       }
 
-      setWorkshopSlug(nextWorkshopSlug || "");
+      if (isWorkshopMode) {
+        setWorkshopSlug(nextWorkshopSlug);
+      }
 
       alert("Account updated successfully.");
-
-      if (accountMode === "workshop" && safeRoles.includes("workshop")) {
-        localStorage.setItem("activeRole", "workshop");
-        router.refresh();
-        return;
-      }
-
-      if (accountMode === "customer" && safeRoles.includes("customer")) {
-        localStorage.setItem("activeRole", "customer");
-        router.push("/customer/dashboard");
-        return;
-      }
-
       router.refresh();
     } catch (error) {
       console.error("Failed to save account:", error);
@@ -411,7 +451,7 @@ export default function AccountPage() {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <main className="min-h-screen bg-black px-5 py-10 text-white">
         <div className="mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center">
@@ -434,12 +474,10 @@ export default function AccountPage() {
               Account
             </p>
             <h1 className="mt-3 text-3xl font-bold tracking-tight md:text-5xl">
-              {accountMode === "workshop"
-                ? "Service profile"
-                : "Customer profile"}
+              {isWorkshopMode ? "Service profile" : "Customer profile"}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55 md:text-base">
-              {accountMode === "workshop"
+              {isWorkshopMode
                 ? "Build your workshop identity. This information will later appear on your public service profile."
                 : "Manage your customer account and access settings."}
             </p>
@@ -454,7 +492,7 @@ export default function AccountPage() {
               {saving ? "Saving..." : "Save profile"}
             </button>
 
-            {accountMode === "workshop" && workshopName.trim() && (
+            {isWorkshopMode && workshopName.trim() && (
               <button
                 type="button"
                 onClick={() => {
@@ -475,19 +513,48 @@ export default function AccountPage() {
           </div>
         </div>
 
+        {hasCustomer && hasWorkshop && (
+          <div className="mb-5 inline-flex w-full rounded-2xl border border-white/10 bg-white/[0.04] p-1 sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setEditingProfile("customer")}
+              className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${
+                editingProfile === "customer"
+                  ? "bg-orange-500 text-black"
+                  : "text-white/60 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              Customer profile
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditingProfile("workshop")}
+              className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition sm:flex-none ${
+                editingProfile === "workshop"
+                  ? "bg-orange-500 text-black"
+                  : "text-white/60 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              Workshop profile
+            </button>
+          </div>
+        )}
+
         <div className="grid gap-5 lg:grid-cols-[0.9fr_1.4fr]">
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
             <div className="rounded-[1.5rem] border border-white/10 bg-gradient-to-br from-white/10 to-white/[0.03] p-5">
               <div className="flex items-center gap-4">
                 <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-3xl border border-orange-400/30 bg-orange-500/10">
-                  {workshopLogoUrl ? (
+                  {isWorkshopMode && workshopLogoUrl ? (
                     <img
                       src={workshopLogoUrl}
                       alt="Workshop logo"
                       className="h-full w-full object-cover"
                     />
-                  ) : (
+                  ) : isWorkshopMode ? (
                     <Store className="h-9 w-9 text-orange-400" />
+                  ) : (
+                    <User className="h-9 w-9 text-orange-400" />
                   )}
                 </div>
 
@@ -505,21 +572,43 @@ export default function AccountPage() {
                   label="Email"
                   value={email || "Not set"}
                 />
-                <InfoCard
-                  icon={<Store size={17} />}
-                  label="Service name"
-                  value={workshopName || "Add your workshop name"}
-                />
-                <InfoCard
-                  icon={<MapPin size={17} />}
-                  label="City"
-                  value={workshopCity || "Add your city"}
-                />
-                <InfoCard
-                  icon={<Phone size={17} />}
-                  label="Phone"
-                  value={workshopPhone || "Add your phone number"}
-                />
+                {isWorkshopMode ? (
+                  <>
+                    <InfoCard
+                      icon={<Store size={17} />}
+                      label="Service name"
+                      value={workshopName || "Add your workshop name"}
+                    />
+                    <InfoCard
+                      icon={<MapPin size={17} />}
+                      label="City"
+                      value={workshopCity || "Add your city"}
+                    />
+                    <InfoCard
+                      icon={<Phone size={17} />}
+                      label="Phone"
+                      value={workshopPhone || "Add your phone number"}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <InfoCard
+                      icon={<User size={17} />}
+                      label="Full name"
+                      value={customerFullName || "Add your full name"}
+                    />
+                    <InfoCard
+                      icon={<User size={17} />}
+                      label="Display name"
+                      value={customerDisplayName || "Add your display name"}
+                    />
+                    <InfoCard
+                      icon={<MapPin size={17} />}
+                      label="City"
+                      value={customerCity || "Add your city"}
+                    />
+                  </>
+                )}
               </div>
             </div>
 
@@ -570,6 +659,8 @@ export default function AccountPage() {
           </section>
 
           <section className="rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
+            {isWorkshopMode ? (
+              <>
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label="Service name"
@@ -722,6 +813,43 @@ export default function AccountPage() {
                 </div>
               )}
             </div>
+              </>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Full name"
+                  value={customerFullName}
+                  onChange={setCustomerFullName}
+                  placeholder="Full name"
+                />
+
+                <Field
+                  label="Display name"
+                  value={customerDisplayName}
+                  onChange={setCustomerDisplayName}
+                  placeholder="Display name"
+                />
+
+                <Field
+                  label="City"
+                  value={customerCity}
+                  onChange={setCustomerCity}
+                  placeholder="City"
+                />
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Email
+                  </label>
+                  <input
+                    value={email}
+                    readOnly
+                    aria-readonly="true"
+                    className="w-full cursor-not-allowed rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white/55 outline-none"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
               <button
