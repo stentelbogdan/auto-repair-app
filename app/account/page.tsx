@@ -851,31 +851,6 @@ export default function AccountPage() {
               </div>
             )}
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              <button
-                onClick={() => router.push("/customer/dashboard")}
-                disabled={!hasCustomer}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                Customer area
-              </button>
-
-              <button
-                onClick={() => router.push("/workshops")}
-                disabled={!hasWorkshop}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                Workshop area
-              </button>
-
-              <button
-                onClick={() => router.push("/admin")}
-                disabled={!hasAdmin}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35"
-              >
-                Admin area
-              </button>
-            </div>
           </section>
         </div>
       </div>

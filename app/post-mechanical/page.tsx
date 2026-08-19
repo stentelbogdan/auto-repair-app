@@ -24,18 +24,8 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
-
-type DamageType =
-  | "engine"
-  | "gearbox"
-  | "brakes"
-  | "suspension"
-  | "steering"
-  | "electrical"
-  | "ac"
-  | "diagnostic"
-  | "service"
-  | "other";
+import { MECHANICAL_CATEGORIES } from "@/lib/mechanical/mechanical-categories";
+import { useMechanicalDraft } from "./MechanicalDraftProvider";
 
 type StoredImage = {
   name: string;
@@ -83,74 +73,6 @@ function logPreparedImage(preparedImage: PreparedImage) {
   );
 }
 
-const mechanicalServices: {
-  value: DamageType;
-  title: string;
-  icon: string;
-  desc: string;
-}[] = [
-  {
-    value: "engine",
-    title: "Motor",
-    icon: "🚗",
-    desc: "Pornire, fum, consum ulei",
-  },
-  {
-    value: "gearbox",
-    title: "Cutie viteze",
-    icon: "⚙️",
-    desc: "Manuală sau automată",
-  },
-  {
-    value: "brakes",
-    title: "Frâne",
-    icon: "🛑",
-    desc: "Plăcuțe, discuri, vibrații",
-  },
-  {
-    value: "suspension",
-    title: "Suspensie",
-    icon: "🔩",
-    desc: "Amortizoare și brațe",
-  },
-  {
-    value: "steering",
-    title: "Direcție",
-    icon: "🛞",
-    desc: "Casetă și articulații",
-  },
-  {
-    value: "electrical",
-    title: "Electrică",
-    icon: "🔋",
-    desc: "Baterie, alternator, senzori",
-  },
-  {
-    value: "ac",
-    title: "Aer condiționat",
-    icon: "❄️",
-    desc: "Freon și compresor",
-  },
-  {
-    value: "diagnostic",
-    title: "Diagnoză",
-    icon: "💻",
-    desc: "Martori bord",
-  },
-  {
-    value: "service",
-    title: "Revizie",
-    icon: "🛠️",
-    desc: "Ulei și filtre",
-  },
-  {
-    value: "other",
-    title: "Altă problemă",
-    icon: "❓",
-    desc: "Descrie problema",
-  },
-];
-
 export default function PostJobPage() {
   return (
     <Suspense
@@ -167,23 +89,25 @@ export default function PostJobPage() {
 
 function PostJobContent() {
   const router = useRouter();
-
   const searchParams = useSearchParams();
   const targetWorkshopId = searchParams.get("targetWorkshopId");
-
-  const [files, setFiles] = useState<File[]>([]);
-  const [carBrand, setCarBrand] = useState("");
-  const [carModel, setCarModel] = useState("");
-  const [carYear, setCarYear] = useState("");
-  const [city, setCity] = useState("");
-  const [licensePlate, setLicensePlate] = useState("");
+  const { draft, files, isHydrated, setFiles, updateDraft, clearDraft } =
+    useMechanicalDraft();
+  const {
+    carBrand,
+    carModel,
+    carYear,
+    city,
+    licensePlate,
+    category: damageType,
+    symptomIdsByCategory,
+    description,
+  } = draft;
 
   const licensePlateHasError =
     licensePlate.length > 0 && !isValidLicensePlate(licensePlate);
 
   const licensePlateErrorMessage = getLicensePlateError(licensePlate);
-  const [damageType, setDamageType] = useState<DamageType>("engine");
-  const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const availableModels = carModelsByBrand[carBrand] || [];
@@ -192,6 +116,11 @@ function PostJobContent() {
     { length: new Date().getFullYear() - 1989 },
     (_, i) => String(new Date().getFullYear() - i),
   );
+
+  useEffect(() => {
+    if (!isHydrated || draft.targetWorkshopId === targetWorkshopId) return;
+    updateDraft({ targetWorkshopId });
+  }, [draft.targetWorkshopId, isHydrated, targetWorkshopId, updateDraft]);
 
   const previewUrls = useMemo(() => {
     return files.map((file) => URL.createObjectURL(file));
@@ -229,6 +158,18 @@ function PostJobContent() {
       if (!authData.user) {
         alert("Te rugăm să te autentifici mai întâi.");
         router.push("/login");
+        return;
+      }
+
+      if (!damageType) {
+        alert("Selectează categoria problemei.");
+        return;
+      }
+
+      const trimmedDescription = description.trim();
+
+      if (trimmedDescription.length < 10) {
+        alert("Descrie problema în cel puțin 10 caractere.");
         return;
       }
 
@@ -275,13 +216,14 @@ function PostJobContent() {
         city,
         licensePlate,
         damageType,
-        description,
+        description: trimmedDescription,
         serviceType: "mechanical",
         images: storedImages,
         requestType: targetWorkshopId ? "direct_request" : "repair",
         targetWorkshopId: targetWorkshopId || null,
       });
 
+      clearDraft();
       sessionStorage.setItem("job-posted-success", "true");
 
       router.replace("/customer/dashboard?success=posted");
@@ -325,8 +267,7 @@ function PostJobContent() {
               <select
                 value={carBrand}
                 onChange={(e) => {
-                  setCarBrand(e.target.value);
-                  setCarModel("");
+                  updateDraft({ carBrand: e.target.value, carModel: "" });
                 }}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
@@ -347,7 +288,7 @@ function PostJobContent() {
 
               <select
                 value={carModel}
-                onChange={(e) => setCarModel(e.target.value)}
+                onChange={(e) => updateDraft({ carModel: e.target.value })}
                 disabled={!carBrand}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400 disabled:opacity-50"
                 required
@@ -373,7 +314,7 @@ function PostJobContent() {
 
               <select
                 value={carYear}
-                onChange={(e) => setCarYear(e.target.value)}
+                onChange={(e) => updateDraft({ carYear: e.target.value })}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
               >
@@ -394,7 +335,7 @@ function PostJobContent() {
 
               <select
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(e) => updateDraft({ city: e.target.value })}
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
               >
@@ -418,7 +359,9 @@ function PostJobContent() {
                   type="text"
                   value={licensePlate}
                   onChange={(e) =>
-                    setLicensePlate(formatLicensePlateInput(e.target.value))
+                    updateDraft({
+                      licensePlate: formatLicensePlateInput(e.target.value),
+                    })
                   }
                   placeholder="Ex: NT 51 FLY"
                   className={`w-full rounded-2xl border bg-black/[0.03] px-4 py-3 pr-14 outline-none transition ${
@@ -459,37 +402,63 @@ function PostJobContent() {
               </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                {mechanicalServices.map((service) => (
-                  <button
-                    key={service.value}
-                    type="button"
-                    onClick={() => setDamageType(service.value)}
-                    className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
-                      damageType === service.value
-                        ? "border-orange-400 bg-orange-50 shadow-sm"
-                        : "border-black/10 bg-black/[0.03] hover:border-orange-300"
-                    }`}
-                  >
-                    <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
-                      {service.icon}
-                    </div>
+                {MECHANICAL_CATEGORIES.map((category) => {
+                  const symptomCount =
+                    symptomIdsByCategory[category.id]?.length ?? 0;
 
-                    <p className="font-bold text-black">{service.title}</p>
-                    <p className="mt-1 text-sm text-black/55">{service.desc}</p>
-                  </button>
-                ))}
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => {
+                        updateDraft({ targetWorkshopId });
+
+                        const query = targetWorkshopId
+                          ? `?targetWorkshopId=${encodeURIComponent(targetWorkshopId)}`
+                          : "";
+
+                        router.push(`/post-mechanical/${category.id}${query}`);
+                      }}
+                      className={`rounded-2xl border p-4 text-left transition active:scale-[0.98] ${
+                        damageType === category.id
+                          ? "border-orange-400 bg-orange-50 shadow-sm"
+                          : "border-black/10 bg-black/[0.03] hover:border-orange-300"
+                      }`}
+                    >
+                      <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                        {category.icon}
+                      </div>
+
+                      <p className="font-bold text-black">{category.label}</p>
+                      <p className="mt-1 text-sm text-black/55">
+                        {category.description}
+                      </p>
+                      {symptomCount > 0 && (
+                        <p className="mt-2 text-xs font-semibold text-orange-600">
+                          {symptomCount} simptom
+                          {symptomCount === 1 ? " selectat" : "e selectate"}
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-medium text-black/70">
-                Descriere scurtă
+                Descrie simptomele
               </label>
+              <p className="mb-3 text-sm text-black/50">
+                Spune ce observi, când apare problema și orice detaliu care poate
+                ajuta service-ul.
+              </p>
               <textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => updateDraft({ description: e.target.value })}
                 placeholder="Ex: se aprinde martorul motor, mașina nu mai trage, se aude un zgomot la suspensie..."
                 rows={4}
+                aria-required="true"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
               />
             </div>
@@ -582,7 +551,7 @@ function PostJobContent() {
             disabled={isSubmitting}
             className="mt-6 w-full rounded-2xl bg-black px-6 py-4 font-semibold text-white transition active:scale-[0.99] disabled:opacity-60"
           >
-            {isSubmitting ? "Se salvează..." : "Continuă"}
+            {isSubmitting ? "Se salvează..." : "Postează cererea"}
           </button>
         </form>
       </div>
