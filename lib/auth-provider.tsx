@@ -5,11 +5,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
 
 type ActiveRole = "customer" | "workshop";
 
@@ -28,11 +30,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [activeRoleState, setActiveRoleState] =
     useState<ActiveRole>("customer");
+  const reconciledWorkshopSlugUserIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     const savedRole = localStorage.getItem("activeRole");
 
     if (savedRole === "workshop" || savedRole === "customer") {
+      // Browser storage is only available after this client component hydrates.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveRoleState(savedRole);
     }
 
@@ -58,6 +63,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
     };
   }, []);
+
+  const userId = session?.user.id ?? null;
+
+  useEffect(() => {
+    if (
+      !userId ||
+      reconciledWorkshopSlugUserIdsRef.current.has(userId)
+    ) {
+      return;
+    }
+
+    reconciledWorkshopSlugUserIdsRef.current.add(userId);
+
+    void ensureAuthenticatedWorkshopSlug(userId).catch((error) => {
+      console.error("Failed to reconcile workshop public profile slug:", error);
+    });
+  }, [userId]);
 
   const setActiveRole = (role: ActiveRole) => {
     localStorage.setItem("activeRole", role);

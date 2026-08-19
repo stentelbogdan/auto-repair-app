@@ -1,7 +1,14 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-provider";
 import { supabase } from "@/lib/supabase/client";
+
+type ViewerRoleState = {
+  userId: string;
+  roles: string[];
+};
 
 export default function WorkshopProfileActions({
   workshopId,
@@ -9,6 +16,52 @@ export default function WorkshopProfileActions({
   workshopId: string;
 }) {
   const router = useRouter();
+  const { user, loading, activeRole } = useAuth();
+  const [viewerRoleState, setViewerRoleState] =
+    useState<ViewerRoleState | null>(null);
+  const authenticatedUserId = user?.id ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (loading || !authenticatedUserId) {
+      return;
+    }
+
+    const userId = authenticatedUserId;
+
+    const loadViewerRoles = async () => {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle<{ role: string[] | null }>();
+
+      if (cancelled) {
+        return;
+      }
+
+      if (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("Failed to load public profile viewer roles:", error);
+        }
+
+        setViewerRoleState({ userId, roles: [] });
+        return;
+      }
+
+      setViewerRoleState({
+        userId,
+        roles: Array.isArray(profile?.role) ? profile.role : [],
+      });
+    };
+
+    void loadViewerRoles();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticatedUserId, loading]);
 
   const handleRequestOffer = () => {
     router.push(`/post-choice?targetWorkshopId=${workshopId}`);
@@ -41,6 +94,17 @@ export default function WorkshopProfileActions({
       `/chat/draft?draft=1&directWorkshopId=${encodeURIComponent(workshopId)}&role=customer`,
     );
   };
+
+  const canUseCustomerActions =
+    !loading &&
+    !!user &&
+    viewerRoleState?.userId === user.id &&
+    viewerRoleState.roles.includes("customer") &&
+    activeRole === "customer";
+
+  if (!canUseCustomerActions) {
+    return null;
+  }
 
   return (
     <div className="mt-8 flex flex-col gap-3 md:flex-row">
