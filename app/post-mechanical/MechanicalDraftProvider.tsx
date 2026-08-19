@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
@@ -45,7 +46,7 @@ type MechanicalDraftContextValue = {
     symptomIds: string[],
   ) => void;
   toggleSymptom: (category: MechanicalCategoryId, symptomId: string) => void;
-  clearDraft: () => void;
+  resetDraft: () => void;
 };
 
 const MechanicalDraftContext = createContext<MechanicalDraftContextValue | null>(
@@ -158,6 +159,7 @@ export default function MechanicalDraftProvider({
   const [draft, setDraft] = useState<MechanicalDraft>(createInitialDraft);
   const [files, setFiles] = useState<File[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
+  const skipNextPersistenceRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -178,6 +180,11 @@ export default function MechanicalDraftProvider({
 
   useEffect(() => {
     if (!isHydrated) return;
+
+    if (skipNextPersistenceRef.current) {
+      skipNextPersistenceRef.current = false;
+      return;
+    }
 
     try {
       sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
@@ -233,7 +240,8 @@ export default function MechanicalDraftProvider({
     });
   };
 
-  const clearDraft = () => {
+  const resetDraft = useCallback(() => {
+    skipNextPersistenceRef.current = true;
     setDraft(createInitialDraft());
     setFiles([]);
 
@@ -242,7 +250,23 @@ export default function MechanicalDraftProvider({
     } catch {
       // The in-memory draft is still cleared when storage is unavailable.
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const pathname = window.location.pathname;
+      const staysInMechanicalFlow =
+        pathname === "/post-mechanical" ||
+        pathname.startsWith("/post-mechanical/");
+
+      if (!staysInMechanicalFlow) {
+        resetDraft();
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [resetDraft]);
 
   return (
     <MechanicalDraftContext.Provider
@@ -254,7 +278,7 @@ export default function MechanicalDraftProvider({
         setFiles,
         setSymptomsForCategory,
         toggleSymptom,
-        clearDraft,
+        resetDraft,
       }}
     >
       {children}

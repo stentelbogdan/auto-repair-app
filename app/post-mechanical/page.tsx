@@ -91,7 +91,7 @@ function PostJobContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetWorkshopId = searchParams.get("targetWorkshopId");
-  const { draft, files, isHydrated, setFiles, updateDraft, clearDraft } =
+  const { draft, files, isHydrated, setFiles, updateDraft, resetDraft } =
     useMechanicalDraft();
   const {
     carBrand,
@@ -223,7 +223,7 @@ function PostJobContent() {
         targetWorkshopId: targetWorkshopId || null,
       });
 
-      clearDraft();
+      resetDraft();
       sessionStorage.setItem("job-posted-success", "true");
 
       router.replace("/customer/dashboard?success=posted");
