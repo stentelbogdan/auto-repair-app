@@ -1,5 +1,12 @@
 import { supabase } from "@/lib/supabase/client";
-import type { StructuredServiceDetails } from "@/lib/supabase/repair-requests";
+import type {
+  RepairServiceDetails,
+  StructuredServiceDetails,
+} from "@/lib/supabase/repair-requests";
+import type {
+  MechanicalServiceDetails,
+} from "@/lib/mechanical/mechanical-service-details";
+import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import {
   prepareImageForUpload,
@@ -22,7 +29,8 @@ export type EditableRepairRequest = {
   city: string;
   license_plate: string | null;
   damage_type: string;
-  service_details: StructuredServiceDetails | null;
+  service_details: RepairServiceDetails | null;
+  service_type: "bodywork" | "mechanical" | null;
   description: string | null;
   images: EditableRepairImage[] | null;
   status: string;
@@ -45,14 +53,24 @@ function logPreparedImage(preparedImage: PreparedImage) {
   );
 }
 
-export type UpdateEditableRepairRequestInput = {
+type UpdateEditableRepairRequestBase = {
   requestId: string;
   userId: string;
   licensePlate: string;
   description: string;
-  serviceDetails: StructuredServiceDetails;
   images: EditableRepairImage[];
 };
+
+export type UpdateEditableRepairRequestInput =
+  | (UpdateEditableRepairRequestBase & {
+      serviceType: "bodywork";
+      serviceDetails: StructuredServiceDetails;
+    })
+  | (UpdateEditableRepairRequestBase & {
+      serviceType: "mechanical";
+      serviceDetails: MechanicalServiceDetails;
+      damageType: MechanicalCategoryId;
+    });
 
 export async function getEditableRepairRequest(
   requestId: string,
@@ -61,7 +79,7 @@ export async function getEditableRepairRequest(
   const { data: request, error: requestError } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, description, images, status, accepted_offer_id",
+      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, description, images, status, accepted_offer_id",
     )
     .eq("id", requestId)
     .eq("user_id", userId)
@@ -155,6 +173,9 @@ export async function updateEditableRepairRequest(
       service_details: input.serviceDetails,
       description: input.description,
       images: input.images,
+      ...(input.serviceType === "mechanical"
+        ? { damage_type: input.damageType }
+        : {}),
     })
     .eq("id", input.requestId)
     .eq("user_id", input.userId);

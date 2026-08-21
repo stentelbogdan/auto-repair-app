@@ -32,6 +32,10 @@ export type MechanicalServiceDetailGroup = {
   symptomLabels: string[];
 };
 
+export type MechanicalSymptomIdsByCategory = Partial<
+  Record<MechanicalCategoryId, string[]>
+>;
+
 function isStringArray(value: unknown): value is string[] {
   return (
     Array.isArray(value) &&
@@ -106,13 +110,13 @@ export function normalizeMechanicalServiceDetails(
   };
 }
 
-export function getMechanicalServiceDetailGroups(
+export function getMechanicalSymptomIdsByCategory(
   value: unknown,
-): MechanicalServiceDetailGroup[] {
+): MechanicalSymptomIdsByCategory {
   const normalized = normalizeMechanicalServiceDetails(value);
 
   if (!normalized) {
-    return [];
+    return {};
   }
 
   const selectedSymptomsByCategory = new Map<
@@ -130,19 +134,71 @@ export function getMechanicalServiceDetailGroups(
     selectedSymptomsByCategory.set(selection.category, selectedSymptoms);
   }
 
-  return MECHANICAL_CATEGORIES.flatMap((category) => {
+  const result: MechanicalSymptomIdsByCategory = {};
+
+  for (const category of MECHANICAL_CATEGORIES) {
     const selectedSymptoms = selectedSymptomsByCategory.get(category.id);
+
+    if (!selectedSymptoms) {
+      continue;
+    }
+
+    result[category.id] = category.symptoms
+      .filter((symptom) => selectedSymptoms.has(symptom.id))
+      .map((symptom) => symptom.id);
+  }
+
+  return result;
+}
+
+export function buildMechanicalServiceDetails(
+  symptomIdsByCategory: MechanicalSymptomIdsByCategory,
+): MechanicalServiceDetails {
+  const selections: MechanicalCategorySelection[] = [];
+
+  for (const category of MECHANICAL_CATEGORIES) {
+    const selectedSymptoms = new Set(
+      symptomIdsByCategory[category.id] ?? [],
+    );
+    const validSymptomIds = category.symptoms
+      .filter((symptom) => selectedSymptoms.has(symptom.id))
+      .map((symptom) => symptom.id);
+
+    if (validSymptomIds.length > 0) {
+      selections.push({
+        category: category.id,
+        symptomIds: validSymptomIds,
+      });
+    }
+  }
+
+  return {
+    version: 2,
+    kind: "mechanical",
+    selections,
+  };
+}
+
+export function getMechanicalServiceDetailGroups(
+  value: unknown,
+): MechanicalServiceDetailGroup[] {
+  const symptomIdsByCategory = getMechanicalSymptomIdsByCategory(value);
+
+  return MECHANICAL_CATEGORIES.flatMap((category) => {
+    const selectedSymptoms = symptomIdsByCategory[category.id];
 
     if (!selectedSymptoms) {
       return [];
     }
+
+    const selectedSymptomIds = new Set(selectedSymptoms);
 
     return [
       {
         category: category.id,
         categoryLabel: category.label,
         symptomLabels: category.symptoms
-          .filter((symptom) => selectedSymptoms.has(symptom.id))
+          .filter((symptom) => selectedSymptomIds.has(symptom.id))
           .map((symptom) => symptom.label),
       },
     ];

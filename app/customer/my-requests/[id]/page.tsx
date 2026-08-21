@@ -18,6 +18,19 @@ import {
   type EditableRepairRequest,
 } from "@/lib/supabase/edit-repair-request";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
+import { Check } from "lucide-react";
+import { isStructuredServiceDetails } from "@/lib/car-damage";
+import {
+  MECHANICAL_CATEGORIES,
+  isMechanicalCategoryId,
+  type MechanicalCategoryId,
+} from "@/lib/mechanical/mechanical-categories";
+import {
+  buildMechanicalServiceDetails,
+  getMechanicalSymptomIdsByCategory,
+  normalizeMechanicalServiceDetails,
+  type MechanicalSymptomIdsByCategory,
+} from "@/lib/mechanical/mechanical-service-details";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -52,6 +65,12 @@ export default function EditMyRequestPage() {
   const [description, setDescription] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
+  const [mechanicalSymptomsByCategory, setMechanicalSymptomsByCategory] =
+    useState<MechanicalSymptomIdsByCategory>({});
+  const [activeMechanicalCategory, setActiveMechanicalCategory] =
+    useState<MechanicalCategoryId | null>(null);
+  const [expandedMechanicalCategory, setExpandedMechanicalCategory] =
+    useState<MechanicalCategoryId | null>(null);
   const [images, setImages] = useState<EditableRepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,6 +123,44 @@ export default function EditMyRequestPage() {
         ? currentDetails.filter((item) => item !== detail)
         : [...currentDetails, detail],
     );
+  };
+
+  const toggleMechanicalCategory = (category: MechanicalCategoryId) => {
+    if (canEdit) {
+      setActiveMechanicalCategory(category);
+    }
+
+    setExpandedMechanicalCategory((current) =>
+      current === category ? null : category,
+    );
+  };
+
+  const toggleMechanicalSymptom = (
+    categoryId: MechanicalCategoryId,
+    symptomId: string,
+  ) => {
+    if (!canEdit) return;
+
+    const category = MECHANICAL_CATEGORIES.find(
+      (item) => item.id === categoryId,
+    );
+
+    if (!category?.symptoms.some((symptom) => symptom.id === symptomId)) {
+      return;
+    }
+
+    setActiveMechanicalCategory(categoryId);
+    setMechanicalSymptomsByCategory((current) => {
+      const selectedSymptoms = current[categoryId] ?? [];
+      const nextSymptoms = selectedSymptoms.includes(symptomId)
+        ? selectedSymptoms.filter((id) => id !== symptomId)
+        : [...selectedSymptoms, symptomId];
+
+      return {
+        ...current,
+        [categoryId]: nextSymptoms,
+      };
+    });
   };
 
   useEffect(() => {
@@ -162,9 +219,30 @@ export default function EditMyRequestPage() {
           Array.isArray(loadedRequest.images) ? loadedRequest.images : [],
         );
 
+        if (loadedRequest.service_type === "mechanical") {
+          const normalizedDetails = normalizeMechanicalServiceDetails(
+            loadedRequest.service_details,
+          );
+          const fallbackCategory = isMechanicalCategoryId(
+            loadedRequest.damage_type,
+          )
+            ? loadedRequest.damage_type
+            : null;
+          const primaryCategory =
+            normalizedDetails?.selections[0]?.category ?? fallbackCategory;
+
+          setMechanicalSymptomsByCategory(
+            getMechanicalSymptomIdsByCategory(loadedRequest.service_details),
+          );
+          setActiveMechanicalCategory(primaryCategory);
+          setExpandedMechanicalCategory(primaryCategory);
+          setServiceDetails([]);
+          return;
+        }
+
         const structuredDetails = loadedRequest.service_details;
 
-        if (!structuredDetails) {
+        if (!isStructuredServiceDetails(structuredDetails)) {
           setServiceDetails([]);
           return;
         }
@@ -202,7 +280,7 @@ export default function EditMyRequestPage() {
   }, [requestId, router]);
 
   useEffect(() => {
-    if (!request) {
+    if (!request || request.service_type === "mechanical") {
       setIs3DReady(false);
       return;
     }
@@ -224,6 +302,23 @@ export default function EditMyRequestPage() {
   const handleSave = async () => {
     if (!request || !canEdit) return;
 
+    const isMechanicalRequest = request.service_type === "mechanical";
+    const nextMechanicalServiceDetails = isMechanicalRequest
+      ? buildMechanicalServiceDetails(mechanicalSymptomsByCategory)
+      : null;
+    const nextMechanicalDamageType = isMechanicalRequest
+      ? (nextMechanicalServiceDetails?.selections[0]?.category ??
+        activeMechanicalCategory ??
+        (isMechanicalCategoryId(request.damage_type)
+          ? request.damage_type
+          : null))
+      : null;
+
+    if (isMechanicalRequest && !nextMechanicalDamageType) {
+      alert("Selectează o categorie mecanică înainte de salvare.");
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -232,38 +327,65 @@ export default function EditMyRequestPage() {
         request.user_id,
       );
       const nextImages = [...images, ...uploadedImages];
+      let savedServiceDetails = request.service_details;
+      let savedDamageType = request.damage_type;
 
-      const selectedDamageTypes = serviceDetails
-        .filter((detail) => detail.startsWith("damage:"))
-        .map((detail) => detail.slice("damage:".length));
+      if (isMechanicalRequest) {
+        if (!nextMechanicalServiceDetails || !nextMechanicalDamageType) {
+          throw new Error("Datele mecanice nu sunt valide.");
+        }
 
-      const otherServiceOptions = serviceDetails.filter(
-        (detail) =>
-          !detail.startsWith("part:") && !detail.startsWith("damage:"),
-      );
+        await updateEditableRepairRequest({
+          serviceType: "mechanical",
+          requestId: request.id,
+          userId: request.user_id,
+          licensePlate,
+          serviceDetails: nextMechanicalServiceDetails,
+          damageType: nextMechanicalDamageType,
+          description,
+          images: nextImages,
+        });
 
-      const nextServiceDetails: StructuredServiceDetails = {
-        version: 1,
-        selectedServices: request.service_details?.selectedServices?.length
-          ? request.service_details.selectedServices
-          : [request.damage_type],
+        savedServiceDetails = nextMechanicalServiceDetails;
+        savedDamageType = nextMechanicalDamageType;
+      } else {
+        const selectedDamageTypes = serviceDetails
+          .filter((detail) => detail.startsWith("damage:"))
+          .map((detail) => detail.slice("damage:".length));
 
-        carDamage: {
-          parts: selectedCarParts,
-          damages: selectedDamageTypes,
-        },
+        const otherServiceOptions = serviceDetails.filter(
+          (detail) =>
+            !detail.startsWith("part:") && !detail.startsWith("damage:"),
+        );
+        const currentStructuredDetails = isStructuredServiceDetails(
+          request.service_details,
+        )
+          ? request.service_details
+          : null;
+        const nextBodyworkServiceDetails: StructuredServiceDetails = {
+          version: 1,
+          selectedServices: currentStructuredDetails?.selectedServices.length
+            ? currentStructuredDetails.selectedServices
+            : [request.damage_type],
+          carDamage: {
+            parts: selectedCarParts,
+            damages: selectedDamageTypes,
+          },
+          options: otherServiceOptions,
+        };
 
-        options: otherServiceOptions,
-      };
+        await updateEditableRepairRequest({
+          serviceType: "bodywork",
+          requestId: request.id,
+          userId: request.user_id,
+          licensePlate,
+          serviceDetails: nextBodyworkServiceDetails,
+          description,
+          images: nextImages,
+        });
 
-      await updateEditableRepairRequest({
-        requestId: request.id,
-        userId: request.user_id,
-        licensePlate,
-        serviceDetails: nextServiceDetails,
-        description,
-        images: nextImages,
-      });
+        savedServiceDetails = nextBodyworkServiceDetails;
+      }
 
       setImages(nextImages);
       setNewFiles([]);
@@ -272,7 +394,8 @@ export default function EditMyRequestPage() {
         currentRequest
           ? {
               ...currentRequest,
-              service_details: nextServiceDetails,
+              service_details: savedServiceDetails,
+              damage_type: savedDamageType,
               description,
               images: nextImages,
             }
@@ -348,6 +471,8 @@ export default function EditMyRequestPage() {
 
   if (!request) return null;
 
+  const isMechanicalRequest = request.service_type === "mechanical";
+
   return (
     <main className="min-h-screen bg-black px-4 pb-40 pt-6 text-white">
       <div className="mx-auto max-w-md">
@@ -361,7 +486,7 @@ export default function EditMyRequestPage() {
         </button>
 
         <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-          Editare daună
+          {isMechanicalRequest ? "Editare problemă mecanică" : "Editare daună"}
         </p>
 
         <LicensePlate plate={licensePlate} className="mt-4" />
@@ -375,52 +500,155 @@ export default function EditMyRequestPage() {
         </p>
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
-          <div>
-            <p className="text-sm font-semibold text-black/60">
-              Elemente afectate
-            </p>
-
-            {canEdit && (
-              <p className="mt-1 text-xs text-black/45">
-                Modifică elementele avariate direct pe modelul 3D.
+          {isMechanicalRequest ? (
+            <div>
+              <p className="text-sm font-semibold text-black/60">
+                Categorii și simptome
               </p>
-            )}
+              <p className="mt-1 text-xs leading-5 text-black/45">
+                Deschide fiecare categorie și modifică simptomele observate.
+              </p>
 
-            <div className="mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
-              {is3DReady ? (
-                <Car3DViewer
-                  mode={canEdit ? "selection" : "preview"}
-                  heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
-                  selectedPartIds={selectedCarParts}
-                  onSelectedPartIdsChange={handleSelectedCarPartsChange}
-                  cameraPositionOverride={[8.15, 1.9, 0.35]}
-                  cameraTargetOverride={[0.35, 0.4, 0]}
-                  cameraFovOverride={46}
-                  modelScaleOverride={canEdit ? 1.3 : 0.75}
-                  modelPositionOverride={[0.35, -0.18, 0]}
-                />
-              ) : (
-                <div className="flex h-[280px] items-center justify-center text-sm text-white/55 [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]">
-                  Se încarcă selectorul 3D...
+              <div className="mt-4 space-y-3">
+                {MECHANICAL_CATEGORIES.map((category) => {
+                  const selectedSymptoms =
+                    mechanicalSymptomsByCategory[category.id] ?? [];
+                  const isExpanded =
+                    expandedMechanicalCategory === category.id;
+                  const isActive =
+                    activeMechanicalCategory === category.id ||
+                    selectedSymptoms.length > 0;
+
+                  return (
+                    <div
+                      key={category.id}
+                      className={`overflow-hidden rounded-2xl border transition ${
+                        isActive
+                          ? "border-orange-300 bg-orange-50"
+                          : "border-black/10 bg-black/[0.03]"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleMechanicalCategory(category.id)}
+                        className="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left"
+                        aria-expanded={isExpanded}
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-sm">
+                          {category.icon}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-bold text-black">
+                            {category.label}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-black/50">
+                            {selectedSymptoms.length}{" "}
+                            {selectedSymptoms.length === 1
+                              ? "simptom selectat"
+                              : "simptome selectate"}
+                          </span>
+                        </span>
+                        <span className="text-lg text-black/35" aria-hidden="true">
+                          {isExpanded ? "−" : "+"}
+                        </span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="space-y-2 border-t border-black/10 p-3">
+                          {category.symptoms.map((symptom) => {
+                            const selected = selectedSymptoms.includes(
+                              symptom.id,
+                            );
+
+                            return (
+                              <button
+                                key={symptom.id}
+                                type="button"
+                                disabled={!canEdit}
+                                aria-pressed={selected}
+                                onClick={() =>
+                                  toggleMechanicalSymptom(
+                                    category.id,
+                                    symptom.id,
+                                  )
+                                }
+                                className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                  selected
+                                    ? "border-orange-400 bg-orange-100 text-black"
+                                    : "border-black/10 bg-white text-black/65"
+                                }`}
+                              >
+                                <span>{symptom.label}</span>
+                                <span
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
+                                    selected
+                                      ? "border-orange-500 bg-orange-500 text-white"
+                                      : "border-black/15 text-transparent"
+                                  }`}
+                                  aria-hidden="true"
+                                >
+                                  <Check size={14} strokeWidth={3} />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <p className="text-sm font-semibold text-black/60">
+                  Elemente afectate
+                </p>
+
+                {canEdit && (
+                  <p className="mt-1 text-xs text-black/45">
+                    Modifică elementele avariate direct pe modelul 3D.
+                  </p>
+                )}
+
+                <div className="mt-4 overflow-hidden rounded-[28px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028] shadow-[0_18px_45px_rgba(0,0,0,0.18)]">
+                  {is3DReady ? (
+                    <Car3DViewer
+                      mode={canEdit ? "selection" : "preview"}
+                      heightClassName="h-[280px] [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]"
+                      selectedPartIds={selectedCarParts}
+                      onSelectedPartIdsChange={handleSelectedCarPartsChange}
+                      cameraPositionOverride={[8.15, 1.9, 0.35]}
+                      cameraTargetOverride={[0.35, 0.4, 0]}
+                      cameraFovOverride={46}
+                      modelScaleOverride={canEdit ? 1.3 : 0.75}
+                      modelPositionOverride={[0.35, -0.18, 0]}
+                    />
+                  ) : (
+                    <div className="flex h-[280px] items-center justify-center text-sm text-white/55 [@media(min-height:700px)]:h-[clamp(300px,34svh,360px)]">
+                      Se încarcă selectorul 3D...
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {damageOptionGroups.map((group) => (
-            <div
-              key={group.title}
-              className="mt-5 rounded-[22px] border border-orange-200 bg-orange-50 py-4"
-            >
-              <ServiceOptionGroup
-                title={group.title}
-                description={group.description}
-                options={group.options}
-                selectedValues={serviceDetails}
-                onToggle={toggleServiceDetail}
-              />
-            </div>
-          ))}
+              {damageOptionGroups.map((group) => (
+                <div
+                  key={group.title}
+                  className="mt-5 rounded-[22px] border border-orange-200 bg-orange-50 py-4"
+                >
+                  <ServiceOptionGroup
+                    title={group.title}
+                    description={group.description}
+                    options={group.options}
+                    selectedValues={serviceDetails}
+                    onToggle={toggleServiceDetail}
+                  />
+                </div>
+              ))}
+            </>
+          )}
 
           <div className="my-6 h-px bg-black/10" />
           <label className="text-sm font-semibold text-black/60">
