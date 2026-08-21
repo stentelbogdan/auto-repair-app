@@ -2,12 +2,19 @@ import type {
   RepairServiceDetails,
   StructuredServiceDetails,
 } from "@/lib/supabase/repair-requests";
+import {
+  isMechanicalServiceDetails,
+} from "@/lib/mechanical/mechanical-service-details";
 import { getDetailedDamageTypeLabel } from "@/lib/displayLabels";
 
 export function isStructuredServiceDetails(
   serviceDetails: RepairServiceDetails | null | undefined,
 ): serviceDetails is StructuredServiceDetails {
-  if (!serviceDetails || Array.isArray(serviceDetails)) {
+  if (
+    !serviceDetails ||
+    Array.isArray(serviceDetails) ||
+    isMechanicalServiceDetails(serviceDetails)
+  ) {
     return false;
   }
 

@@ -25,6 +25,9 @@ import {
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
 import { MECHANICAL_CATEGORIES } from "@/lib/mechanical/mechanical-categories";
+import type {
+  MechanicalServiceDetails,
+} from "@/lib/mechanical/mechanical-service-details";
 import { useMechanicalDraft } from "./MechanicalDraftProvider";
 
 type StoredImage = {
@@ -178,6 +181,27 @@ function PostJobContent() {
         return;
       }
 
+      const activeCategory = MECHANICAL_CATEGORIES.find(
+        (category) => category.id === damageType,
+      );
+
+      if (!activeCategory) {
+        alert("Categoria selectată nu este validă.");
+        return;
+      }
+
+      const selectedSymptomIds = new Set(
+        symptomIdsByCategory[damageType] ?? [],
+      );
+      const mechanicalServiceDetails: MechanicalServiceDetails = {
+        version: 1,
+        kind: "mechanical",
+        category: damageType,
+        symptomIds: activeCategory.symptoms
+          .filter((symptom) => selectedSymptomIds.has(symptom.id))
+          .map((symptom) => symptom.id),
+      };
+
       setIsSubmitting(true);
 
       const preparedImages: Array<{
@@ -216,6 +240,7 @@ function PostJobContent() {
         city,
         licensePlate,
         damageType,
+        serviceDetails: mechanicalServiceDetails,
         description: trimmedDescription,
         serviceType: "mechanical",
         images: storedImages,

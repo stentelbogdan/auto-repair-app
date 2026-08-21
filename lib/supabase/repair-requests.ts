@@ -1,4 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
+import type {
+  MechanicalServiceDetails,
+} from "@/lib/mechanical/mechanical-service-details";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 
 export type StructuredServiceDetails = {
@@ -14,7 +17,10 @@ export type StructuredServiceDetails = {
   options: string[];
 };
 
-export type RepairServiceDetails = string[] | StructuredServiceDetails;
+export type RepairServiceDetails =
+  | string[]
+  | StructuredServiceDetails
+  | MechanicalServiceDetails;
 
 export type RepairRequestRow = {
   id: string;
