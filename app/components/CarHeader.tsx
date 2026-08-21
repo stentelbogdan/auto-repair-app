@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import ImageGallery from "@/app/components/ImageGallery";
 import LicensePlate from "@/app/components/LicensePlate";
+import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
 import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
 
 type CarImage = {
@@ -56,36 +57,12 @@ export default function CarHeader({
 
   const [showAllParts, setShowAllParts] = useState(false);
   const [showAllDamages, setShowAllDamages] = useState(false);
-  const [showAllMechanicalDetails, setShowAllMechanicalDetails] =
-    useState(false);
+  const [expandedMechanicalCategories, setExpandedMechanicalCategories] =
+    useState<Partial<Record<MechanicalCategoryId, boolean>>>({});
 
   const visibleParts = showAllParts ? affectedParts : affectedParts.slice(0, 3);
 
   const visibleDamages = showAllDamages ? damageTypes : damageTypes.slice(0, 2);
-
-  const previewMechanicalDetails = mechanicalDetails
-    .slice(0, 2)
-    .map((group) => ({
-        ...group,
-        symptomLabels: group.symptomLabels.slice(0, 2),
-      }));
-  const mechanicalDetailsExpanded =
-    forceShowAllMechanicalDetails || showAllMechanicalDetails;
-  const visibleMechanicalDetails = mechanicalDetailsExpanded
-    ? mechanicalDetails
-    : previewMechanicalDetails;
-  const totalMechanicalSymptoms = mechanicalDetails.reduce(
-    (total, group) => total + group.symptomLabels.length,
-    0,
-  );
-  const previewMechanicalSymptoms = previewMechanicalDetails.reduce(
-    (total, group) => total + group.symptomLabels.length,
-    0,
-  );
-  const hiddenMechanicalSymptoms = Math.max(
-    0,
-    totalMechanicalSymptoms - previewMechanicalSymptoms,
-  );
 
   const imageClassName = isLarge ? "h-[150px] w-[150px]" : "h-20 w-20";
   const wrapperClassName = isLarge
@@ -301,43 +278,59 @@ export default function CarHeader({
 
         {mechanicalDetails.length > 0 && (
           <div className="mt-4 space-y-3">
-            {visibleMechanicalDetails.map((group) => (
-              <div key={group.category}>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
-                  {group.categoryLabel}
-                </p>
+            {mechanicalDetails.map((group) => {
+              const isExpanded =
+                forceShowAllMechanicalDetails ||
+                Boolean(expandedMechanicalCategories[group.category]);
+              const visibleSymptoms = isExpanded
+                ? group.symptomLabels
+                : group.symptomLabels.slice(0, 2);
+              const hiddenSymptoms = Math.max(
+                0,
+                group.symptomLabels.length - visibleSymptoms.length,
+              );
 
-                {group.symptomLabels.length > 0 && (
-                  <div className="mt-1.5 space-y-1">
-                    {group.symptomLabels.map((symptom) => (
-                      <p
-                        key={symptom}
-                        className="text-xs font-semibold leading-snug text-black/70"
+              return (
+                <div key={group.category}>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                    {group.categoryLabel}
+                  </p>
+
+                  {visibleSymptoms.length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                      {visibleSymptoms.map((symptom) => (
+                        <p
+                          key={symptom}
+                          className="text-xs font-semibold leading-snug text-black/70"
+                        >
+                          • {symptom}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {!forceShowAllMechanicalDetails &&
+                    group.symptomLabels.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setExpandedMechanicalCategories((current) => ({
+                            ...current,
+                            [group.category]: !current[group.category],
+                          }));
+                        }}
+                        className="mt-1 text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                        aria-expanded={isExpanded}
                       >
-                        • {symptom}
-                      </p>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {!forceShowAllMechanicalDetails &&
-              hiddenMechanicalSymptoms > 0 && (
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setShowAllMechanicalDetails((current) => !current);
-                  }}
-                  className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
-                  aria-expanded={showAllMechanicalDetails}
-                >
-                  {showAllMechanicalDetails
-                    ? "Arată mai puține"
-                    : `+${hiddenMechanicalSymptoms}`}
-                </button>
-              )}
+                        {isExpanded
+                          ? "Arată mai puține"
+                          : `+${hiddenSymptoms}`}
+                      </button>
+                    )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
