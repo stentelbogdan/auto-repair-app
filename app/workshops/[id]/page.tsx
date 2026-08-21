@@ -59,10 +59,6 @@ export default function WorkshopRequestDetailsPage() {
 
   const loadRequest = useEffectEvent(
     async ({ silent = false }: { silent?: boolean } = {}) => {
-      if (silent && process.env.NODE_ENV === "development") {
-        console.log("[DETAIL-RT] silent reload start", id);
-      }
-
       if (!silent) {
         setLoading(true);
       }
@@ -96,14 +92,6 @@ export default function WorkshopRequestDetailsPage() {
           .eq("id", id)
           .single<RepairRequestRow>();
 
-        if (silent && process.env.NODE_ENV === "development") {
-          console.log("[DETAIL-RT] silent reload result", {
-            id,
-            loadedRequestId: data?.id ?? null,
-            description: data?.description ?? null,
-          });
-        }
-
         if (error || !data) {
           if (!silent) {
             setRequest(null);
@@ -127,15 +115,6 @@ export default function WorkshopRequestDetailsPage() {
       }
     },
   );
-
-  const logRealtimeEffect = useEffectEvent(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("[DETAIL-RT] effect", {
-        routeId: id,
-        requestId: request?.id ?? null,
-      });
-    }
-  });
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
@@ -165,7 +144,6 @@ export default function WorkshopRequestDetailsPage() {
   }, [id, router]);
 
   useEffect(() => {
-    logRealtimeEffect();
     let hasSubscribed = false;
 
     const channel = supabase
@@ -178,32 +156,11 @@ export default function WorkshopRequestDetailsPage() {
           table: "repair_requests",
           filter: `id=eq.${id}`,
         },
-        (payload) => {
-          if (process.env.NODE_ENV === "development") {
-            console.log("[DETAIL-RT] UPDATE received", {
-              routeId: id,
-              payloadNewId:
-                typeof payload.new?.id === "string" ? payload.new.id : null,
-              payload: {
-                schema: payload.schema,
-                table: payload.table,
-                eventType: payload.eventType,
-                commitTimestamp: payload.commit_timestamp,
-              },
-            });
-          }
-
+        () => {
           void loadRequest({ silent: true });
         },
       )
-      .subscribe((status, error) => {
-        if (process.env.NODE_ENV === "development") {
-          console.log("[DETAIL-RT] status", {
-            status,
-            error: error?.message ?? null,
-          });
-        }
-
+      .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           if (hasSubscribed) {
             void loadRequest({ silent: true });
@@ -214,13 +171,6 @@ export default function WorkshopRequestDetailsPage() {
       });
 
     return () => {
-      if (process.env.NODE_ENV === "development") {
-        console.log("[DETAIL-RT] cleanup", {
-          routeId: id,
-          channel: `workshop-request-details-${id}`,
-        });
-      }
-
       void supabase.removeChannel(channel);
     };
   }, [id]);
