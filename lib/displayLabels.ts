@@ -107,6 +107,12 @@ export function getServiceTypeLabel(value?: string | null) {
   return serviceTypeLabels[value] || fallbackLabel(value);
 }
 
+export function getRequestTypeBadgeLabel(serviceType?: string | null) {
+  return serviceType === "mechanical"
+    ? "Problemă mecanică"
+    : "Daună estetică";
+}
+
 export function getStatusLabel(value?: string | null) {
   if (!value) return "";
   return statusLabels[value] || fallbackLabel(value);

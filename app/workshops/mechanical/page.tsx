@@ -9,7 +9,7 @@ import {
 } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
-import { getMechanicalCategory } from "@/lib/mechanical/mechanical-categories";
+import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type WorkshopRequest = {
@@ -35,14 +35,6 @@ type WorkshopRequest = {
 type ProfileRow = {
   role: string[] | null;
 };
-
-function getServiceMeta(value: string) {
-  const category = getMechanicalCategory(value);
-
-  return category
-    ? { label: category.label, icon: category.icon }
-    : { label: "Problemă mecanică", icon: "🔧" };
-}
 
 const filters = [
   { id: "all", label: "Toate", icon: "📋" },
@@ -308,7 +300,6 @@ export default function WorkshopsPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {filteredRequests.map((request) => {
               const isAcceptata = request.status === "matched";
-              const service = getServiceMeta(request.damageType);
               const mechanicalDetails = getMechanicalServiceDetailGroups(
                 request.serviceDetails,
               );
@@ -334,7 +325,7 @@ export default function WorkshopsPage() {
                         color: isAcceptata ? "green" : "yellow",
                       },
                       {
-                        text: service.label,
+                        text: getRequestTypeBadgeLabel("mechanical"),
                         color: "orange",
                       },
                       {

@@ -11,6 +11,7 @@ import {
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
+import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 
 type WorkshopRequest = {
   id: string;
@@ -36,31 +37,6 @@ type WorkshopRequest = {
 type ProfileRow = {
   role: string[] | null;
 };
-
-const serviceMeta: Record<string, { label: string; icon: string }> = {
-  scratch: { label: "Reparație daună", icon: "🚗" },
-  dent: { label: "Îndoitură", icon: "🔨" },
-  bumper: { label: "Bară avariată", icon: "🚘" },
-  paint: { label: "Problemă vopsea", icon: "🎨" },
-  cracked_part: { label: "Element crăpat", icon: "🧩" },
-  other: { label: "Altă daună", icon: "🔧" },
-
-  detailing_interior: { label: "Detailing interior", icon: "✨" },
-  detailing_exterior: { label: "Detailing exterior", icon: "🧽" },
-  polish: { label: "Polish profesional", icon: "💎" },
-  ceramic_coating: { label: "Ceramic coating", icon: "🛡️" },
-  ppf: { label: "PPF", icon: "🧊" },
-  wrap: { label: "Colantări auto", icon: "🎨" },
-  window_tint: { label: "Folii geamuri", icon: "🕶️" },
-  dechroming: { label: "Dechroming", icon: "⚫" },
-  wheel_refurbishment: { label: "Recondiționare jante", icon: "🛞" },
-  smart_repair: { label: "Smart Repair", icon: "🔧" },
-  pdr: { label: "PDR", icon: "🔨" },
-};
-
-function getServiceMeta(value: string) {
-  return serviceMeta[value] || { label: value, icon: "🔧" };
-}
 
 const filters = [
   { id: "all", label: "Toate", icon: "📋" },
@@ -338,7 +314,6 @@ export default function WorkshopsPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {filteredRequests.map((request) => {
               const isAcceptata = request.status === "matched";
-              const service = getServiceMeta(request.damageType);
 
               const affectedPartLabels = getAffectedPartLabels(
                 request.serviceDetails,
@@ -370,7 +345,7 @@ export default function WorkshopsPage() {
                         color: isAcceptata ? "green" : "yellow",
                       },
                       {
-                        text: service.label,
+                        text: getRequestTypeBadgeLabel("bodywork"),
                         color: "orange",
                       },
                       {

@@ -48,7 +48,7 @@ export default function CarHeader({
   affectedParts = [],
   damageTypes = [],
   mechanicalDetails = [],
-  showAllMechanicalDetails = false,
+  showAllMechanicalDetails: forceShowAllMechanicalDetails = false,
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
@@ -56,28 +56,35 @@ export default function CarHeader({
 
   const [showAllParts, setShowAllParts] = useState(false);
   const [showAllDamages, setShowAllDamages] = useState(false);
+  const [showAllMechanicalDetails, setShowAllMechanicalDetails] =
+    useState(false);
 
   const visibleParts = showAllParts ? affectedParts : affectedParts.slice(0, 3);
 
   const visibleDamages = showAllDamages ? damageTypes : damageTypes.slice(0, 2);
 
-  const visibleMechanicalDetails = showAllMechanicalDetails
-    ? mechanicalDetails
-    : mechanicalDetails.slice(0, 1).map((group) => ({
+  const previewMechanicalDetails = mechanicalDetails
+    .slice(0, 2)
+    .map((group) => ({
         ...group,
         symptomLabels: group.symptomLabels.slice(0, 2),
       }));
+  const mechanicalDetailsExpanded =
+    forceShowAllMechanicalDetails || showAllMechanicalDetails;
+  const visibleMechanicalDetails = mechanicalDetailsExpanded
+    ? mechanicalDetails
+    : previewMechanicalDetails;
   const totalMechanicalSymptoms = mechanicalDetails.reduce(
     (total, group) => total + group.symptomLabels.length,
     0,
   );
-  const visibleMechanicalSymptoms = visibleMechanicalDetails.reduce(
+  const previewMechanicalSymptoms = previewMechanicalDetails.reduce(
     (total, group) => total + group.symptomLabels.length,
     0,
   );
   const hiddenMechanicalSymptoms = Math.max(
     0,
-    totalMechanicalSymptoms - visibleMechanicalSymptoms,
+    totalMechanicalSymptoms - previewMechanicalSymptoms,
   );
 
   const imageClassName = isLarge ? "h-[150px] w-[150px]" : "h-20 w-20";
@@ -315,11 +322,22 @@ export default function CarHeader({
               </div>
             ))}
 
-            {!showAllMechanicalDetails && hiddenMechanicalSymptoms > 0 && (
-              <p className="text-xs font-bold text-orange-600">
-                +{hiddenMechanicalSymptoms}
-              </p>
-            )}
+            {!forceShowAllMechanicalDetails &&
+              hiddenMechanicalSymptoms > 0 && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setShowAllMechanicalDetails((current) => !current);
+                  }}
+                  className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                  aria-expanded={showAllMechanicalDetails}
+                >
+                  {showAllMechanicalDetails
+                    ? "Arată mai puține"
+                    : `+${hiddenMechanicalSymptoms}`}
+                </button>
+              )}
           </div>
         )}
       </div>
