@@ -183,6 +183,8 @@ export default function WorkshopsPage() {
       return;
     }
 
+    let hasSubscribed = false;
+
     const channel = supabase
       .channel("workshop-mechanical-repair-request-updates")
       .on(
@@ -196,7 +198,19 @@ export default function WorkshopsPage() {
           refreshRequestsFromRealtime();
         },
       )
-      .subscribe();
+      .subscribe((status, error) => {
+        if (process.env.NODE_ENV === "development" && error) {
+          console.error("Mechanical requests Realtime error:", status, error);
+        }
+
+        if (status === "SUBSCRIBED") {
+          if (hasSubscribed) {
+            refreshRequestsFromRealtime();
+          }
+
+          hasSubscribed = true;
+        }
+      });
 
     return () => {
       void supabase.removeChannel(channel);
