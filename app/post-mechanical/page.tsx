@@ -26,6 +26,7 @@ import {
 } from "@/lib/images/prepare-image-for-upload";
 import { MECHANICAL_CATEGORIES } from "@/lib/mechanical/mechanical-categories";
 import type {
+  MechanicalCategorySelection,
   MechanicalServiceDetails,
 } from "@/lib/mechanical/mechanical-service-details";
 import { useMechanicalDraft } from "./MechanicalDraftProvider";
@@ -190,17 +191,30 @@ function PostJobContent() {
         return;
       }
 
-      const selectedSymptomIds = new Set(
-        symptomIdsByCategory[damageType] ?? [],
-      );
-      const mechanicalServiceDetails: MechanicalServiceDetails = {
-        version: 1,
-        kind: "mechanical",
-        category: damageType,
-        symptomIds: activeCategory.symptoms
+      const selections: MechanicalCategorySelection[] = [];
+
+      for (const category of MECHANICAL_CATEGORIES) {
+        const selectedSymptomIds = new Set(
+          symptomIdsByCategory[category.id] ?? [],
+        );
+        const validSymptomIds = category.symptoms
           .filter((symptom) => selectedSymptomIds.has(symptom.id))
-          .map((symptom) => symptom.id),
+          .map((symptom) => symptom.id);
+
+        if (validSymptomIds.length > 0) {
+          selections.push({
+            category: category.id,
+            symptomIds: validSymptomIds,
+          });
+        }
+      }
+
+      const mechanicalServiceDetails: MechanicalServiceDetails = {
+        version: 2,
+        kind: "mechanical",
+        selections,
       };
+      const primaryDamageType = selections[0]?.category ?? damageType;
 
       setIsSubmitting(true);
 
@@ -239,7 +253,7 @@ function PostJobContent() {
         carYear,
         city,
         licensePlate,
-        damageType,
+        damageType: primaryDamageType,
         serviceDetails: mechanicalServiceDetails,
         description: trimmedDescription,
         serviceType: "mechanical",
