@@ -9,6 +9,7 @@ import { createRepairOffer } from "@/lib/supabase/repair-offers";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import { getDamageTypeLabel } from "@/lib/displayLabels";
+import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type RepairImage = {
   name?: string;
@@ -30,6 +31,7 @@ type RepairRequestRow = {
   license_plate: string | null;
   damage_type: string;
   service_details: RepairServiceDetails | null;
+  service_type: "bodywork" | "mechanical" | null;
   description: string | null;
   images: RepairImage[];
   status: string;
@@ -104,7 +106,7 @@ export default function WorkshopRequestDetailsPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, description, images, status",
+            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, description, images, status",
           )
           .eq("id", id)
           .single<RepairRequestRow>();
@@ -181,8 +183,12 @@ export default function WorkshopRequestDetailsPage() {
       });
 
       router.replace("/workshops/dashboard?offerSent=1");
-    } catch (error: any) {
-      alert(error?.message || "Nu am putut trimite oferta.");
+    } catch (error: unknown) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Nu am putut trimite oferta.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -209,6 +215,11 @@ export default function WorkshopRequestDetailsPage() {
   const affectedPartLabels = getAffectedPartLabels(request.service_details);
 
   const damageTypeLabels = getDamageTypeLabels(request.service_details);
+
+  const mechanicalDetails =
+    request.service_type === "mechanical"
+      ? getMechanicalServiceDetailGroups(request.service_details)
+      : [];
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
@@ -246,6 +257,8 @@ export default function WorkshopRequestDetailsPage() {
             variant="listLarge"
             affectedParts={affectedPartLabels}
             damageTypes={damageTypeLabels}
+            mechanicalDetails={mechanicalDetails}
+            showAllMechanicalDetails
             details={[
               {
                 text: isClosed ? "Închisă" : "Deschisă",

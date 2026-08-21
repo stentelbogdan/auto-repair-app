@@ -9,6 +9,8 @@ import {
 } from "@/lib/supabase/repair-requests";
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
+import { getMechanicalCategory } from "@/lib/mechanical/mechanical-categories";
+import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type WorkshopRequest = {
   id: string;
@@ -18,6 +20,7 @@ type WorkshopRequest = {
   city: string;
   licensePlate: string | null;
   damageType: string;
+  serviceDetails: RepairRequestRow["service_details"];
   description: string;
   images: {
     name: string;
@@ -33,21 +36,12 @@ type ProfileRow = {
   role: string[] | null;
 };
 
-const serviceMeta: Record<string, { label: string; icon: string }> = {
-  engine: { label: "Motor", icon: "🚗" },
-  gearbox: { label: "Cutie viteze", icon: "⚙️" },
-  brakes: { label: "Frâne", icon: "🛑" },
-  suspension: { label: "Suspensie", icon: "🚙" },
-  steering: { label: "Direcție", icon: "🛞" },
-  electrical: { label: "Electrică", icon: "🔋" },
-  ac: { label: "Aer condiționat", icon: "❄️" },
-  diagnostic: { label: "Diagnoză", icon: "💻" },
-  service: { label: "Revizie", icon: "🛠️" },
-  other: { label: "Altă problemă", icon: "❓" },
-};
-
 function getServiceMeta(value: string) {
-  return serviceMeta[value] || { label: value, icon: "🔧" };
+  const category = getMechanicalCategory(value);
+
+  return category
+    ? { label: category.label, icon: category.icon }
+    : { label: "Problemă mecanică", icon: "🔧" };
 }
 
 const filters = [
@@ -166,6 +160,7 @@ export default function WorkshopsPage() {
           city: req.city || "-",
           licensePlate: req.license_plate,
           damageType: req.damage_type || "other",
+          serviceDetails: req.service_details,
           description: req.description || "No description provided.",
           images: Array.isArray(req.images) ? req.images : [],
           status: req.status || "open",
@@ -314,6 +309,9 @@ export default function WorkshopsPage() {
             {filteredRequests.map((request) => {
               const isAcceptata = request.status === "matched";
               const service = getServiceMeta(request.damageType);
+              const mechanicalDetails = getMechanicalServiceDetailGroups(
+                request.serviceDetails,
+              );
 
               return (
                 <div
@@ -329,6 +327,7 @@ export default function WorkshopsPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    mechanicalDetails={mechanicalDetails}
                     details={[
                       {
                         text: isAcceptata ? "Acceptată" : "Deschisă",

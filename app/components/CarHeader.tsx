@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import ImageGallery from "@/app/components/ImageGallery";
 import LicensePlate from "@/app/components/LicensePlate";
+import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
 
 type CarImage = {
   name?: string;
@@ -30,6 +31,8 @@ type CarHeaderProps = {
   details?: CarHeaderDetail[];
   affectedParts?: string[];
   damageTypes?: string[];
+  mechanicalDetails?: MechanicalServiceDetailGroup[];
+  showAllMechanicalDetails?: boolean;
 };
 
 export default function CarHeader({
@@ -44,6 +47,8 @@ export default function CarHeader({
   details = [],
   affectedParts = [],
   damageTypes = [],
+  mechanicalDetails = [],
+  showAllMechanicalDetails = false,
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
@@ -55,6 +60,25 @@ export default function CarHeader({
   const visibleParts = showAllParts ? affectedParts : affectedParts.slice(0, 3);
 
   const visibleDamages = showAllDamages ? damageTypes : damageTypes.slice(0, 2);
+
+  const visibleMechanicalDetails = showAllMechanicalDetails
+    ? mechanicalDetails
+    : mechanicalDetails.slice(0, 1).map((group) => ({
+        ...group,
+        symptomLabels: group.symptomLabels.slice(0, 2),
+      }));
+  const totalMechanicalSymptoms = mechanicalDetails.reduce(
+    (total, group) => total + group.symptomLabels.length,
+    0,
+  );
+  const visibleMechanicalSymptoms = visibleMechanicalDetails.reduce(
+    (total, group) => total + group.symptomLabels.length,
+    0,
+  );
+  const hiddenMechanicalSymptoms = Math.max(
+    0,
+    totalMechanicalSymptoms - visibleMechanicalSymptoms,
+  );
 
   const imageClassName = isLarge ? "h-[150px] w-[150px]" : "h-20 w-20";
   const wrapperClassName = isLarge
@@ -264,6 +288,37 @@ export default function CarHeader({
                   )}
                 </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {mechanicalDetails.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {visibleMechanicalDetails.map((group) => (
+              <div key={group.category}>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                  {group.categoryLabel}
+                </p>
+
+                {group.symptomLabels.length > 0 && (
+                  <div className="mt-1.5 space-y-1">
+                    {group.symptomLabels.map((symptom) => (
+                      <p
+                        key={symptom}
+                        className="text-xs font-semibold leading-snug text-black/70"
+                      >
+                        • {symptom}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {!showAllMechanicalDetails && hiddenMechanicalSymptoms > 0 && (
+              <p className="text-xs font-bold text-orange-600">
+                +{hiddenMechanicalSymptoms}
+              </p>
             )}
           </div>
         )}

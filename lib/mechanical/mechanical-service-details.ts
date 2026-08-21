@@ -1,4 +1,5 @@
 import {
+  MECHANICAL_CATEGORIES,
   isMechanicalCategoryId,
   type MechanicalCategoryId,
 } from "@/lib/mechanical/mechanical-categories";
@@ -24,6 +25,12 @@ export type MechanicalServiceDetails = {
 export type SupportedMechanicalServiceDetails =
   | LegacyMechanicalServiceDetails
   | MechanicalServiceDetails;
+
+export type MechanicalServiceDetailGroup = {
+  category: MechanicalCategoryId;
+  categoryLabel: string;
+  symptomLabels: string[];
+};
 
 function isStringArray(value: unknown): value is string[] {
   return (
@@ -97,4 +104,47 @@ export function normalizeMechanicalServiceDetails(
       },
     ],
   };
+}
+
+export function getMechanicalServiceDetailGroups(
+  value: unknown,
+): MechanicalServiceDetailGroup[] {
+  const normalized = normalizeMechanicalServiceDetails(value);
+
+  if (!normalized) {
+    return [];
+  }
+
+  const selectedSymptomsByCategory = new Map<
+    MechanicalCategoryId,
+    Set<string>
+  >();
+
+  for (const selection of normalized.selections) {
+    const selectedSymptoms =
+      selectedSymptomsByCategory.get(selection.category) ?? new Set<string>();
+
+    selection.symptomIds.forEach((symptomId) => {
+      selectedSymptoms.add(symptomId);
+    });
+    selectedSymptomsByCategory.set(selection.category, selectedSymptoms);
+  }
+
+  return MECHANICAL_CATEGORIES.flatMap((category) => {
+    const selectedSymptoms = selectedSymptomsByCategory.get(category.id);
+
+    if (!selectedSymptoms) {
+      return [];
+    }
+
+    return [
+      {
+        category: category.id,
+        categoryLabel: category.label,
+        symptomLabels: category.symptoms
+          .filter((symptom) => selectedSymptoms.has(symptom.id))
+          .map((symptom) => symptom.label),
+      },
+    ];
+  });
 }
