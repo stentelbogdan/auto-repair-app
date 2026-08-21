@@ -8,7 +8,7 @@ import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
-import { getDamageTypeLabel } from "@/lib/displayLabels";
+import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type RepairImage = {
@@ -265,7 +265,7 @@ export default function WorkshopRequestDetailsPage() {
                 color: isClosed ? "red" : "yellow",
               },
               {
-                text: getDamageTypeLabel(request.damage_type) || "Daună",
+                text: getRequestTypeBadgeLabel(request.service_type),
                 color: "orange",
               },
             ]}
