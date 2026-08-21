@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
@@ -57,31 +57,12 @@ export default function WorkshopRequestDetailsPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    localStorage.setItem("activeRole", "workshop");
+  const loadRequest = useEffectEvent(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
+      if (!silent) {
+        setLoading(true);
+      }
 
-    // Dacă venim din calendar, folosim direct valorile din URL.
-    if (dateFromUrl) {
-      setAvailableDate(dateFromUrl);
-    }
-
-    if (timeFromUrl) {
-      setAvailableTime(timeFromUrl);
-    }
-
-    const savedAvailability = sessionStorage.getItem(`availability-${id}`);
-
-    if (savedAvailability) {
-      const parsed = JSON.parse(savedAvailability);
-
-      setAvailableDate(parsed.date || "");
-      setAvailableTime(parsed.time || "");
-      setPrice(parsed.price || "");
-      setDays(parsed.days || "");
-      setMessage(parsed.message || "");
-    }
-
-    const loadRequest = async () => {
       try {
         const { data: authData } = await supabase.auth.getUser();
 
@@ -112,20 +93,77 @@ export default function WorkshopRequestDetailsPage() {
           .single<RepairRequestRow>();
 
         if (error || !data) {
-          setRequest(null);
+          if (!silent) {
+            setRequest(null);
+          } else if (process.env.NODE_ENV === "development") {
+            console.error("Silent repair request refresh failed.", error);
+          }
           return;
         }
 
         setRequest(data);
-      } catch {
-        setRequest(null);
+      } catch (error) {
+        if (!silent) {
+          setRequest(null);
+        } else if (process.env.NODE_ENV === "development") {
+          console.error("Silent repair request refresh failed.", error);
+        }
       } finally {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
       }
-    };
+    },
+  );
 
-    loadRequest();
+  useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
+
+    // Dacă venim din calendar, folosim direct valorile din URL.
+    if (dateFromUrl) {
+      setAvailableDate(dateFromUrl);
+    }
+
+    if (timeFromUrl) {
+      setAvailableTime(timeFromUrl);
+    }
+
+    const savedAvailability = sessionStorage.getItem(`availability-${id}`);
+
+    if (savedAvailability) {
+      const parsed = JSON.parse(savedAvailability);
+
+      setAvailableDate(parsed.date || "");
+      setAvailableTime(parsed.time || "");
+      setPrice(parsed.price || "");
+      setDays(parsed.days || "");
+      setMessage(parsed.message || "");
+    }
+
+    void loadRequest();
   }, [id, router]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`workshop-request-details-${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "repair_requests",
+          filter: `id=eq.${id}`,
+        },
+        () => {
+          void loadRequest({ silent: true });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [id]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
