@@ -57,6 +57,7 @@ export default function WorkshopRequestDetailsPage() {
   const [availableTime, setAvailableTime] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasExistingOffer, setHasExistingOffer] = useState(false);
 
   const loadRequest = useEffectEvent(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -104,6 +105,26 @@ export default function WorkshopRequestDetailsPage() {
 
         setRequest(data);
         void recordWorkshopRequestView(data.id);
+
+        const { data: existingOffer, error: existingOfferError } =
+          await supabase
+            .from("repair_offers")
+            .select("id")
+            .eq("request_id", data.id)
+            .eq("workshop_user_id", authData.user.id)
+            .limit(1)
+            .maybeSingle();
+
+        if (existingOfferError) {
+          throw existingOfferError;
+        }
+
+        const offerExists = Boolean(existingOffer);
+        setHasExistingOffer(offerExists);
+
+        if (offerExists) {
+          sessionStorage.removeItem(`availability-${data.id}`);
+        }
       } catch (error) {
         if (!silent) {
           setRequest(null);
@@ -232,6 +253,8 @@ export default function WorkshopRequestDetailsPage() {
         pickupAddress: parsedAvailability.pickupAddress || "",
       });
 
+      sessionStorage.removeItem(`availability-${id}`);
+
       router.replace("/workshops/dashboard?offerSent=1");
     } catch (error: unknown) {
       alert(
@@ -256,6 +279,31 @@ export default function WorkshopRequestDetailsPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         Dauna nu a fost găsită.
+      </main>
+    );
+  }
+
+  if (hasExistingOffer) {
+    return (
+      <main className="min-h-screen bg-black px-4 py-8 text-white">
+        <div className="mx-auto max-w-md">
+          <div className="rounded-[28px] bg-white p-6 text-center text-black shadow-xl">
+            <h1 className="text-2xl font-bold">Ai trimis deja o ofertă</h1>
+
+            <p className="mt-2 text-sm text-black/55">
+              Pentru această lucrare există deja o ofertă trimisă de service-ul
+              tău. Așteaptă răspunsul clientului.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => router.push("/workshops/my-offers")}
+              className="mt-6 rounded-full bg-black px-6 py-3 text-sm font-semibold text-white"
+            >
+              Vezi ofertele tale
+            </button>
+          </div>
+        </div>
       </main>
     );
   }

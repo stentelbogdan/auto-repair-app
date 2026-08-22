@@ -58,6 +58,9 @@ export default function WorkshopsPage() {
   const router = useRouter();
   const [requests, setRequests] = useState<WorkshopRequest[]>([]);
   const [authorized, setAuthorized] = useState(false);
+  const [currentWorkshopUserId, setCurrentWorkshopUserId] = useState<
+    string | null
+  >(null);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
@@ -90,6 +93,8 @@ export default function WorkshopsPage() {
           router.push("/");
           return;
         }
+
+        setCurrentWorkshopUserId(authData.user.id);
 
         const { data: readData, error: readError } = await supabase
           .from("repair_requests")
@@ -132,6 +137,24 @@ export default function WorkshopsPage() {
       const { data: authData } = await supabase.auth.getUser();
       const workshopUserId = authData.user?.id;
 
+      let offeredRequestIds: string[] = [];
+
+      if (workshopUserId) {
+        const { data: existingOffers, error: existingOffersError } =
+          await supabase
+            .from("repair_offers")
+            .select("request_id")
+            .eq("workshop_user_id", workshopUserId);
+
+        if (existingOffersError) {
+          console.error("Failed to load existing offers:", existingOffersError);
+        }
+
+        offeredRequestIds = (existingOffers || [])
+          .map((offer) => offer.request_id)
+          .filter(Boolean);
+      }
+
       const mechanicalRows = rows.filter((req) => {
         const requestType = req.request_type ?? "repair";
 
@@ -144,7 +167,8 @@ export default function WorkshopsPage() {
           req.service_type === "mechanical" &&
           req.status === "open" &&
           !req.accepted_offer_id &&
-          isVisibleToWorkshop
+          isVisibleToWorkshop &&
+          !offeredRequestIds.includes(req.id)
         );
       });
 
@@ -216,7 +240,7 @@ export default function WorkshopsPage() {
   };
 
   useEffect(() => {
-    if (!authorized) {
+    if (!authorized || !currentWorkshopUserId) {
       return;
     }
 
@@ -230,6 +254,18 @@ export default function WorkshopsPage() {
           event: "UPDATE",
           schema: "public",
           table: "repair_requests",
+        },
+        () => {
+          refreshRequestsFromRealtime();
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "repair_offers",
+          filter: `workshop_user_id=eq.${currentWorkshopUserId}`,
         },
         () => {
           refreshRequestsFromRealtime();
@@ -252,7 +288,7 @@ export default function WorkshopsPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [authorized]);
+  }, [authorized, currentWorkshopUserId]);
 
   if (checkingAccess) {
     return (

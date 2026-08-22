@@ -14,6 +14,7 @@ import {
   getDamageTypeLabels,
 } from "@/lib/car-damage";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type ProfileRow = {
   role: string[] | null;
@@ -33,6 +34,7 @@ type RepairRequest = {
   city: string | null;
   license_plate: string | null;
   damage_type: string | null;
+  service_type: "bodywork" | "mechanical" | null;
   service_details?: RepairServiceDetails | null;
   description: string | null;
   status?: string | null;
@@ -113,6 +115,7 @@ export default function WorkshopMyOffersPage() {
             city,
             license_plate,
             damage_type,
+            service_type,
             service_details,
             description,
             status,
@@ -142,51 +145,56 @@ export default function WorkshopMyOffersPage() {
         return;
       }
 
-      const mapped: RepairOffer[] = (data ?? []).map((row: any) => ({
-        id: String(row.id),
-        request_id: String(row.request_id),
-        workshop_user_id: String(row.workshop_user_id),
-        workshop_name: row.workshop_name || "",
-        price: row.price ?? "",
-        days: row.days ?? "",
-        message: row.message || "",
-        status: row.status || "pending",
-        created_at: String(row.created_at),
-        available_date: row.available_date ?? null,
-        available_time: row.available_time ?? null,
+      const mapped: RepairOffer[] = (data ?? []).map((row) => {
+        const request = Array.isArray(row.repair_requests)
+          ? row.repair_requests[0]
+          : row.repair_requests;
 
-        repair_requests: row.repair_requests
-          ? {
-              id: String(row.repair_requests.id),
-              car_brand: row.repair_requests.car_brand ?? null,
-              car_model: row.repair_requests.car_model ?? null,
-              car_year: row.repair_requests.car_year ?? null,
-              city: row.repair_requests.city ?? null,
-              license_plate: row.repair_requests.license_plate ?? null,
-              damage_type: row.repair_requests.damage_type ?? null,
-              service_details: row.repair_requests.service_details ?? null,
-              description: row.repair_requests.description ?? null,
-              status: row.repair_requests.status ?? null,
-              accepted_offer_id: row.repair_requests.accepted_offer_id ?? null,
-              images: Array.isArray(row.repair_requests.images)
-                ? row.repair_requests.images
-                : [],
-            }
-          : null,
+        return {
+          id: String(row.id),
+          request_id: String(row.request_id),
+          workshop_user_id: String(row.workshop_user_id),
+          workshop_name: row.workshop_name || "",
+          price: row.price ?? "",
+          days: row.days ?? "",
+          message: row.message || "",
+          status: row.status || "pending",
+          created_at: String(row.created_at),
+          available_date: row.available_date ?? null,
+          available_time: row.available_time ?? null,
 
-        repair_appointments: Array.isArray(row.repair_appointments)
-          ? row.repair_appointments.map((appointment: any) => ({
-              id: String(appointment.id),
-              offer_id: String(appointment.offer_id),
-              request_id: String(appointment.request_id),
-              appointment_date: appointment.appointment_date ?? null,
-              appointment_time: appointment.appointment_time ?? null,
-              proposed_date: appointment.proposed_date ?? null,
-              proposed_time: appointment.proposed_time ?? null,
-              status: appointment.status ?? null,
-            }))
-          : [],
-      }));
+          repair_requests: request
+            ? {
+                id: String(request.id),
+                car_brand: request.car_brand ?? null,
+                car_model: request.car_model ?? null,
+                car_year: request.car_year ?? null,
+                city: request.city ?? null,
+                license_plate: request.license_plate ?? null,
+                damage_type: request.damage_type ?? null,
+                service_type: request.service_type ?? null,
+                service_details: request.service_details ?? null,
+                description: request.description ?? null,
+                status: request.status ?? null,
+                accepted_offer_id: request.accepted_offer_id ?? null,
+                images: Array.isArray(request.images) ? request.images : [],
+              }
+            : null,
+
+          repair_appointments: Array.isArray(row.repair_appointments)
+            ? row.repair_appointments.map((appointment) => ({
+                id: String(appointment.id),
+                offer_id: String(appointment.offer_id),
+                request_id: String(appointment.request_id),
+                appointment_date: appointment.appointment_date ?? null,
+                appointment_time: appointment.appointment_time ?? null,
+                proposed_date: appointment.proposed_date ?? null,
+                proposed_time: appointment.proposed_time ?? null,
+                status: appointment.status ?? null,
+              }))
+            : [],
+        };
+      });
 
       setOffers(mapped);
     };
@@ -490,6 +498,10 @@ export default function WorkshopMyOffersPage() {
               const fallbackDamageTypeLabel = getDamageTypeLabel(
                 request?.damage_type,
               );
+              const mechanicalDetails =
+                request?.service_type === "mechanical"
+                  ? getMechanicalServiceDetailGroups(request.service_details)
+                  : [];
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -551,7 +563,12 @@ export default function WorkshopMyOffersPage() {
                     variant="listLarge"
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
-                    damageTypes={displayedDamageTypeLabels}
+                    damageTypes={
+                      mechanicalDetails.length > 0
+                        ? []
+                        : displayedDamageTypeLabels
+                    }
+                    mechanicalDetails={mechanicalDetails}
                     details={[workshopBadge]}
                   />
 
