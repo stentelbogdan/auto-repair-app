@@ -11,6 +11,8 @@ import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getWorkshopRequestMetrics } from "@/lib/supabase/repair-request-metrics";
+import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 
 type WorkshopRequest = {
   id: string;
@@ -30,6 +32,8 @@ type WorkshopRequest = {
   status: string;
   accepted_offer_id?: string | null;
   postedAt: string;
+  viewCount: number;
+  offerCount: number;
 };
 
 type ProfileRow = {
@@ -143,22 +147,40 @@ export default function WorkshopsPage() {
         );
       });
 
+      let metricsByRequestId: Awaited<
+        ReturnType<typeof getWorkshopRequestMetrics>
+      > = new Map();
+
+      try {
+        metricsByRequestId = await getWorkshopRequestMetrics(
+          mechanicalRows.map((request) => request.id),
+        );
+      } catch (metricsError) {
+        console.error("Failed to load repair request metrics:", metricsError);
+      }
+
       const mapped: WorkshopRequest[] = mechanicalRows.map(
-        (req: RepairRequestRow) => ({
-          id: req.id,
-          carBrand: req.car_brand || "Unknown brand",
-          carModel: req.car_model || "Unknown model",
-          carYear: req.car_year || "-",
-          city: req.city || "-",
-          licensePlate: req.license_plate,
-          damageType: req.damage_type || "other",
-          serviceDetails: req.service_details,
-          description: req.description || "No description provided.",
-          images: Array.isArray(req.images) ? req.images : [],
-          status: req.status || "open",
-          accepted_offer_id: req.accepted_offer_id,
-          postedAt: formatPostedAt(req.created_at),
-        }),
+        (req: RepairRequestRow) => {
+          const metrics = metricsByRequestId.get(req.id);
+
+          return {
+            id: req.id,
+            carBrand: req.car_brand || "Unknown brand",
+            carModel: req.car_model || "Unknown model",
+            carYear: req.car_year || "-",
+            city: req.city || "-",
+            licensePlate: req.license_plate,
+            damageType: req.damage_type || "other",
+            serviceDetails: req.service_details,
+            description: req.description || "No description provided.",
+            images: Array.isArray(req.images) ? req.images : [],
+            status: req.status || "open",
+            accepted_offer_id: req.accepted_offer_id,
+            postedAt: formatPostedAt(req.created_at),
+            viewCount: metrics?.viewCount ?? 0,
+            offerCount: metrics?.offerCount ?? 0,
+          };
+        },
       );
 
       setRequests(mapped);
@@ -347,6 +369,11 @@ export default function WorkshopsPage() {
                         color: "gray",
                       },
                     ]}
+                  />
+
+                  <RepairRequestMetrics
+                    viewCount={request.viewCount}
+                    offerCount={request.offerCount}
                   />
 
                   <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
