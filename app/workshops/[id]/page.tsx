@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useEffectEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useEffectEvent, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
@@ -10,6 +10,7 @@ import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 
 type RepairImage = {
   name?: string;
@@ -56,7 +57,6 @@ export default function WorkshopRequestDetailsPage() {
   const [availableTime, setAvailableTime] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const recordedViewRequestIdsRef = useRef(new Set<string>());
 
   const loadRequest = useEffectEvent(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -103,33 +103,7 @@ export default function WorkshopRequestDetailsPage() {
         }
 
         setRequest(data);
-
-        if (!recordedViewRequestIdsRef.current.has(data.id)) {
-          recordedViewRequestIdsRef.current.add(data.id);
-
-          void (async () => {
-            try {
-              const { error: viewError } = await supabase.rpc(
-                "record_repair_request_view",
-                { p_request_id: data.id },
-              );
-
-              if (viewError && process.env.NODE_ENV === "development") {
-                console.error(
-                  "Failed to record repair request view.",
-                  viewError,
-                );
-              }
-            } catch (viewError) {
-              if (process.env.NODE_ENV === "development") {
-                console.error(
-                  "Failed to record repair request view.",
-                  viewError,
-                );
-              }
-            }
-          })();
-        }
+        void recordWorkshopRequestView(data.id);
       } catch (error) {
         if (!silent) {
           setRequest(null);

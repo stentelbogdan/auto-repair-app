@@ -34,6 +34,7 @@ type CarHeaderProps = {
   damageTypes?: string[];
   mechanicalDetails?: MechanicalServiceDetailGroup[];
   showAllMechanicalDetails?: boolean;
+  onActiveInteraction?: () => void;
 };
 
 export default function CarHeader({
@@ -50,6 +51,7 @@ export default function CarHeader({
   damageTypes = [],
   mechanicalDetails = [],
   showAllMechanicalDetails: forceShowAllMechanicalDetails = false,
+  onActiveInteraction,
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
 
@@ -85,6 +87,7 @@ export default function CarHeader({
               alt={title}
               className={`${imageClassName} object-cover`}
               wrapperClassName={wrapperClassName}
+              onOpen={onActiveInteraction}
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-xs text-black/40">
@@ -219,6 +222,7 @@ export default function CarHeader({
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
+                        onActiveInteraction?.();
                         setShowAllParts((current) => !current);
                       }}
                       className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
@@ -258,6 +262,7 @@ export default function CarHeader({
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
+                        onActiveInteraction?.();
                         setShowAllDamages((current) => !current);
                       }}
                       className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
@@ -315,6 +320,7 @@ export default function CarHeader({
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
+                          onActiveInteraction?.();
                           setExpandedMechanicalCategories((current) => ({
                             ...current,
                             [group.category]: !current[group.category],

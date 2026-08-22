@@ -28,6 +28,7 @@ type ImageGalleryProps = {
    * Util în grilele în care afișăm deja toate fotografiile.
    */
   hideCountBadge?: boolean;
+  onOpen?: () => void;
 };
 
 export default function ImageGallery({
@@ -37,6 +38,7 @@ export default function ImageGallery({
   wrapperClassName = "block w-full overflow-hidden",
   initialIndex = 0,
   hideCountBadge = false,
+  onOpen,
 }: ImageGalleryProps) {
   const [open, setOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
@@ -67,6 +69,7 @@ export default function ImageGallery({
           type="button"
           onClick={(event) => {
             event.stopPropagation();
+            onOpen?.();
             setSelectedIndex(safeInitialIndex);
             setOpen(true);
           }}

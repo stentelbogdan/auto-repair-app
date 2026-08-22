@@ -14,6 +14,7 @@ import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getWorkshopRequestMetrics } from "@/lib/supabase/repair-request-metrics";
 import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
+import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 
 type WorkshopRequest = {
   id: string;
@@ -213,6 +214,20 @@ export default function WorkshopsPage() {
     void loadRequests({ silent: true });
   });
 
+  const recordEngagedView = (requestId: string) => {
+    void recordWorkshopRequestView(requestId).then((created) => {
+      if (!created) return;
+
+      setRequests((current) =>
+        current.map((request) =>
+          request.id === requestId
+            ? { ...request, viewCount: request.viewCount + 1 }
+            : request,
+        ),
+      );
+    });
+  };
+
   useEffect(() => {
     if (!authorized) {
       return;
@@ -375,6 +390,7 @@ export default function WorkshopsPage() {
                     variant="listLarge"
                     affectedParts={affectedPartLabels}
                     damageTypes={damageTypeLabels}
+                    onActiveInteraction={() => recordEngagedView(request.id)}
                     details={[
                       {
                         text: isAcceptata ? "Acceptată" : "Deschisă",
@@ -408,7 +424,10 @@ export default function WorkshopsPage() {
 
                   <button
                     type="button"
-                    onClick={() => router.push(`/workshops/${request.id}`)}
+                    onClick={() => {
+                      recordEngagedView(request.id);
+                      router.push(`/workshops/${request.id}`);
+                    }}
                     className="mt-4 w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-orange-600"
                   >
                     Vezi detalii și trimite ofertă
