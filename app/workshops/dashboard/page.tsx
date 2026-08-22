@@ -43,6 +43,9 @@ function WorkshopDashboardContent() {
   }, [showSuccessToast, router]);
 
   const [authorized, setAuthorized] = useState(false);
+  const [currentWorkshopUserId, setCurrentWorkshopUserId] = useState<
+    string | null
+  >(null);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     bodyworkRequests: 0,
@@ -77,6 +80,7 @@ function WorkshopDashboardContent() {
           return;
         }
 
+        setCurrentWorkshopUserId(authData.user.id);
         setAuthorized(true);
         await loadStats(authData.user.id);
       } catch {
@@ -90,7 +94,7 @@ function WorkshopDashboardContent() {
   }, [router]);
 
   useEffect(() => {
-    if (!authorized) return;
+    if (!authorized || !currentWorkshopUserId) return;
 
     let active = true;
 
@@ -113,6 +117,16 @@ function WorkshopDashboardContent() {
         },
         refreshStats,
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "repair_offers",
+          filter: `workshop_user_id=eq.${currentWorkshopUserId}`,
+        },
+        refreshStats,
+      )
       .subscribe();
 
     window.addEventListener("direct-requests-read-updated", refreshStats);
@@ -124,7 +138,7 @@ function WorkshopDashboardContent() {
       window.removeEventListener("focus", refreshStats);
       supabase.removeChannel(channel);
     };
-  }, [authorized]);
+  }, [authorized, currentWorkshopUserId]);
 
   const loadStats = async (userId: string) => {
     try {
@@ -162,14 +176,24 @@ function WorkshopDashboardContent() {
 
       const bodyworkRequestsCount = visibleBodyworkRows.length;
 
-      const mechanicalRequestsResult = await supabase
-        .from("repair_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "open")
-        .eq("service_type", "mechanical")
-        .or(
-          `request_type.eq.repair,and(request_type.eq.direct_request,target_workshop_id.eq.${userId})`,
+      const visibleMechanicalRows = rows.filter((req) => {
+        const requestType = req.request_type ?? "repair";
+
+        const isVisible =
+          requestType === "repair" ||
+          (requestType === "direct_request" &&
+            req.target_workshop_id === userId);
+
+        return (
+          req.service_type === "mechanical" &&
+          req.status === "open" &&
+          !req.accepted_offer_id &&
+          isVisible &&
+          !offeredRequestIds.includes(req.id)
         );
+      });
+
+      const mechanicalRequestsCount = visibleMechanicalRows.length;
 
       const directBodyworkUnreadResult = await supabase
         .from("repair_requests")
@@ -213,7 +237,7 @@ function WorkshopDashboardContent() {
       ]);
 
       const wonCount =
-        wonJobsResult.data?.filter((row: any) => {
+        wonJobsResult.data?.filter((row) => {
           const request = Array.isArray(row.repair_requests)
             ? row.repair_requests[0]
             : row.repair_requests;
@@ -223,7 +247,7 @@ function WorkshopDashboardContent() {
 
       setStats({
         bodyworkRequests: bodyworkRequestsCount,
-        mechanicalRequests: mechanicalRequestsResult.count || 0,
+        mechanicalRequests: mechanicalRequestsCount,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
         directBodyworkUnread: directBodyworkUnreadResult.count || 0,
