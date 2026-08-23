@@ -20,6 +20,8 @@ import {
 import { getDamageTypeLabel } from "@/lib/displayLabels";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { interactiveButton } from "@/lib/ui";
+import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
+import RequestClientName from "@/app/components/RequestClientName";
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
@@ -34,6 +36,26 @@ type JobImage = {
   name: string;
   dataUrl: string;
   url?: string;
+};
+
+type WonJobRequestRow = {
+  id: string;
+  car_brand: string | null;
+  car_model: string | null;
+  car_year: string | null;
+  city: string | null;
+  license_plate: string | null;
+  damage_type: string | null;
+  service_details: RepairServiceDetails | null;
+  description: string | null;
+  images: Array<{
+    name?: string | null;
+    dataUrl?: string | null;
+    url?: string | null;
+  }> | null;
+  status: string | null;
+  accepted_offer_id: string | null;
+  created_at: string | null;
 };
 
 type RepairAppointment = {
@@ -67,6 +89,7 @@ type WonJob = {
   createdAt: string;
   latestProgressStatus?: string | null;
   completionTimestamp: string | null;
+  clientName: string;
   appointment?: RepairAppointment | null;
   request: {
     id: string;
@@ -244,8 +267,8 @@ export default function WorkshopWonJobsPage() {
       if (offersError) throw offersError;
 
       const unreadAcceptedOfferIds = (offersData || [])
-        .filter((offer: any) => !offer.workshop_read_at)
-        .map((offer: any) => offer.id);
+        .filter((offer) => !offer.workshop_read_at)
+        .map((offer) => offer.id);
 
       if (unreadAcceptedOfferIds.length > 0) {
         const { error: markReadError } = await supabase
@@ -262,8 +285,9 @@ export default function WorkshopWonJobsPage() {
         }
       }
 
-      const requestIds = (offersData || []).map(
-        (offer: any) => offer.request_id,
+      const requestIds = (offersData || []).map((offer) => offer.request_id);
+      const clientNamesByRequestId = await getWorkshopRequestClientNames(
+        requestIds,
       );
 
       let appointmentsMap = new Map<string, RepairAppointment>();
@@ -284,7 +308,7 @@ export default function WorkshopWonJobsPage() {
 
         appointmentsMap = new Map();
 
-        (appointmentsData || []).forEach((appointment: any) => {
+        (appointmentsData || []).forEach((appointment) => {
           if (!appointmentsMap.has(appointment.request_id)) {
             appointmentsMap.set(
               appointment.request_id,
@@ -294,7 +318,7 @@ export default function WorkshopWonJobsPage() {
         });
       }
 
-      let requestsMap = new Map<string, any>();
+      let requestsMap = new Map<string, WonJobRequestRow>();
 
       let latestProgressMap = new Map<string, string>();
       let completionTimestampMap = new Map<string, string>();
@@ -309,7 +333,7 @@ export default function WorkshopWonJobsPage() {
         latestProgressMap = new Map();
         completionTimestampMap = new Map();
 
-        (progressData || []).forEach((item: any) => {
+        (progressData || []).forEach((item) => {
           if (!latestProgressMap.has(item.request_id)) {
             latestProgressMap.set(item.request_id, item.status);
           }
@@ -348,11 +372,14 @@ export default function WorkshopWonJobsPage() {
         if (requestsError) throw requestsError;
 
         requestsMap = new Map(
-          (requestsData || []).map((request: any) => [request.id, request]),
+          (requestsData || []).map((request) => [
+            request.id,
+            request as WonJobRequestRow,
+          ]),
         );
       }
 
-      const mapped: WonJob[] = (offersData || []).map((row: any) => {
+      const mapped: WonJob[] = (offersData || []).map((row) => {
         const request = requestsMap.get(row.request_id);
 
         return {
@@ -366,6 +393,7 @@ export default function WorkshopWonJobsPage() {
           latestProgressStatus: latestProgressMap.get(row.request_id) || null,
           completionTimestamp:
             completionTimestampMap.get(row.request_id) || null,
+          clientName: clientNamesByRequestId.get(row.request_id) ?? "Client",
           createdAt: row.created_at,
           appointment: appointmentsMap.get(row.request_id) || null,
           request: {
@@ -382,7 +410,7 @@ export default function WorkshopWonJobsPage() {
               "Această lucrare acceptată este acum disponibilă aici.",
             images:
               Array.isArray(request?.images) && request.images.length > 0
-                ? request.images.map((image: any) => ({
+                ? request.images.map((image) => ({
                     name: image?.name || "",
                     dataUrl: image?.dataUrl || image?.url || "",
                     url: image?.url || "",
@@ -871,6 +899,8 @@ export default function WorkshopWonJobsPage() {
                     ]}
                   />
 
+                  <RequestClientName name={job.clientName} />
+
                   <div className="mt-5">
                     <OfferSummaryCard
                       title="Lucrare în lucru"
@@ -959,6 +989,7 @@ export default function WorkshopWonJobsPage() {
                   affectedParts={affectedPartLabels}
                   damageTypes={displayedDamageTypeLabels}
                   description={job.request.description}
+                  clientName={job.clientName}
                   price={job.price}
                   days={job.days}
                   appointmentDate={displayDate}
@@ -1039,6 +1070,8 @@ export default function WorkshopWonJobsPage() {
                       },
                     ]}
                   />
+
+                  <RequestClientName name={job.clientName} />
 
                   <div
                     onClick={() =>
