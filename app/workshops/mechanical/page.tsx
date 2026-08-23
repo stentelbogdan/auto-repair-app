@@ -14,6 +14,8 @@ import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-se
 import { getWorkshopRequestMetrics } from "@/lib/supabase/repair-request-metrics";
 import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
+import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
+import RequestClientName from "@/app/components/RequestClientName";
 
 type WorkshopRequest = {
   id: string;
@@ -35,6 +37,7 @@ type WorkshopRequest = {
   postedAt: string;
   viewCount: number;
   offerCount: number;
+  clientName: string;
 };
 
 type ProfileRow = {
@@ -184,6 +187,10 @@ export default function WorkshopsPage() {
         console.error("Failed to load repair request metrics:", metricsError);
       }
 
+      const clientNamesByRequestId = await getWorkshopRequestClientNames(
+        mechanicalRows.map((request) => request.id),
+      );
+
       const mapped: WorkshopRequest[] = mechanicalRows.map(
         (req: RepairRequestRow) => {
           const metrics = metricsByRequestId.get(req.id);
@@ -204,6 +211,7 @@ export default function WorkshopsPage() {
             postedAt: formatPostedAt(req.created_at),
             viewCount: metrics?.viewCount ?? 0,
             offerCount: metrics?.offerCount ?? 0,
+            clientName: clientNamesByRequestId.get(req.id) ?? "Client",
           };
         },
       );
@@ -422,6 +430,8 @@ export default function WorkshopsPage() {
                       },
                     ]}
                   />
+
+                  <RequestClientName name={request.clientName} />
 
                   <RepairRequestMetrics
                     viewCount={request.viewCount}

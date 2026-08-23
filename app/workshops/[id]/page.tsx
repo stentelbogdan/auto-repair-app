@@ -11,6 +11,8 @@ import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
+import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
+import RequestClientName from "@/app/components/RequestClientName";
 
 type RepairImage = {
   name?: string;
@@ -58,6 +60,7 @@ export default function WorkshopRequestDetailsPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasExistingOffer, setHasExistingOffer] = useState(false);
+  const [clientName, setClientName] = useState("Client");
 
   const loadRequest = useEffectEvent(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -105,6 +108,11 @@ export default function WorkshopRequestDetailsPage() {
 
         setRequest(data);
         void recordWorkshopRequestView(data.id);
+
+        const clientNamesByRequestId = await getWorkshopRequestClientNames([
+          data.id,
+        ]);
+        setClientName(clientNamesByRequestId.get(data.id) ?? "Client");
 
         const { data: existingOffer, error: existingOfferError } =
           await supabase
@@ -368,6 +376,8 @@ export default function WorkshopRequestDetailsPage() {
               },
             ]}
           />
+
+          <RequestClientName name={clientName} variant="detail" />
 
           <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/40">

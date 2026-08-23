@@ -15,6 +15,8 @@ import {
 } from "@/lib/car-damage";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
+import RequestClientName from "@/app/components/RequestClientName";
 
 type ProfileRow = {
   role: string[] | null;
@@ -40,6 +42,7 @@ type RepairRequest = {
   status?: string | null;
   accepted_offer_id?: string | null;
   images?: RepairImage[];
+  clientName: string;
 };
 
 type RepairAppointment = {
@@ -145,6 +148,21 @@ export default function WorkshopMyOffersPage() {
         return;
       }
 
+      const requestIds = (data ?? []).flatMap((row) => {
+        const request = Array.isArray(row.repair_requests)
+          ? row.repair_requests[0]
+          : row.repair_requests;
+
+        return request?.id ? [String(request.id)] : [];
+      });
+      const clientNamesByRequestId = await getWorkshopRequestClientNames(
+        requestIds,
+      );
+
+      if (cancelled) {
+        return;
+      }
+
       const mapped: RepairOffer[] = (data ?? []).map((row) => {
         const request = Array.isArray(row.repair_requests)
           ? row.repair_requests[0]
@@ -178,6 +196,8 @@ export default function WorkshopMyOffersPage() {
                 status: request.status ?? null,
                 accepted_offer_id: request.accepted_offer_id ?? null,
                 images: Array.isArray(request.images) ? request.images : [],
+                clientName:
+                  clientNamesByRequestId.get(String(request.id)) ?? "Client",
               }
             : null,
 
@@ -571,6 +591,8 @@ export default function WorkshopMyOffersPage() {
                     mechanicalDetails={mechanicalDetails}
                     details={[workshopBadge]}
                   />
+
+                  <RequestClientName name={request?.clientName} />
 
                   <OfferSummaryCard
                     price={offer.price}
