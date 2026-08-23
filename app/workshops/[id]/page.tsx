@@ -60,7 +60,7 @@ export default function WorkshopRequestDetailsPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasExistingOffer, setHasExistingOffer] = useState(false);
-  const [clientName, setClientName] = useState("Client");
+  const [clientName, setClientName] = useState<string | null>(null);
 
   const loadRequest = useEffectEvent(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -112,7 +112,7 @@ export default function WorkshopRequestDetailsPage() {
         const clientNamesByRequestId = await getWorkshopRequestClientNames([
           data.id,
         ]);
-        setClientName(clientNamesByRequestId.get(data.id) ?? "Client");
+        setClientName(clientNamesByRequestId.get(data.id) ?? null);
 
         const { data: existingOffer, error: existingOfferError } =
           await supabase

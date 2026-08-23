@@ -37,7 +37,7 @@ type WorkshopRequest = {
   postedAt: string;
   viewCount: number;
   offerCount: number;
-  clientName: string;
+  clientName: string | null;
 };
 
 type ProfileRow = {
@@ -211,7 +211,7 @@ export default function WorkshopsPage() {
             postedAt: formatPostedAt(req.created_at),
             viewCount: metrics?.viewCount ?? 0,
             offerCount: metrics?.offerCount ?? 0,
-            clientName: clientNamesByRequestId.get(req.id) ?? "Client",
+            clientName: clientNamesByRequestId.get(req.id) ?? null,
           };
         },
       );

@@ -89,7 +89,7 @@ type WonJob = {
   createdAt: string;
   latestProgressStatus?: string | null;
   completionTimestamp: string | null;
-  clientName: string;
+  clientName: string | null;
   appointment?: RepairAppointment | null;
   request: {
     id: string;
@@ -393,7 +393,7 @@ export default function WorkshopWonJobsPage() {
           latestProgressStatus: latestProgressMap.get(row.request_id) || null,
           completionTimestamp:
             completionTimestampMap.get(row.request_id) || null,
-          clientName: clientNamesByRequestId.get(row.request_id) ?? "Client",
+          clientName: clientNamesByRequestId.get(row.request_id) ?? null,
           createdAt: row.created_at,
           appointment: appointmentsMap.get(row.request_id) || null,
           request: {

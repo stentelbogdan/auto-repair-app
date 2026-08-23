@@ -42,7 +42,7 @@ type RepairRequest = {
   status?: string | null;
   accepted_offer_id?: string | null;
   images?: RepairImage[];
-  clientName: string;
+  clientName: string | null;
 };
 
 type RepairAppointment = {
@@ -197,7 +197,7 @@ export default function WorkshopMyOffersPage() {
                 accepted_offer_id: request.accepted_offer_id ?? null,
                 images: Array.isArray(request.images) ? request.images : [],
                 clientName:
-                  clientNamesByRequestId.get(String(request.id)) ?? "Client",
+                  clientNamesByRequestId.get(String(request.id)) ?? null,
               }
             : null,
 

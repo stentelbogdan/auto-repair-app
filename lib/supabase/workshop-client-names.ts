@@ -7,10 +7,10 @@ type WorkshopRequestClientNameRow = {
 
 export async function getWorkshopRequestClientNames(
   requestIds: string[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, string | null>> {
   const uniqueRequestIds = [...new Set(requestIds.filter(Boolean))];
-  const namesByRequestId = new Map<string, string>(
-    uniqueRequestIds.map((requestId) => [requestId, "Client"]),
+  const namesByRequestId = new Map<string, string | null>(
+    uniqueRequestIds.map((requestId) => [requestId, null]),
   );
 
   if (uniqueRequestIds.length === 0) {
@@ -32,7 +32,7 @@ export async function getWorkshopRequestClientNames(
 
   ((data ?? []) as WorkshopRequestClientNameRow[]).forEach((row) => {
     const clientName = row.client_name?.trim();
-    namesByRequestId.set(row.request_id, clientName || "Client");
+    namesByRequestId.set(row.request_id, clientName || null);
   });
 
   return namesByRequestId;
