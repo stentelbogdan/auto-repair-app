@@ -12,6 +12,7 @@ import {
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
+import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type ActiveRole = "customer" | "workshop";
 
@@ -24,6 +25,7 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const SESSION_TIMEOUT_MS = 10_000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -37,17 +39,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (savedRole === "workshop" || savedRole === "customer") {
       // Browser storage is only available after this client component hydrates.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setActiveRoleState(savedRole);
     }
 
     const loadSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await withTimeout(
+          supabase.auth.getSession(),
+          SESSION_TIMEOUT_MS,
+          "Session initialization",
+        );
 
-      setSession(session);
-      setLoading(false);
+        setSession(session);
+      } catch (error) {
+        if (
+          error instanceof AsyncTimeoutError &&
+          process.env.NODE_ENV === "development"
+        ) {
+          console.warn("[AUTH] session:timeout");
+        } else if (process.env.NODE_ENV === "development") {
+          console.error("Failed to initialize auth session:", error);
+        }
+      } finally {
+        setLoading(false);
+      }
     };
 
     loadSession();

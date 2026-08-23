@@ -5,8 +5,14 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { createWorkshopSlug } from "@/lib/workshops/workshop-slug";
+import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type UserRole = "customer" | "workshop";
+
+const AUTH_TIMEOUT_MESSAGE =
+  "Serviciul de autentificare răspunde greu. Încearcă din nou.";
+const SIGN_UP_TIMEOUT_MS = 20_000;
+const PROFILE_TIMEOUT_MS = 10_000;
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -40,10 +46,14 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+        }),
+        SIGN_UP_TIMEOUT_MS,
+        "Sign up",
+      );
 
       if (error) {
         alert(error.message);
@@ -85,9 +95,11 @@ export default function RegisterPage() {
               gdpr_accepted_at: new Date().toISOString(),
             };
 
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .upsert(profileData);
+      const { error: profileError } = await withTimeout(
+        supabase.from("profiles").upsert(profileData),
+        PROFILE_TIMEOUT_MS,
+        "Profile update",
+      );
 
       if (profileError) {
         alert(profileError.message);
@@ -112,6 +124,15 @@ export default function RegisterPage() {
 
       router.push("/customer/dashboard");
     } catch (err) {
+      if (err instanceof AsyncTimeoutError) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[AUTH] register:timeout");
+        }
+
+        alert(AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+
       console.error("Register failed:", err);
       alert("A apărut o problemă la crearea contului.");
     } finally {

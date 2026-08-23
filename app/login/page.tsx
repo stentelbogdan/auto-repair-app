@@ -5,12 +5,18 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
+import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type UserRole = "customer" | "workshop";
 
 type ProfileRow = {
   role: string[] | null;
 };
+
+const AUTH_TIMEOUT_MESSAGE =
+  "Serviciul de autentificare răspunde greu. Încearcă din nou.";
+const SIGN_IN_TIMEOUT_MS = 15_000;
+const PROFILE_TIMEOUT_MS = 10_000;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -98,21 +104,33 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      if (process.env.NODE_ENV === "development") {
+        console.log("[AUTH] login:start");
+      }
+
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        SIGN_IN_TIMEOUT_MS,
+        "Sign in",
+      );
 
       if (error) {
         alert(error.message);
         return;
       }
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single<ProfileRow>();
+      const { data: profile, error: profileError } = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .single<ProfileRow>(),
+        PROFILE_TIMEOUT_MS,
+        "Profile lookup",
+      );
 
       if (profileError) {
         alert(profileError.message);
@@ -123,8 +141,16 @@ export default function LoginPage() {
 
       if (roles.includes("workshop")) {
         try {
-          await ensureAuthenticatedWorkshopSlug(data.user.id);
+          await withTimeout(
+            ensureAuthenticatedWorkshopSlug(data.user.id),
+            PROFILE_TIMEOUT_MS,
+            "Workshop profile initialization",
+          );
         } catch (error) {
+          if (error instanceof AsyncTimeoutError) {
+            throw error;
+          }
+
           console.error("Failed to initialize workshop public profile:", error);
         }
       }
@@ -153,6 +179,15 @@ export default function LoginPage() {
 
       alert("Contul nu are un rol valid.");
     } catch (err) {
+      if (err instanceof AsyncTimeoutError) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[AUTH] login:timeout");
+        }
+
+        alert(AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+
       console.error("Login failed:", err);
       alert("A apărut o problemă la autentificare.");
     } finally {

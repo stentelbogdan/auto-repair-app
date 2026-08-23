@@ -8,6 +8,7 @@ import {
   ensureAuthenticatedWorkshopSlug,
   hasWorkshopSlug,
 } from "@/lib/workshops/workshop-slug";
+import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type UserRole = "customer" | "workshop";
 
@@ -15,6 +16,12 @@ type ProfileRow = {
   role: string[] | null;
   workshop_slug?: string | null;
 };
+
+const AUTH_TIMEOUT_MESSAGE =
+  "Serviciul de autentificare răspunde greu. Încearcă din nou.";
+const SIGN_IN_TIMEOUT_MS = 15_000;
+const SIGN_UP_TIMEOUT_MS = 20_000;
+const PROFILE_TIMEOUT_MS = 10_000;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -65,10 +72,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+        }),
+        SIGN_UP_TIMEOUT_MS,
+        "Sign up",
+      );
 
       if (error) {
         alert(error.message);
@@ -79,11 +90,15 @@ export default function LoginPage() {
 
       if (userId) {
         const { data: existingProfile, error: fetchProfileError } =
-          await supabase
-            .from("profiles")
-            .select("role, workshop_slug")
-            .eq("id", userId)
-            .maybeSingle<ProfileRow>();
+          await withTimeout(
+            supabase
+              .from("profiles")
+              .select("role, workshop_slug")
+              .eq("id", userId)
+              .maybeSingle<ProfileRow>(),
+            PROFILE_TIMEOUT_MS,
+            "Profile lookup",
+          );
 
         if (fetchProfileError) {
           alert(fetchProfileError.message);
@@ -103,14 +118,16 @@ export default function LoginPage() {
             ? createWorkshopSlug("Service", userId)
             : undefined;
 
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .upsert({
+        const { error: profileError } = await withTimeout(
+          supabase.from("profiles").upsert({
             id: userId,
             email,
             role: mergedRoles,
             ...(workshopSlug ? { workshop_slug: workshopSlug } : {}),
-          });
+          }),
+          PROFILE_TIMEOUT_MS,
+          "Profile update",
+        );
 
         if (profileError) {
           alert(profileError.message);
@@ -123,8 +140,16 @@ export default function LoginPage() {
 
         if (role === "workshop") {
           try {
-            await ensureAuthenticatedWorkshopSlug(data.session.user.id);
+            await withTimeout(
+              ensureAuthenticatedWorkshopSlug(data.session.user.id),
+              PROFILE_TIMEOUT_MS,
+              "Workshop profile initialization",
+            );
           } catch (error) {
+            if (error instanceof AsyncTimeoutError) {
+              throw error;
+            }
+
             console.error(
               "Failed to initialize workshop public profile:",
               error,
@@ -139,6 +164,15 @@ export default function LoginPage() {
         alert("Account created successfully. You can now log in.");
       }
     } catch (err) {
+      if (err instanceof AsyncTimeoutError) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[AUTH] register:timeout");
+        }
+
+        alert(AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+
       console.error("Sign up failed:", err);
       alert("Something went wrong during sign up.");
     } finally {
@@ -155,10 +189,18 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      if (process.env.NODE_ENV === "development") {
+        console.log("[AUTH] login:start");
+      }
+
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        SIGN_IN_TIMEOUT_MS,
+        "Sign in",
+      );
 
       if (error) {
         alert(error.message);
@@ -167,11 +209,15 @@ export default function LoginPage() {
 
       const userId = data.user.id;
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", userId)
-        .single<ProfileRow>();
+      const { data: profile, error: profileError } = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .single<ProfileRow>(),
+        PROFILE_TIMEOUT_MS,
+        "Profile lookup",
+      );
 
       if (profileError) {
         alert(profileError.message);
@@ -182,8 +228,16 @@ export default function LoginPage() {
 
       if (roles.includes("workshop")) {
         try {
-          await ensureAuthenticatedWorkshopSlug(userId);
+          await withTimeout(
+            ensureAuthenticatedWorkshopSlug(userId),
+            PROFILE_TIMEOUT_MS,
+            "Workshop profile initialization",
+          );
         } catch (error) {
+          if (error instanceof AsyncTimeoutError) {
+            throw error;
+          }
+
           console.error("Failed to initialize workshop public profile:", error);
         }
       }
@@ -204,6 +258,15 @@ export default function LoginPage() {
         router.push("/customer/dashboard");
       }
     } catch (err) {
+      if (err instanceof AsyncTimeoutError) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[AUTH] login:timeout");
+        }
+
+        alert(AUTH_TIMEOUT_MESSAGE);
+        return;
+      }
+
       console.error("Login failed:", err);
       alert("Something went wrong during login.");
     } finally {
