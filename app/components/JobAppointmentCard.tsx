@@ -102,22 +102,22 @@ export default function JobAppointmentCard({
       </div>
 
       <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
-        <p className="mb-2 text-xs font-semibold text-black/45">
+        <p className="mb-2 text-[13px] font-semibold leading-[18px] text-black/60">
           📝 Descriere
         </p>
 
-        <p className="text-sm leading-6 text-black/70">
+        <p className="text-[15px] leading-6 text-black/70">
           {description || "Fără descriere."}
         </p>
       </div>
 
       {message && (
         <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
-          <p className="mb-2 text-xs font-semibold text-black/45">
+          <p className="mb-2 text-[13px] font-semibold leading-[18px] text-black/60">
             Mesaj ofertă
           </p>
 
-          <p className="text-sm leading-6 text-black/70">{message}</p>
+          <p className="text-[15px] leading-6 text-black/70">{message}</p>
         </div>
       )}
 

@@ -156,8 +156,8 @@ export default function CarHeader({
         <p
           className={
             isLarge
-              ? "mt-2 text-sm text-black/55"
-              : "mt-1 text-xs text-black/55"
+              ? "mt-2 text-[15px] leading-5 text-black/65"
+              : "mt-1 text-[13px] leading-[18px] text-black/65"
           }
         >
           {year || "-"} • {city || "-"}
@@ -203,7 +203,7 @@ export default function CarHeader({
           <div className="mt-4 space-y-3">
             {affectedParts.length > 0 && (
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                <p className="text-xs font-bold uppercase tracking-wide text-black/60">
                   Elemente afectate
                 </p>
 
@@ -211,7 +211,7 @@ export default function CarHeader({
                   {visibleParts.map((part) => (
                     <p
                       key={part}
-                      className="text-xs font-semibold leading-snug text-black/70"
+                      className="text-[13px] font-semibold leading-[18px] text-black/70"
                     >
                       • {part}
                     </p>
@@ -225,7 +225,7 @@ export default function CarHeader({
                         onActiveInteraction?.();
                         setShowAllParts((current) => !current);
                       }}
-                      className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                      className="text-left text-[13px] font-bold leading-[18px] text-orange-600 transition active:scale-[0.98]"
                       aria-expanded={showAllParts}
                     >
                       {showAllParts
@@ -243,7 +243,7 @@ export default function CarHeader({
 
             {damageTypes.length > 0 && (
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                <p className="text-xs font-bold uppercase tracking-wide text-black/60">
                   Tip daună
                 </p>
 
@@ -251,7 +251,7 @@ export default function CarHeader({
                   {visibleDamages.map((damage) => (
                     <p
                       key={damage}
-                      className="text-xs font-semibold leading-snug text-black/70"
+                      className="text-[13px] font-semibold leading-[18px] text-black/70"
                     >
                       • {damage}
                     </p>
@@ -265,7 +265,7 @@ export default function CarHeader({
                         onActiveInteraction?.();
                         setShowAllDamages((current) => !current);
                       }}
-                      className="text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                      className="text-left text-[13px] font-bold leading-[18px] text-orange-600 transition active:scale-[0.98]"
                       aria-expanded={showAllDamages}
                     >
                       {showAllDamages
@@ -297,7 +297,7 @@ export default function CarHeader({
 
               return (
                 <div key={group.category}>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">
+                  <p className="text-xs font-bold uppercase tracking-wide text-black/60">
                     {group.categoryLabel}
                   </p>
 
@@ -306,7 +306,7 @@ export default function CarHeader({
                       {visibleSymptoms.map((symptom) => (
                         <p
                           key={symptom}
-                          className="text-xs font-semibold leading-snug text-black/70"
+                          className="text-[13px] font-semibold leading-[18px] text-black/70"
                         >
                           • {symptom}
                         </p>
@@ -326,7 +326,7 @@ export default function CarHeader({
                             [group.category]: !current[group.category],
                           }));
                         }}
-                        className="mt-1 text-left text-xs font-bold text-orange-600 transition active:scale-[0.98]"
+                        className="mt-1 text-left text-[13px] font-bold leading-[18px] text-orange-600 transition active:scale-[0.98]"
                         aria-expanded={isExpanded}
                       >
                         {isExpanded

@@ -11,7 +11,7 @@ export default function RepairRequestMetrics({
 }: RepairRequestMetricsProps) {
   return (
     <div
-      className="mt-3 flex w-fit flex-col items-start gap-1 rounded-full border border-black/10 bg-black/[0.035] px-3 py-1.5 text-xs font-semibold text-black/55"
+      className="mt-3 flex w-fit flex-col items-start gap-1 rounded-full border border-black/10 bg-black/[0.035] px-3 py-1.5 text-[13px] font-semibold leading-[18px] text-black/65"
       aria-label={`${formatViews(viewCount)}, ${formatOffers(offerCount)}`}
     >
       <span className="flex items-center gap-1.5">

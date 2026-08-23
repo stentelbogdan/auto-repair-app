@@ -58,12 +58,12 @@ export default function RepairRequestCard({
     : "mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3";
 
   const descriptionTitleClassName = dark
-    ? "mb-2 text-xs font-semibold text-white/45"
-    : "mb-2 text-xs font-semibold text-black/45";
+    ? "mb-2 text-[13px] font-semibold leading-[18px] text-white/60"
+    : "mb-2 text-[13px] font-semibold leading-[18px] text-black/60";
 
   const descriptionTextClassName = dark
-    ? "text-sm leading-6 text-white/75"
-    : "text-sm leading-6 text-black/70";
+    ? "text-[15px] leading-6 text-white/75"
+    : "text-[15px] leading-6 text-black/70";
 
   return (
     <div className={cardClassName}>
@@ -122,7 +122,7 @@ export default function RepairRequestCard({
           />
 
           {isWorkshop && postedAt && (
-            <p className="mt-2 text-xs font-semibold text-white/45">
+            <p className="mt-2 text-[13px] font-semibold leading-[18px] text-white/60">
               {postedAt}
             </p>
           )}

@@ -12,7 +12,7 @@ export default function RequestClientName({
   if (variant === "detail") {
     return (
       <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3">
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-black/40">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-black/60">
           Client
         </p>
         {displayName && (
@@ -23,8 +23,8 @@ export default function RequestClientName({
   }
 
   return (
-    <div className="mt-3 flex w-fit max-w-full items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-xs text-black/65">
-      <span className="font-semibold text-black/45">Client</span>
+    <div className="mt-3 flex w-fit max-w-full items-center gap-1.5 rounded-xl border border-black/10 bg-black/[0.03] px-3 py-2 text-[13px] leading-[18px] text-black/65">
+      <span className="font-semibold text-black/60">Client</span>
       {displayName && (
         <>
           <span aria-hidden="true">•</span>
