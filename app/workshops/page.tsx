@@ -18,6 +18,7 @@ import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
 import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
+import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type WorkshopRequest = {
   id: string;
@@ -55,6 +56,8 @@ const filters = [
   { id: "pdr", label: "PDR", icon: "🔨" },
 ];
 
+const ENRICHMENT_TIMEOUT_MS = 8_000;
+
 export default function WorkshopsPage() {
   const router = useRouter();
   const [requests, setRequests] = useState<WorkshopRequest[]>([]);
@@ -63,6 +66,9 @@ export default function WorkshopsPage() {
   const [accessError, setAccessError] = useState(false);
   const [accessCheckVersion, setAccessCheckVersion] = useState(0);
   const accessAttemptRef = useRef(0);
+  const loadAttemptRef = useRef(0);
+  const hasLoadedRequestsRef = useRef(false);
+  const workshopUserIdRef = useRef<string | null>(null);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [dataError, setDataError] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
@@ -101,6 +107,7 @@ export default function WorkshopsPage() {
       if (!isCurrentAttempt()) return;
 
       if (result.status === "authorized") {
+        workshopUserIdRef.current = result.userId;
         setLoadingRequests(true);
         setAuthorized(true);
         setAccessError(false);
@@ -110,6 +117,7 @@ export default function WorkshopsPage() {
         return;
       }
 
+      workshopUserIdRef.current = null;
       setAuthorized(false);
       setCheckingAccess(false);
 
@@ -136,38 +144,51 @@ export default function WorkshopsPage() {
     };
   }, [accessCheckVersion, router]);
 
+  useEffect(
+    () => () => {
+      loadAttemptRef.current += 1;
+    },
+    [],
+  );
+
   const loadRequests = async (
     { silent = false }: { silent?: boolean } = {},
   ) => {
+    const attemptId = ++loadAttemptRef.current;
+    const isCurrentAttempt = () => attemptId === loadAttemptRef.current;
+
     if (!silent) {
       setLoadingRequests(true);
       setDataError(false);
     }
 
+    let bodyworkRows: RepairRequestRow[];
+
     try {
       const rows = await getWorkshopRepairRequests();
-      const { data: authData } = await supabase.auth.getUser();
-      const workshopUserId = authData.user?.id;
+      const workshopUserId = workshopUserIdRef.current;
 
-      let offeredRequestIds: string[] = [];
-
-      if (workshopUserId) {
-        const { data: existingOffers, error: existingOffersError } =
-          await supabase
-            .from("repair_offers")
-            .select("request_id")
-            .eq("workshop_user_id", workshopUserId);
-
-        if (existingOffersError) {
-          console.error("Failed to load existing offers:", existingOffersError);
-        }
-
-        offeredRequestIds = (existingOffers || [])
-          .map((offer) => offer.request_id)
-          .filter(Boolean);
+      if (!workshopUserId) {
+        throw new Error("Workshop user is unavailable for request loading.");
       }
 
-      const bodyworkRows = rows.filter((req) => {
+      const { data: existingOffers, error: existingOffersError } =
+        await supabase
+          .from("repair_offers")
+          .select("request_id")
+          .eq("workshop_user_id", workshopUserId);
+
+      if (existingOffersError) {
+        throw existingOffersError;
+      }
+
+      const offeredRequestIds = new Set(
+        (existingOffers || [])
+          .map((offer) => offer.request_id)
+          .filter(Boolean),
+      );
+
+      bodyworkRows = rows.filter((req) => {
         const requestType = req.request_type ?? "repair";
 
         const isVisibleToWorkshop =
@@ -179,65 +200,124 @@ export default function WorkshopsPage() {
           (req.service_type ?? "bodywork") === "bodywork" &&
           req.status === "open" &&
           isVisibleToWorkshop &&
-          !offeredRequestIds.includes(req.id)
+          !offeredRequestIds.has(req.id)
         );
       });
 
-      let metricsByRequestId: Awaited<
-        ReturnType<typeof getWorkshopRequestMetrics>
-      > = new Map();
-
-      try {
-        metricsByRequestId = await getWorkshopRequestMetrics(
-          bodyworkRows.map((request) => request.id),
-        );
-      } catch (metricsError) {
-        console.error("Failed to load repair request metrics:", metricsError);
-      }
-
-      const clientNamesByRequestId = await getWorkshopRequestClientNames(
-        bodyworkRows.map((request) => request.id),
-      );
-
       const mapped: WorkshopRequest[] = bodyworkRows.map(
-        (req: RepairRequestRow) => {
-          const metrics = metricsByRequestId.get(req.id);
-
-          return {
-            id: req.id,
-            carBrand: req.car_brand || "Unknown brand",
-            carModel: req.car_model || "Unknown model",
-            carYear: req.car_year || "-",
-            city: req.city || "-",
-            licensePlate: req.license_plate,
-            damageType: req.damage_type || "other",
-            description: req.description || "No description provided.",
-            serviceDetails: req.service_details,
-            images: Array.isArray(req.images) ? req.images : [],
-            status: req.status || "open",
-            postedAt: formatPostedAt(req.created_at),
-            viewCount: metrics?.viewCount ?? 0,
-            offerCount: metrics?.offerCount ?? 0,
-            clientName: clientNamesByRequestId.get(req.id) ?? null,
-          };
-        },
+        (req: RepairRequestRow) => ({
+          id: req.id,
+          carBrand: req.car_brand || "Unknown brand",
+          carModel: req.car_model || "Unknown model",
+          carYear: req.car_year || "-",
+          city: req.city || "-",
+          licensePlate: req.license_plate,
+          damageType: req.damage_type || "other",
+          description: req.description || "No description provided.",
+          serviceDetails: req.service_details,
+          images: Array.isArray(req.images) ? req.images : [],
+          status: req.status || "open",
+          postedAt: formatPostedAt(req.created_at),
+          viewCount: 0,
+          offerCount: 0,
+          clientName: null,
+        }),
       );
 
-      setRequests(mapped);
+      if (!isCurrentAttempt()) return;
+
+      setRequests((current) => {
+        if (!silent) return mapped;
+
+        const currentById = new Map(
+          current.map((request) => [request.id, request]),
+        );
+
+        return mapped.map((request) => {
+          const existing = currentById.get(request.id);
+
+          return existing
+            ? {
+                ...request,
+                viewCount: existing.viewCount,
+                offerCount: existing.offerCount,
+                clientName: existing.clientName,
+              }
+            : request;
+        });
+      });
       setDataError(false);
+      hasLoadedRequestsRef.current = true;
+      setLoadingRequests(false);
     } catch (error) {
+      if (!isCurrentAttempt()) return;
+
       if (process.env.NODE_ENV === "development") {
-        console.error("[DATA] loadRequests:error", error);
+        console.error("[DATA] critical:error", error);
       }
-      if (!silent) {
+
+      if (!silent || !hasLoadedRequestsRef.current) {
+        hasLoadedRequestsRef.current = false;
         setRequests([]);
         setDataError(true);
       }
-    } finally {
-      if (!silent) {
-        setLoadingRequests(false);
-      }
+
+      setLoadingRequests(false);
+
+      return;
     }
+
+    const requestIds = bodyworkRows.map((request) => request.id);
+    const [metricsResult, clientNamesResult] = await Promise.allSettled([
+      withTimeout(
+        getWorkshopRequestMetrics(requestIds),
+        ENRICHMENT_TIMEOUT_MS,
+        "Workshop request metrics",
+      ),
+      withTimeout(
+        getWorkshopRequestClientNames(requestIds),
+        ENRICHMENT_TIMEOUT_MS,
+        "Workshop request client names",
+      ),
+    ]);
+
+    if (!isCurrentAttempt()) return;
+
+    if (metricsResult.status === "rejected") {
+      logEnrichmentFailure("metrics", metricsResult.reason);
+    }
+
+    if (clientNamesResult.status === "rejected") {
+      logEnrichmentFailure("clientNames", clientNamesResult.reason);
+    }
+
+    const requestIdSet = new Set(requestIds);
+
+    setRequests((current) =>
+      current.map((request) => {
+        if (!requestIdSet.has(request.id)) return request;
+
+        const metrics =
+          metricsResult.status === "fulfilled"
+            ? metricsResult.value.get(request.id)
+            : null;
+        const clientName =
+          clientNamesResult.status === "fulfilled"
+            ? (clientNamesResult.value.get(request.id) ?? null)
+            : request.clientName;
+
+        return {
+          ...request,
+          viewCount: metrics
+            ? Math.max(request.viewCount, metrics.viewCount)
+            : request.viewCount,
+          offerCount: metrics
+            ? Math.max(request.offerCount, metrics.offerCount)
+            : request.offerCount,
+          clientName,
+        };
+      }),
+    );
   };
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
@@ -566,4 +646,18 @@ function formatPostedAt(value: string) {
   }
 
   return createdAt.toLocaleDateString();
+}
+
+function logEnrichmentFailure(
+  enrichment: "metrics" | "clientNames",
+  error: unknown,
+) {
+  if (process.env.NODE_ENV !== "development") return;
+
+  if (error instanceof AsyncTimeoutError) {
+    console.warn(`[ENRICH] ${enrichment}:timeout`);
+    return;
+  }
+
+  console.error(`[ENRICH] ${enrichment}:error`, error);
 }
