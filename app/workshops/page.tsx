@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -17,6 +17,7 @@ import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
 
 type WorkshopRequest = {
   id: string;
@@ -42,10 +43,6 @@ type WorkshopRequest = {
   clientName: string | null;
 };
 
-type ProfileRow = {
-  role: string[] | null;
-};
-
 const filters = [
   { id: "all", label: "Toate", icon: "📋" },
   { id: "damage", label: "Daune", icon: "🚗" },
@@ -63,67 +60,88 @@ export default function WorkshopsPage() {
   const [requests, setRequests] = useState<WorkshopRequest[]>([]);
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const [accessError, setAccessError] = useState(false);
+  const [accessCheckVersion, setAccessCheckVersion] = useState(0);
+  const accessAttemptRef = useRef(0);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [dataError, setDataError] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
 
   useEffect(() => {
-    const checkUserAndLoad = async () => {
-      try {
-        const { data: authData } = await supabase.auth.getUser();
+    let cancelled = false;
+    const attemptId = ++accessAttemptRef.current;
 
-        if (!authData.user) {
-          router.push("/login");
-          return;
+    const isCurrentAttempt = () =>
+      !cancelled && attemptId === accessAttemptRef.current;
+
+    const markDirectRequestsRead = async (workshopUserId: string) => {
+      const { error } = await supabase
+        .from("repair_requests")
+        .update({ target_workshop_read_at: new Date().toISOString() })
+        .eq("target_workshop_id", workshopUserId)
+        .eq("service_type", "bodywork")
+        .eq("request_type", "direct_request")
+        .is("target_workshop_read_at", null);
+
+      if (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.error("Failed to mark direct requests as read:", error);
         }
+        return;
+      }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
-
-        if (profileError) {
-          console.error("Failed to load profile:", profileError);
-          router.push("/");
-          return;
-        }
-
-        const roles = Array.isArray(profile?.role) ? profile.role : [];
-
-        if (!roles.includes("workshop")) {
-          router.push("/");
-          return;
-        }
-
-        setAuthorized(true);
-
-        await supabase
-          .from("repair_requests")
-          .update({ target_workshop_read_at: new Date().toISOString() })
-          .eq("target_workshop_id", authData.user.id)
-          .eq("service_type", "bodywork")
-          .eq("request_type", "direct_request")
-          .is("target_workshop_read_at", null);
-
+      if (isCurrentAttempt()) {
         window.dispatchEvent(new Event("direct-requests-read-updated"));
-
-        await loadRequests();
-      } catch (error) {
-        console.error("Access check failed:", error);
-        router.push("/login");
-      } finally {
-        setCheckingAccess(false);
       }
     };
 
-    checkUserAndLoad();
-  }, [router]);
+    const checkUserAndLoad = async () => {
+      const result = await checkWorkshopAccess();
+
+      if (!isCurrentAttempt()) return;
+
+      if (result.status === "authorized") {
+        setLoadingRequests(true);
+        setAuthorized(true);
+        setAccessError(false);
+        setCheckingAccess(false);
+        void loadRequests();
+        void markDirectRequestsRead(result.userId);
+        return;
+      }
+
+      setAuthorized(false);
+      setCheckingAccess(false);
+
+      if (result.status === "unauthenticated") {
+        router.push("/login");
+        return;
+      }
+
+      if (result.status === "forbidden") {
+        router.push("/");
+        return;
+      }
+
+      setAccessError(true);
+    };
+
+    void checkUserAndLoad();
+
+    return () => {
+      cancelled = true;
+      if (attemptId === accessAttemptRef.current) {
+        accessAttemptRef.current += 1;
+      }
+    };
+  }, [accessCheckVersion, router]);
 
   const loadRequests = async (
     { silent = false }: { silent?: boolean } = {},
   ) => {
     if (!silent) {
       setLoadingRequests(true);
+      setDataError(false);
     }
 
     try {
@@ -206,10 +224,14 @@ export default function WorkshopsPage() {
       );
 
       setRequests(mapped);
+      setDataError(false);
     } catch (error) {
-      console.error("Failed to load repair requests:", error);
+      if (process.env.NODE_ENV === "development") {
+        console.error("[DATA] loadRequests:error", error);
+      }
       if (!silent) {
         setRequests([]);
+        setDataError(true);
       }
     } finally {
       if (!silent) {
@@ -285,6 +307,35 @@ export default function WorkshopsPage() {
     );
   }
 
+  if (accessError) {
+    return (
+      <main className="min-h-screen bg-black px-6 py-10 text-white">
+        <div className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center">
+          <div className="max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+            <h1 className="text-2xl font-semibold">
+              Nu am putut verifica accesul
+            </h1>
+            <p className="mt-3 text-white/70">
+              Serviciul de autentificare răspunde greu. Verifică conexiunea și
+              încearcă din nou.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setAccessError(false);
+                setCheckingAccess(true);
+                setAccessCheckVersion((current) => current + 1);
+              }}
+              className="mt-6 rounded-xl bg-white px-5 py-3 font-semibold text-black"
+            >
+              Încearcă din nou
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   if (!authorized) {
     return null;
   }
@@ -351,6 +402,22 @@ export default function WorkshopsPage() {
         {loadingRequests ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
             <p className="text-white/70">Se încarcă daunele...</p>
+          </div>
+        ) : dataError ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
+            <h2 className="text-2xl font-semibold">
+              Nu am putut încărca lucrările
+            </h2>
+            <p className="mt-3 text-white/70">
+              Verifică conexiunea și încearcă din nou.
+            </p>
+            <button
+              type="button"
+              onClick={() => void loadRequests()}
+              className="mt-6 rounded-lg bg-white px-6 py-3 font-semibold text-black"
+            >
+              Încearcă din nou
+            </button>
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
