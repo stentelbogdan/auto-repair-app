@@ -1,4 +1,9 @@
-export type ProgressServiceType = "bodywork" | "mechanical";
+import {
+  resolveRepairServiceType,
+  type RepairServiceType,
+} from "@/lib/repair-requests/service-types";
+
+export type ProgressServiceType = RepairServiceType;
 
 export type ProgressStatus =
   | "Received"
@@ -11,6 +16,9 @@ export type ProgressStatus =
   | "Parts ordered"
   | "In repair"
   | "Testing"
+  | "Inspection"
+  | "Wheel / Tire service"
+  | "Final check"
   | "Ready";
 
 export type ProgressWorkflowStep = {
@@ -43,8 +51,20 @@ export const mechanicalProgressWorkflow = createWorkflow([
   ["Ready", "Gata"],
 ]);
 
+export const wheelsProgressWorkflow = createWorkflow([
+  ["Received", "Primită"],
+  ["Inspection", "Inspecție"],
+  ["Wheel / Tire service", "Service roți/anvelope"],
+  ["Final check", "Verificare finală"],
+  ["Ready", "Gata"],
+]);
+
 const progressLabels = new Map<ProgressStatus, string>(
-  [...bodyworkProgressWorkflow, ...mechanicalProgressWorkflow].map(
+  [
+    ...bodyworkProgressWorkflow,
+    ...mechanicalProgressWorkflow,
+    ...wheelsProgressWorkflow,
+  ].map(
     ({ status, label }) => [status, label],
   ),
 );
@@ -74,6 +94,16 @@ const aliases: Record<string, ProgressStatus> = {
   "in reparatie": "In repair",
   testing: "Testing",
   testare: "Testing",
+  inspection: "Inspection",
+  inspecție: "Inspection",
+  inspectie: "Inspection",
+  "wheel / tire service": "Wheel / Tire service",
+  "wheel tire service": "Wheel / Tire service",
+  "service roți/anvelope": "Wheel / Tire service",
+  "service roti/anvelope": "Wheel / Tire service",
+  "final check": "Final check",
+  "verificare finală": "Final check",
+  "verificare finala": "Final check",
   ready: "Ready",
   gata: "Ready",
 };
@@ -101,9 +131,12 @@ function readableFallback(status: string) {
 export function getProgressWorkflow(
   serviceType?: string | null,
 ): readonly ProgressWorkflowStep[] {
-  return serviceType === "mechanical"
-    ? mechanicalProgressWorkflow
-    : bodyworkProgressWorkflow;
+  const resolvedServiceType = resolveRepairServiceType(serviceType);
+
+  if (resolvedServiceType === "bodywork") return bodyworkProgressWorkflow;
+  if (resolvedServiceType === "mechanical") return mechanicalProgressWorkflow;
+  if (resolvedServiceType === "wheels") return wheelsProgressWorkflow;
+  return [];
 }
 
 export function normalizeProgressStatus(

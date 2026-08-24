@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
@@ -17,8 +17,13 @@ import {
   formatProgressStatus,
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
-import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  getDamageTypeLabel,
+  getRequestTypeBadgeLabel,
+} from "@/lib/displayLabels";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { interactiveButton } from "@/lib/ui";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
@@ -46,6 +51,7 @@ type WonJobRequestRow = {
   city: string | null;
   license_plate: string | null;
   damage_type: string | null;
+  service_type: RepairServiceType | null;
   service_details: RepairServiceDetails | null;
   description: string | null;
   images: Array<{
@@ -99,6 +105,7 @@ type WonJob = {
     city: string;
     licensePlate: string | null;
     damageType: string;
+    serviceType: RepairServiceType | null;
     serviceDetails: RepairServiceDetails | null;
     description: string;
     images: JobImage[];
@@ -112,20 +119,29 @@ function getJobDamageDetails(request: WonJob["request"]) {
   const affectedPartLabels = getAffectedPartLabels(request.serviceDetails);
   const detailedDamageTypeLabels = getDamageTypeLabels(request.serviceDetails);
   const fallbackDamageTypeLabel = getDamageTypeLabel(request.damageType);
-
-  return {
-    affectedPartLabels,
-    displayedDamageTypeLabels:
-      detailedDamageTypeLabels.length > 0
+  const mechanicalDetails =
+    request.serviceType === "mechanical"
+      ? getMechanicalServiceDetailGroups(request.serviceDetails)
+      : [];
+  const displayedDamageTypeLabels =
+    mechanicalDetails.length > 0
+      ? []
+      : detailedDamageTypeLabels.length > 0
         ? detailedDamageTypeLabels
         : fallbackDamageTypeLabel
           ? [fallbackDamageTypeLabel]
-          : [],
+          : [];
+
+  return {
+    affectedPartLabels,
+    mechanicalDetails,
+    displayedDamageTypeLabels,
   };
 }
 
 export default function WorkshopWonJobsPage() {
   const router = useRouter();
+  const startingJobIdsRef = useRef(new Set<string>());
 
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -359,6 +375,7 @@ export default function WorkshopWonJobsPage() {
             city,
             license_plate,
             damage_type,
+            service_type,
             service_details,
             description,
             images,
@@ -404,6 +421,7 @@ export default function WorkshopWonJobsPage() {
             city: request?.city || "-",
             licensePlate: request?.license_plate || null,
             damageType: request?.damage_type || "other",
+            serviceType: request?.service_type ?? null,
             serviceDetails: request?.service_details ?? null,
             description:
               request?.description ||
@@ -523,6 +541,7 @@ export default function WorkshopWonJobsPage() {
       "Lucrarea nu poate fi pornită deoarece starea ei s-a schimbat. Reîncarcă pagina și încearcă din nou.";
 
     if (
+      startingJobIdsRef.current.has(job.requestId) ||
       job.offerStatus !== "accepted" ||
       job.appointment?.status !== "confirmed" ||
       job.request.status !== "matched"
@@ -530,6 +549,8 @@ export default function WorkshopWonJobsPage() {
       alert(staleJobMessage);
       return;
     }
+
+    startingJobIdsRef.current.add(job.requestId);
 
     try {
       const { data, error } = await supabase
@@ -563,6 +584,8 @@ export default function WorkshopWonJobsPage() {
     } catch (err) {
       console.error("Failed to start job:", err);
       alert("Nu am putut începe lucrarea.");
+    } finally {
+      startingJobIdsRef.current.delete(job.requestId);
     }
   };
 
@@ -848,8 +871,11 @@ export default function WorkshopWonJobsPage() {
         ) : activeTab === "workshop" ? (
           <div className="space-y-4">
             {filteredJobs.map((job) => {
-              const { affectedPartLabels, displayedDamageTypeLabels } =
-                getJobDamageDetails(job.request);
+              const {
+                affectedPartLabels,
+                displayedDamageTypeLabels,
+                mechanicalDetails,
+              } = getJobDamageDetails(job.request);
               const latestProgressLabel = job.latestProgressStatus
                 ? formatJobStatus(job.latestProgressStatus)
                 : null;
@@ -883,6 +909,7 @@ export default function WorkshopWonJobsPage() {
                     variant="listLarge"
                     affectedParts={affectedPartLabels}
                     damageTypes={displayedDamageTypeLabels}
+                    mechanicalDetails={mechanicalDetails}
                     details={[
                       {
                         text: "În lucru",
@@ -896,6 +923,12 @@ export default function WorkshopWonJobsPage() {
                             },
                           ]
                         : []),
+                      {
+                        text: getRequestTypeBadgeLabel(
+                          job.request.serviceType,
+                        ),
+                        color: "orange",
+                      },
                     ]}
                   />
 
@@ -957,8 +990,11 @@ export default function WorkshopWonJobsPage() {
             {filteredJobs.map((job) => {
               const jobState = getJobState(job);
               const appointment = job.appointment;
-              const { affectedPartLabels, displayedDamageTypeLabels } =
-                getJobDamageDetails(job.request);
+              const {
+                affectedPartLabels,
+                displayedDamageTypeLabels,
+                mechanicalDetails,
+              } = getJobDamageDetails(job.request);
 
               const displayDate =
                 appointment?.proposed_date ||
@@ -988,6 +1024,10 @@ export default function WorkshopWonJobsPage() {
                   city={job.request.city}
                   affectedParts={affectedPartLabels}
                   damageTypes={displayedDamageTypeLabels}
+                  mechanicalDetails={mechanicalDetails}
+                  requestTypeLabel={getRequestTypeBadgeLabel(
+                    job.request.serviceType,
+                  )}
                   description={job.request.description}
                   clientName={job.clientName}
                   price={job.price}
@@ -1033,8 +1073,11 @@ export default function WorkshopWonJobsPage() {
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredJobs.map((job) => {
               const jobState = getJobState(job);
-              const { affectedPartLabels, displayedDamageTypeLabels } =
-                getJobDamageDetails(job.request);
+              const {
+                affectedPartLabels,
+                displayedDamageTypeLabels,
+                mechanicalDetails,
+              } = getJobDamageDetails(job.request);
 
               return (
                 <article
@@ -1052,6 +1095,7 @@ export default function WorkshopWonJobsPage() {
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
                     damageTypes={displayedDamageTypeLabels}
+                    mechanicalDetails={mechanicalDetails}
                     details={[
                       {
                         text: jobState.label,
@@ -1063,6 +1107,12 @@ export default function WorkshopWonJobsPage() {
                               : jobState.stage === "completed"
                                 ? "green"
                                 : "blue",
+                      },
+                      {
+                        text: getRequestTypeBadgeLabel(
+                          job.request.serviceType,
+                        ),
+                        color: "orange",
                       },
                       {
                         text: `€${job.price}`,

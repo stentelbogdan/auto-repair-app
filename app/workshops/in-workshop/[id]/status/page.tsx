@@ -9,9 +9,9 @@ import {
   getProgressWorkflow,
   isProgressStatusValidForWorkflow,
   normalizeProgressStatus,
-  type ProgressServiceType,
   type ProgressStatus,
 } from "@/lib/work-progress/workflows";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type RequestSummary = {
   car_brand: string | null;
@@ -28,8 +28,7 @@ export default function WorkStatusPage() {
   const [loading, setLoading] = useState(true);
   const [request, setRequest] = useState<RequestSummary | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [serviceType, setServiceType] =
-    useState<ProgressServiceType>("bodywork");
+  const [serviceType, setServiceType] = useState<string | null>(null);
   const [activeStatus, setActiveStatus] = useState<ProgressStatus | null>(null);
   const [savingStatus, setSavingStatus] = useState<ProgressStatus | null>(null);
   const [workflowBlocked, setWorkflowBlocked] = useState(false);
@@ -78,11 +77,23 @@ export default function WorkStatusPage() {
 
         setUserId(authData.user.id);
         setRequest(requestResult.data);
-        const resolvedServiceType: ProgressServiceType =
-          requestResult.data.service_type === "mechanical"
-            ? "mechanical"
-            : "bodywork";
-        setServiceType(resolvedServiceType);
+        const resolvedServiceType = resolveRepairServiceType(
+          requestResult.data.service_type,
+        );
+
+        setServiceType(
+          resolvedServiceType ?? requestResult.data.service_type,
+        );
+
+        if (!resolvedServiceType) {
+          setWorkflowBlocked(true);
+          setFeedback({
+            type: "error",
+            message:
+              "Tipul lucrării nu are un workflow de progres recunoscut. Etapa nu poate fi schimbată.",
+          });
+          return;
+        }
 
         if (progressResult.data?.status) {
           if (
@@ -98,7 +109,7 @@ export default function WorkStatusPage() {
             setWorkflowBlocked(true);
             setFeedback({
               type: "error",
-              message: `Statusul curent „${formatProgressStatus(progressResult.data.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : "de caroserie"}. Etapa nu poate fi schimbată până la clarificarea datelor.`,
+              message: `Statusul curent „${formatProgressStatus(progressResult.data.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : resolvedServiceType === "wheels" ? "de roți și anvelope" : "de caroserie"}. Etapa nu poate fi schimbată până la clarificarea datelor.`,
             });
           }
         } else if (requestResult.data.status === "completed") {

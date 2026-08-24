@@ -31,6 +31,7 @@ import {
   normalizeMechanicalServiceDetails,
   type MechanicalSymptomIdsByCategory,
 } from "@/lib/mechanical/mechanical-service-details";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -219,7 +220,11 @@ export default function EditMyRequestPage() {
           Array.isArray(loadedRequest.images) ? loadedRequest.images : [],
         );
 
-        if (loadedRequest.service_type === "mechanical") {
+        const resolvedServiceType = resolveRepairServiceType(
+          loadedRequest.service_type,
+        );
+
+        if (resolvedServiceType === "mechanical") {
           const normalizedDetails = normalizeMechanicalServiceDetails(
             loadedRequest.service_details,
           );
@@ -236,6 +241,11 @@ export default function EditMyRequestPage() {
           );
           setActiveMechanicalCategory(primaryCategory);
           setExpandedMechanicalCategory(primaryCategory);
+          setServiceDetails([]);
+          return;
+        }
+
+        if (resolvedServiceType !== "bodywork") {
           setServiceDetails([]);
           return;
         }
@@ -280,7 +290,10 @@ export default function EditMyRequestPage() {
   }, [requestId, router]);
 
   useEffect(() => {
-    if (!request || request.service_type === "mechanical") {
+    if (
+      !request ||
+      resolveRepairServiceType(request.service_type) !== "bodywork"
+    ) {
       setIs3DReady(false);
       return;
     }
@@ -302,7 +315,17 @@ export default function EditMyRequestPage() {
   const handleSave = async () => {
     if (!request || !canEdit) return;
 
-    const isMechanicalRequest = request.service_type === "mechanical";
+    const resolvedServiceType = resolveRepairServiceType(request.service_type);
+
+    if (
+      resolvedServiceType !== "bodywork" &&
+      resolvedServiceType !== "mechanical"
+    ) {
+      alert("Editarea acestui tip de cerere nu este disponibilă încă.");
+      return;
+    }
+
+    const isMechanicalRequest = resolvedServiceType === "mechanical";
     const nextMechanicalServiceDetails = isMechanicalRequest
       ? buildMechanicalServiceDetails(mechanicalSymptomsByCategory)
       : null;
@@ -471,7 +494,10 @@ export default function EditMyRequestPage() {
 
   if (!request) return null;
 
-  const isMechanicalRequest = request.service_type === "mechanical";
+  const resolvedServiceType = resolveRepairServiceType(request.service_type);
+  const isMechanicalRequest = resolvedServiceType === "mechanical";
+  const isUnsupportedRequest =
+    resolvedServiceType !== "bodywork" && resolvedServiceType !== "mechanical";
 
   return (
     <main className="min-h-screen bg-black px-4 pb-40 pt-6 text-white">
@@ -486,7 +512,11 @@ export default function EditMyRequestPage() {
         </button>
 
         <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-          {isMechanicalRequest ? "Editare problemă mecanică" : "Editare daună"}
+          {isMechanicalRequest
+            ? "Editare problemă mecanică"
+            : isUnsupportedRequest
+              ? "Detalii cerere"
+              : "Editare daună"}
         </p>
 
         <LicensePlate plate={licensePlate} className="mt-4" />
@@ -500,7 +530,13 @@ export default function EditMyRequestPage() {
         </p>
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
-          {isMechanicalRequest ? (
+          {isUnsupportedRequest ? (
+            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4">
+              <p className="text-sm font-semibold text-black/70">
+                Editarea acestui tip de cerere nu este disponibilă încă.
+              </p>
+            </div>
+          ) : isMechanicalRequest ? (
             <div>
               <p className="text-sm font-semibold text-black/60">
                 Categorii și simptome

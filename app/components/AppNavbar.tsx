@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
+import { WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE } from "@/lib/notifications";
 
 type Role = "customer" | "workshop";
 
@@ -61,6 +62,7 @@ export default function AppNavbar() {
 
   const [appointmentConfirmedUnreadCount, setAppointmentConfirmedUnreadCount] =
     useState(0);
+  const [jobStartedUnreadCount, setJobStartedUnreadCount] = useState(0);
   const [appointmentToast, setAppointmentToast] = useState<{
     title: string;
     message: string;
@@ -661,6 +663,7 @@ export default function AppNavbar() {
       const [
         { count: proposalCount, error: proposalError },
         { count: confirmedCount, error: confirmedError },
+        { count: jobStartedCount, error: jobStartedError },
       ] = await Promise.all([
         supabase
           .from("notifications")
@@ -681,21 +684,30 @@ export default function AppNavbar() {
             "customer_confirmed_appointment",
             "workshop_confirmed_appointment",
           ]),
+
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_id", userId)
+          .is("read_at", null)
+          .eq("type", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE),
       ]);
 
-      if (proposalError || confirmedError) {
+      if (proposalError || confirmedError || jobStartedError) {
         console.error(
           "Failed to load appointment notifications:",
-          proposalError || confirmedError,
+          proposalError || confirmedError || jobStartedError,
         );
 
         setAppointmentProposalUnreadCount(0);
         setAppointmentConfirmedUnreadCount(0);
+        setJobStartedUnreadCount(0);
         return;
       }
 
       setAppointmentProposalUnreadCount(proposalCount || 0);
       setAppointmentConfirmedUnreadCount(confirmedCount || 0);
+      setJobStartedUnreadCount(jobStartedCount || 0);
     };
 
     const loadUnreadWonJobs = async () => {
@@ -1262,7 +1274,12 @@ export default function AppNavbar() {
 
   const goJobs = () => {
     void runLocked(async ({ navigate }) => {
-      if (userId && appointmentConfirmedUnreadCount > 0) {
+      const hasUnreadJobStarted = jobStartedUnreadCount > 0;
+
+      if (
+        userId &&
+        (appointmentConfirmedUnreadCount > 0 || hasUnreadJobStarted)
+      ) {
         const { error } = await supabase
           .from("notifications")
           .update({
@@ -1273,6 +1290,7 @@ export default function AppNavbar() {
           .in("type", [
             "customer_confirmed_appointment",
             "workshop_confirmed_appointment",
+            WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
           ]);
 
         if (error) {
@@ -1282,6 +1300,7 @@ export default function AppNavbar() {
           );
         } else {
           setAppointmentConfirmedUnreadCount(0);
+          setJobStartedUnreadCount(0);
         }
       }
 
@@ -1293,7 +1312,7 @@ export default function AppNavbar() {
 
       localStorage.setItem("activeRole", "customer");
       navigate(
-        progressUnreadCount > 0
+        progressUnreadCount > 0 || hasUnreadJobStarted
           ? "/customer/my-jobs?tab=in_progress"
           : "/customer/my-jobs",
       );
@@ -1425,13 +1444,15 @@ export default function AppNavbar() {
                 </span>
               )}
 
-              {appointmentConfirmedUnreadCount > 0 &&
+              {appointmentConfirmedUnreadCount + jobStartedUnreadCount > 0 &&
                 !(isClientMode && progressUnreadCount > 0) &&
                 !(isWorkshopMode && wonJobsUnreadCount > 0) && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
-                    {appointmentConfirmedUnreadCount > 9
+                    {appointmentConfirmedUnreadCount + jobStartedUnreadCount >
+                    9
                       ? "9+"
-                      : appointmentConfirmedUnreadCount}
+                      : appointmentConfirmedUnreadCount +
+                        jobStartedUnreadCount}
                   </span>
                 )}
             </button>

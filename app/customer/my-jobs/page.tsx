@@ -16,17 +16,24 @@ import { Eye } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import { interactiveButton } from "@/lib/ui";
-import { markNotificationsAsRead } from "@/lib/notifications";
+import {
+  markNotificationsAsRead,
+  WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+} from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
 import {
   getAffectedPartLabels,
   getDamageTypeLabels,
 } from "@/lib/car-damage";
-import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  getDamageTypeLabel,
+  getRequestTypeBadgeLabel,
+} from "@/lib/displayLabels";
 import {
   formatProgressStatus,
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
+import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type RepairAppointment = {
   id: string;
@@ -103,7 +110,10 @@ export default function MyJobsPage() {
 
       await markNotificationsAsRead({
         recipientRole: "customer",
-        types: ["workshop_confirmed_appointment"],
+        types: [
+          "workshop_confirmed_appointment",
+          WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+        ],
       });
 
       const { data: reviewsData } = await supabase
@@ -523,6 +533,10 @@ export default function MyJobsPage() {
               const fallbackDamageTypeLabel = getDamageTypeLabel(
                 request.damage_type,
               );
+              const mechanicalDetails =
+                request.service_type === "mechanical"
+                  ? getMechanicalServiceDetailGroups(request.service_details)
+                  : [];
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -557,7 +571,12 @@ export default function MyJobsPage() {
                         city={request.city}
                         variant="listLarge"
                         affectedParts={affectedPartLabels}
-                        damageTypes={displayedDamageTypeLabels}
+                        damageTypes={
+                          mechanicalDetails.length > 0
+                            ? []
+                            : displayedDamageTypeLabels
+                        }
+                        mechanicalDetails={mechanicalDetails}
                         details={[
                           {
                             text:
@@ -591,6 +610,12 @@ export default function MyJobsPage() {
                                 },
                               ]
                             : []),
+                          {
+                            text: getRequestTypeBadgeLabel(
+                              request.service_type,
+                            ),
+                            color: "orange",
+                          },
                         ]}
                       />
                     </div>

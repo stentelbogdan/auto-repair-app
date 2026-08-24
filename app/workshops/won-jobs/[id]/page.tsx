@@ -13,7 +13,6 @@ import {
   formatProgressStatus,
   getProgressWorkflow,
   normalizeProgressStatus,
-  type ProgressServiceType,
 } from "@/lib/work-progress/workflows";
 
 function logPreparedImage(preparedImage: PreparedImage) {
@@ -40,8 +39,7 @@ export default function WonJobDetailPage() {
   const [uploadedPreviewUrls, setUploadedPreviewUrls] = useState<string[]>([]);
   const uploadedPreviewUrlsRef = useRef<string[]>([]);
   const [successMessage, setSuccessMessage] = useState("");
-  const [serviceType, setServiceType] =
-    useState<ProgressServiceType>("bodywork");
+  const [serviceType, setServiceType] = useState<string | null>("bodywork");
 
   useEffect(() => {
     const loadRequestStatus = async () => {
@@ -68,8 +66,8 @@ export default function WonJobDetailPage() {
         setSelectedStatus(requestData.status);
       }
 
-      if (requestData?.service_type === "mechanical") {
-        setServiceType("mechanical");
+      if (requestData) {
+        setServiceType(requestData.service_type ?? "bodywork");
       }
     };
 
@@ -328,7 +326,9 @@ export default function WonJobDetailPage() {
               placeholder={
                 serviceType === "mechanical"
                   ? "Ex: Am făcut diagnoza, am comandat piesele..."
-                  : "Ex: Bara spate este pregătită pentru vopsit..."
+                  : serviceType === "wheels"
+                    ? "Ex: Am inspectat roțile și am început intervenția..."
+                    : "Ex: Bara spate este pregătită pentru vopsit..."
               }
               className="mt-4 min-h-[120px] w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
             />

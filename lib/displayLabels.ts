@@ -27,6 +27,7 @@ export const damageTypeLabels: Record<string, string> = {
   cracked_part: "Element crăpat",
   cosmetic: "Daună estetică",
   mechanical: "Problemă mecanică",
+  wheels: "Roți și anvelope",
   detailing: "Detailing",
   body: "Caroserie",
   bodywork: "Caroserie",
@@ -53,6 +54,7 @@ export const detailedDamageTypeLabels: Record<string, string> = {
 export const serviceTypeLabels: Record<string, string> = {
   bodywork: "Caroserie",
   mechanical: "Mecanică",
+  wheels: "Roți și anvelope",
 };
 
 export const statusLabels: Record<string, string> = {
@@ -108,9 +110,10 @@ export function getServiceTypeLabel(value?: string | null) {
 }
 
 export function getRequestTypeBadgeLabel(serviceType?: string | null) {
-  return serviceType === "mechanical"
-    ? "Problemă mecanică"
-    : "Daună estetică";
+  if (!serviceType || serviceType === "bodywork") return "Daună estetică";
+  if (serviceType === "mechanical") return "Problemă mecanică";
+  if (serviceType === "wheels") return "Roți și anvelope";
+  return "Tip cerere";
 }
 
 export function getStatusLabel(value?: string | null) {

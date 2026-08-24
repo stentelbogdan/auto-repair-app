@@ -5,6 +5,7 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import RequestClientName from "@/app/components/RequestClientName";
 import { interactiveButton } from "@/lib/ui";
+import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
 
 type JobImage = {
   name?: string;
@@ -24,6 +25,7 @@ type JobAppointmentCardProps = {
   city?: string | null;
   affectedParts?: string[];
   damageTypes?: string[];
+  mechanicalDetails?: MechanicalServiceDetailGroup[];
   description?: string | null;
   clientName?: string | null;
 
@@ -36,6 +38,7 @@ type JobAppointmentCardProps = {
   statusText?: string;
   badgeText?: string;
   badgeColor?: "yellow" | "orange" | "gray" | "green" | "blue" | "red";
+  requestTypeLabel?: string;
 
   message?: string | null;
 
@@ -52,6 +55,7 @@ export default function JobAppointmentCard({
   city,
   affectedParts = [],
   damageTypes = [],
+  mechanicalDetails = [],
   description,
   clientName,
   price,
@@ -62,6 +66,7 @@ export default function JobAppointmentCard({
   statusText = "Confirmată",
   badgeText = "Programare confirmată",
   badgeColor = "blue",
+  requestTypeLabel,
   message,
   onChat,
   onStartJob,
@@ -79,11 +84,15 @@ export default function JobAppointmentCard({
         variant="listLarge"
         affectedParts={affectedParts}
         damageTypes={damageTypes}
+        mechanicalDetails={mechanicalDetails}
         details={[
           {
             text: badgeText,
             color: badgeColor,
           },
+          ...(requestTypeLabel
+            ? [{ text: requestTypeLabel, color: "orange" as const }]
+            : []),
         ]}
       />
 

@@ -13,6 +13,7 @@ import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-se
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 
 type RepairImage = {
   name?: string;
@@ -34,7 +35,7 @@ type RepairRequestRow = {
   license_plate: string | null;
   damage_type: string;
   service_details: RepairServiceDetails | null;
-  service_type: "bodywork" | "mechanical" | null;
+  service_type: RepairServiceType | null;
   description: string | null;
   images: RepairImage[];
   status: string;

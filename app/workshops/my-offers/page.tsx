@@ -8,7 +8,10 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import { markNotificationsAsRead } from "@/lib/notifications";
-import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  getDamageTypeLabel,
+  getRequestTypeBadgeLabel,
+} from "@/lib/displayLabels";
 import {
   getAffectedPartLabels,
   getDamageTypeLabels,
@@ -17,6 +20,7 @@ import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 
 type ProfileRow = {
   role: string[] | null;
@@ -36,7 +40,7 @@ type RepairRequest = {
   city: string | null;
   license_plate: string | null;
   damage_type: string | null;
-  service_type: "bodywork" | "mechanical" | null;
+  service_type: RepairServiceType | null;
   service_details?: RepairServiceDetails | null;
   description: string | null;
   status?: string | null;
@@ -589,7 +593,13 @@ export default function WorkshopMyOffersPage() {
                         : displayedDamageTypeLabels
                     }
                     mechanicalDetails={mechanicalDetails}
-                    details={[workshopBadge]}
+                    details={[
+                      workshopBadge,
+                      {
+                        text: getRequestTypeBadgeLabel(request?.service_type),
+                        color: "orange",
+                      },
+                    ]}
                   />
 
                   <RequestClientName name={request?.clientName} />

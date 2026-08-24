@@ -16,11 +16,15 @@ import type {
 } from "@/lib/services/offers/customer-offers.types";
 import { loadCustomerOffers } from "@/lib/services/offers/customer-offers.service";
 import { confirmCustomerAppointment } from "@/lib/services/offers/customer-appointments.service";
-import { getDamageTypeLabel } from "@/lib/displayLabels";
+import {
+  getDamageTypeLabel,
+  getRequestTypeBadgeLabel,
+} from "@/lib/displayLabels";
 import {
   getAffectedPartLabels,
   getDamageTypeLabels,
 } from "@/lib/car-damage";
+import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 
 type ProfileRow = {
   role: string[] | null;
@@ -356,6 +360,10 @@ export default function OffersPage() {
               const fallbackDamageTypeLabel = getDamageTypeLabel(
                 request.damageType,
               );
+              const mechanicalDetails =
+                request.serviceType === "mechanical"
+                  ? getMechanicalServiceDetailGroups(request.serviceDetails)
+                  : [];
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -368,7 +376,7 @@ export default function OffersPage() {
                   key={request.id}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
-                  <div className="relative pb-11">
+                  <div className="relative pb-20">
                     <CarHeader
                       images={request.images}
                       plate={request.licensePlate}
@@ -379,13 +387,25 @@ export default function OffersPage() {
                       city={request.city}
                       variant="listLarge"
                       affectedParts={affectedPartLabels}
-                      damageTypes={displayedDamageTypeLabels}
+                      damageTypes={
+                        mechanicalDetails.length > 0
+                          ? []
+                          : displayedDamageTypeLabels
+                      }
+                      mechanicalDetails={mechanicalDetails}
                     />
 
-                    <div className="absolute left-0 top-[196px] flex w-[150px] justify-center">
+                    <div className="absolute left-0 top-[196px] flex w-[150px] flex-col items-center gap-1.5">
                       <span className="rounded-full bg-orange-50 px-4 py-1.5 text-sm font-bold text-orange-700">
                         {group.items.length}{" "}
                         {group.items.length === 1 ? "ofertă" : "oferte"}
+                      </span>
+
+                      <span className="flex max-w-full items-center justify-center gap-1.5 rounded-2xl bg-black/[0.04] px-2.5 py-1">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-orange-500" />
+                        <span className="min-w-0 text-center text-xs font-bold leading-tight text-orange-600">
+                          {getRequestTypeBadgeLabel(request.serviceType)}
+                        </span>
                       </span>
                     </div>
                   </div>

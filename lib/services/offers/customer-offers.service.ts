@@ -218,6 +218,7 @@ function createRequestMap(
       carYear: request.car_year,
       city: request.city,
       damageType: request.damage_type,
+      serviceType: request.service_type ?? null,
       serviceDetails: request.service_details,
       description: request.description || "",
 

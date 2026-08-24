@@ -2,6 +2,9 @@ import { supabase } from "@/lib/supabase/client";
 
 export type NotificationRecipientRole = "customer" | "workshop";
 
+export const WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE =
+  "workshop_started_job";
+
 type MarkNotificationsAsReadInput = {
   types: string[];
   recipientRole: NotificationRecipientRole;

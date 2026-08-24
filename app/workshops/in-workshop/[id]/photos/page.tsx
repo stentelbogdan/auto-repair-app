@@ -16,6 +16,7 @@ import {
 import { Camera, Images } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type RequestSummary = {
   car_brand: string | null;
@@ -94,10 +95,18 @@ export default function WorkProgressPhotosPage() {
 
         setUserId(authData.user.id);
         setRequest(requestResult.data);
-        const resolvedServiceType =
-          requestResult.data.service_type === "mechanical"
-            ? "mechanical"
-            : "bodywork";
+        const resolvedServiceType = resolveRepairServiceType(
+          requestResult.data.service_type,
+        );
+
+        if (!resolvedServiceType) {
+          setFeedback({
+            type: "error",
+            message:
+              "Tipul lucrării nu are un workflow de progres recunoscut. Pozele nu pot fi trimise.",
+          });
+          return;
+        }
 
         if (!progressResult.data?.status) {
           setFeedback({
@@ -113,7 +122,7 @@ export default function WorkProgressPhotosPage() {
         ) {
           setFeedback({
             type: "error",
-            message: `Statusul curent „${formatProgressStatus(progressResult.data.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : "de caroserie"}. Pozele nu pot fi trimise până la clarificarea datelor.`,
+            message: `Statusul curent „${formatProgressStatus(progressResult.data.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : resolvedServiceType === "wheels" ? "de roți și anvelope" : "de caroserie"}. Pozele nu pot fi trimise până la clarificarea datelor.`,
           });
         } else {
           setCurrentStatus(normalizeProgressStatus(progressResult.data.status));

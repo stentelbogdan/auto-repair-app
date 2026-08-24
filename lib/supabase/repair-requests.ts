@@ -2,7 +2,9 @@ import { supabase } from "@/lib/supabase/client";
 import type {
   SupportedMechanicalServiceDetails,
 } from "@/lib/mechanical/mechanical-service-details";
+import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
+import type { WheelsServiceDetails } from "@/lib/wheels/wheels-service-details";
 
 export type StructuredServiceDetails = {
   version: 1;
@@ -20,7 +22,8 @@ export type StructuredServiceDetails = {
 export type RepairServiceDetails =
   | string[]
   | StructuredServiceDetails
-  | SupportedMechanicalServiceDetails;
+  | SupportedMechanicalServiceDetails
+  | WheelsServiceDetails;
 
 export type RepairRequestRow = {
   id: string;
@@ -33,7 +36,7 @@ export type RepairRequestRow = {
   damage_type: string;
   service_details?: RepairServiceDetails;
 
-  service_type?: "bodywork" | "mechanical";
+  service_type?: RepairServiceType | null;
 
   request_type?: "repair" | "direct_request" | "direct_message";
   target_workshop_id?: string | null;
@@ -63,7 +66,7 @@ export async function createRepairRequest(input: {
   damageType: string;
   serviceDetails?: RepairServiceDetails;
   description: string;
-  serviceType?: "bodywork" | "mechanical";
+  serviceType?: RepairServiceType;
   requestType?: "repair" | "direct_request" | "direct_message";
   targetWorkshopId?: string | null;
   images: {

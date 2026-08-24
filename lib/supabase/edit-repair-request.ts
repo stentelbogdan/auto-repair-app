@@ -7,6 +7,7 @@ import type {
   MechanicalServiceDetails,
 } from "@/lib/mechanical/mechanical-service-details";
 import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
+import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import {
   prepareImageForUpload,
@@ -30,7 +31,7 @@ export type EditableRepairRequest = {
   license_plate: string | null;
   damage_type: string;
   service_details: RepairServiceDetails | null;
-  service_type: "bodywork" | "mechanical" | null;
+  service_type: RepairServiceType | null;
   description: string | null;
   images: EditableRepairImage[] | null;
   status: string;
