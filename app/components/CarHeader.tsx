@@ -20,6 +20,17 @@ type CarHeaderDetail = {
   icon?: LucideIcon;
 };
 
+export type WheelsServiceDetailGroup = {
+  key: string;
+  title: string;
+  serviceLabels: string[];
+};
+
+export type WheelsServiceSummary = {
+  groups: WheelsServiceDetailGroup[];
+  wheelSizeLabel: string;
+};
+
 type CarHeaderProps = {
   images?: CarImage[];
   plate?: string | null;
@@ -33,6 +44,7 @@ type CarHeaderProps = {
   affectedParts?: string[];
   damageTypes?: string[];
   mechanicalDetails?: MechanicalServiceDetailGroup[];
+  wheelsSummary?: WheelsServiceSummary;
   showAllMechanicalDetails?: boolean;
   onActiveInteraction?: () => void;
 };
@@ -50,6 +62,7 @@ export default function CarHeader({
   affectedParts = [],
   damageTypes = [],
   mechanicalDetails = [],
+  wheelsSummary,
   showAllMechanicalDetails: forceShowAllMechanicalDetails = false,
   onActiveInteraction,
 }: CarHeaderProps) {
@@ -337,6 +350,38 @@ export default function CarHeader({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {wheelsSummary && wheelsSummary.groups.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {wheelsSummary.groups.slice(0, 2).map((group) => (
+              <div key={group.key}>
+                <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+                  {group.title}
+                </p>
+                <div className="mt-1.5 space-y-0.5">
+                  {group.serviceLabels.map((serviceLabel) => (
+                    <p
+                      key={serviceLabel}
+                      className="text-[13px] font-semibold leading-[18px] text-black/70"
+                    >
+                      {serviceLabel}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {wheelsSummary.groups.length > 2 && (
+              <p className="text-[13px] font-bold leading-[18px] text-orange-600">
+                + încă {wheelsSummary.groups.length - 2}
+              </p>
+            )}
+
+            <p className="text-[13px] font-semibold leading-[18px] text-black/60">
+              {wheelsSummary.wheelSizeLabel}
+            </p>
           </div>
         )}
       </div>

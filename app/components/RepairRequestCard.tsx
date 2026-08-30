@@ -1,10 +1,18 @@
 "use client";
 
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
-import CarHeader from "@/app/components/CarHeader";
+import CarHeader, {
+  type WheelsServiceSummary,
+} from "@/app/components/CarHeader";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import {
+  isWheelsServiceDetailsV2,
+  RIM_SERVICES,
+  TIRE_SERVICES,
+  WHEEL_POSITIONS,
+} from "@/lib/wheels/wheels-service-details";
 import {
   formatProgressStatus,
   normalizeProgressStatus,
@@ -49,6 +57,11 @@ export default function RepairRequestCard({
       ? getMechanicalServiceDetailGroups(request.service_details)
       : [];
 
+  const wheelsSummary =
+    request.service_type === "wheels"
+      ? getWheelsServiceSummary(request.service_details)
+      : undefined;
+
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"
     : "w-full overflow-hidden rounded-[22px] bg-white text-left text-black shadow-lg";
@@ -81,6 +94,7 @@ export default function RepairRequestCard({
             affectedParts={affectedPartLabels}
             damageTypes={damageTypeLabels}
             mechanicalDetails={mechanicalDetails}
+            wheelsSummary={wheelsSummary}
             details={[
               {
                 text: formatStatus(request.status, request.accepted_offer_id),
@@ -153,6 +167,47 @@ export default function RepairRequestCard({
       </div>
     </div>
   );
+}
+
+function getWheelsServiceSummary(
+  value: unknown,
+): WheelsServiceSummary | undefined {
+  if (!isWheelsServiceDetailsV2(value)) return undefined;
+
+  const wheelLabels = new Map(
+    WHEEL_POSITIONS.map((position) => [position.id, position.label]),
+  );
+  const tireServiceLabels = new Map(
+    TIRE_SERVICES.map((service) => [service.id, service.label]),
+  );
+  const rimServiceLabels = new Map(
+    RIM_SERVICES.map((service) => [service.id, service.label]),
+  );
+  const groups = value.selections.flatMap((selection) =>
+    selection.components.map((component) => {
+      const isTire = component.component === "tire";
+      const serviceLabels = isTire
+        ? component.services.map(
+            (serviceId) => tireServiceLabels.get(serviceId) ?? serviceId,
+          )
+        : component.services.map(
+            (serviceId) => rimServiceLabels.get(serviceId) ?? serviceId,
+          );
+
+      return {
+        key: `${selection.wheel}-${component.component}`,
+        title: `${wheelLabels.get(selection.wheel) ?? selection.wheel} · ${
+          isTire ? "Cauciuc" : "Jantă"
+        }`,
+        serviceLabels,
+      };
+    }),
+  );
+  const wheelSizeLabel = value.wheelSize.known
+    ? `${value.wheelSize.width}/${value.wheelSize.profile} R${value.wheelSize.rimDiameter}`
+    : "Dimensiune necunoscută";
+
+  return { groups, wheelSizeLabel };
 }
 
 function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
