@@ -59,9 +59,7 @@ export default function ScheduleDamagePage() {
   const [loadingSlots, setLoadingSlots] = useState(false);
 
   const minDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 1);
-    return date.toISOString().split("T")[0];
+    return toLocalDateValue(new Date());
   }, []);
 
   const loadData = async () => {
@@ -289,6 +287,21 @@ export default function ScheduleDamagePage() {
 
     if (!appointmentTime) {
       alert("Alege ora programării.");
+      return;
+    }
+
+    const selectedDateTime = toLocalDateTime(
+      appointmentDate,
+      appointmentTime,
+    );
+
+    if (!selectedDateTime) {
+      alert("Alege o dată și o oră valide.");
+      return;
+    }
+
+    if (selectedDateTime.getTime() <= new Date().getTime()) {
+      alert("Alege o dată și o oră care nu au trecut.");
       return;
     }
 
@@ -655,9 +668,15 @@ export default function ScheduleDamagePage() {
                         return;
                       }
 
-                      setAppointmentDate(
-                        `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
-                      );
+                      const isoDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+                      if (isoDate < toLocalDateValue(new Date())) {
+                        setDateError("Data nu poate fi în trecut.");
+                        setAppointmentDate("");
+                        return;
+                      }
+
+                      setAppointmentDate(isoDate);
                     }
                   }}
                   className={`h-14 w-full rounded-2xl border px-4 pr-14 text-base outline-none transition-colors ${
@@ -684,6 +703,12 @@ export default function ScheduleDamagePage() {
                       setDateError("");
                       const isoDate = e.target.value;
 
+                      if (isoDate && isoDate < toLocalDateValue(new Date())) {
+                        setDateError("Data nu poate fi în trecut.");
+                        setAppointmentDate("");
+                        return;
+                      }
+
                       setAppointmentDate(isoDate);
                       setDateInput(isoDate.split("-").reverse().join("."));
                     }}
@@ -705,19 +730,26 @@ export default function ScheduleDamagePage() {
               <div className="mt-3 grid grid-cols-3 gap-2">
                 {timeSlots.map((slot) => {
                   const isBooked = bookedSlots.includes(slot);
+                  const isPast = isPastDateTime(
+                    appointmentDate,
+                    slot,
+                    new Date(),
+                  );
 
                   return (
                     <button
                       key={slot}
                       type="button"
-                      disabled={!appointmentDate || isBooked || loadingSlots}
+                      disabled={
+                        !appointmentDate || isBooked || isPast || loadingSlots
+                      }
                       onClick={() => setAppointmentTime(slot)}
                       className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
                         appointmentTime === slot
                           ? "bg-orange-500 text-black"
                           : isBooked
                             ? "cursor-not-allowed bg-black/10 text-black/30 line-through"
-                            : !appointmentDate || loadingSlots
+                            : !appointmentDate || isPast || loadingSlots
                               ? "cursor-not-allowed bg-black/[0.04] text-black/30"
                               : "bg-black/[0.05] text-black"
                       }`}
@@ -815,4 +847,48 @@ export default function ScheduleDamagePage() {
       </div>
     </main>
   );
+}
+
+function toLocalDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function toLocalDateTime(dateValue: string, timeValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hour, minute] = timeValue.split(":").map(Number);
+
+  if (
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    !Number.isInteger(day) ||
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute)
+  ) {
+    return null;
+  }
+
+  const date = new Date(year, month - 1, day, hour, minute, 0, 0);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function isPastDateTime(dateValue: string, timeValue: string, now: Date) {
+  if (!dateValue) return false;
+
+  const dateTime = toLocalDateTime(dateValue, timeValue);
+  return dateTime ? dateTime.getTime() <= now.getTime() : false;
 }

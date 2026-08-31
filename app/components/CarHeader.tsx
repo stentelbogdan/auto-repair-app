@@ -24,6 +24,7 @@ export type WheelsServiceDetailGroup = {
   key: string;
   title: string;
   serviceLabels: string[];
+  supplyLabel?: string;
 };
 
 export type WheelsServiceSummary = {
@@ -46,6 +47,7 @@ type CarHeaderProps = {
   mechanicalDetails?: MechanicalServiceDetailGroup[];
   wheelsSummary?: WheelsServiceSummary;
   showAllMechanicalDetails?: boolean;
+  showAllWheelsDetails?: boolean;
   onActiveInteraction?: () => void;
 };
 
@@ -64,6 +66,7 @@ export default function CarHeader({
   mechanicalDetails = [],
   wheelsSummary,
   showAllMechanicalDetails: forceShowAllMechanicalDetails = false,
+  showAllWheelsDetails = false,
   onActiveInteraction,
 }: CarHeaderProps) {
   const title = `${brand || "Mașină"} ${model || ""}`.trim();
@@ -74,6 +77,9 @@ export default function CarHeader({
   const [showAllDamages, setShowAllDamages] = useState(false);
   const [expandedMechanicalCategories, setExpandedMechanicalCategories] =
     useState<Partial<Record<MechanicalCategoryId, boolean>>>({});
+  const [expandedWheelsSections, setExpandedWheelsSections] = useState<
+    Partial<Record<"tire" | "rim", boolean>>
+  >({});
 
   const visibleParts = showAllParts ? affectedParts : affectedParts.slice(0, 3);
 
@@ -355,29 +361,51 @@ export default function CarHeader({
 
         {wheelsSummary && wheelsSummary.groups.length > 0 && (
           <div className="mt-4 space-y-3">
-            {wheelsSummary.groups.slice(0, 2).map((group) => (
-              <div key={group.key}>
-                <p className="text-xs font-bold uppercase tracking-wide text-black/60">
-                  {group.title}
-                </p>
-                <div className="mt-1.5 space-y-0.5">
-                  {group.serviceLabels.map((serviceLabel) => (
-                    <p
-                      key={serviceLabel}
-                      className="text-[13px] font-semibold leading-[18px] text-black/70"
-                    >
-                      {serviceLabel}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ))}
+            {showAllWheelsDetails
+              ? wheelsSummary.groups.map(renderWheelsGroup)
+              : (["tire", "rim"] as const).map((component) => {
+                  const sectionGroups = wheelsSummary.groups.filter((group) =>
+                    group.key.endsWith(`-${component}`),
+                  );
 
-            {wheelsSummary.groups.length > 2 && (
-              <p className="text-[13px] font-bold leading-[18px] text-orange-600">
-                + încă {wheelsSummary.groups.length - 2}
-              </p>
-            )}
+                  if (sectionGroups.length === 0) return null;
+
+                  const isExpanded = Boolean(
+                    expandedWheelsSections[component],
+                  );
+                  const visibleGroups = isExpanded
+                    ? sectionGroups
+                    : sectionGroups.slice(0, 1);
+                  const hiddenGroups = Math.max(
+                    0,
+                    sectionGroups.length - visibleGroups.length,
+                  );
+
+                  return (
+                    <div key={component} className="space-y-3">
+                      {visibleGroups.map(renderWheelsGroup)}
+                      {sectionGroups.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onActiveInteraction?.();
+                            setExpandedWheelsSections((current) => ({
+                              ...current,
+                              [component]: !current[component],
+                            }));
+                          }}
+                          className="text-left text-[13px] font-bold leading-[18px] text-orange-600 transition active:scale-[0.98]"
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded
+                            ? "Arată mai puțin"
+                            : `+ încă ${hiddenGroups}`}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
 
             <p className="text-[13px] font-semibold leading-[18px] text-black/60">
               {wheelsSummary.wheelSizeLabel}
@@ -385,6 +413,31 @@ export default function CarHeader({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function renderWheelsGroup(group: WheelsServiceDetailGroup) {
+  return (
+    <div key={group.key}>
+      <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+        {group.title}
+      </p>
+      <div className="mt-1.5 space-y-0.5">
+        {group.serviceLabels.map((serviceLabel) => (
+          <p
+            key={serviceLabel}
+            className="text-[13px] font-semibold leading-[18px] text-black/70"
+          >
+            {serviceLabel}
+          </p>
+        ))}
+      </div>
+      {group.supplyLabel && (
+        <p className="mt-1 text-[12px] font-semibold leading-[17px] text-orange-600">
+          {group.supplyLabel}
+        </p>
+      )}
     </div>
   );
 }

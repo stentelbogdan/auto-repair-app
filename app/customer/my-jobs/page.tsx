@@ -34,6 +34,7 @@ import {
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
 type RepairAppointment = {
   id: string;
@@ -537,6 +538,10 @@ export default function MyJobsPage() {
                 request.service_type === "mechanical"
                   ? getMechanicalServiceDetailGroups(request.service_details)
                   : [];
+              const wheelsSummary =
+                request.service_type === "wheels"
+                  ? getWheelsDisplaySummary(request.service_details)
+                  : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -572,11 +577,12 @@ export default function MyJobsPage() {
                         variant="listLarge"
                         affectedParts={affectedPartLabels}
                         damageTypes={
-                          mechanicalDetails.length > 0
+                          mechanicalDetails.length > 0 || wheelsSummary
                             ? []
                             : displayedDamageTypeLabels
                         }
                         mechanicalDetails={mechanicalDetails}
+                        wheelsSummary={wheelsSummary}
                         details={[
                           {
                             text:

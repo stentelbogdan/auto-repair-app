@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
 import { WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE } from "@/lib/notifications";
+import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
 
 type Role = "customer" | "workshop";
 
@@ -1311,11 +1312,49 @@ export default function AppNavbar() {
       }
 
       localStorage.setItem("activeRole", "customer");
-      navigate(
-        progressUnreadCount > 0 || hasUnreadJobStarted
-          ? "/customer/my-jobs?tab=in_progress"
-          : "/customer/my-jobs",
-      );
+      let customerJobsUrl = hasUnreadJobStarted
+        ? "/customer/my-jobs?tab=in_progress"
+        : "/customer/my-jobs";
+
+      if (progressUnreadCount > 0) {
+        customerJobsUrl = "/customer/my-jobs?tab=in_progress";
+
+        try {
+          const { data: unreadProgressRows, error: unreadProgressError } =
+            await supabase.rpc("get_unread_progress_updates_by_request");
+
+          if (unreadProgressError) throw unreadProgressError;
+
+          const unreadRequestIds = Array.from(
+            new Set(
+              (
+                (unreadProgressRows ?? []) as Array<{ request_id: string }>
+              ).map((row) => row.request_id),
+            ),
+          );
+
+          if (unreadRequestIds.length > 0) {
+            const { data: latestProgress, error: latestProgressError } =
+              await supabase
+                .from("work_progress_updates")
+                .select("status")
+                .in("request_id", unreadRequestIds)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle<{ status: string | null }>();
+
+            if (latestProgressError) throw latestProgressError;
+
+            if (normalizeProgressStatus(latestProgress?.status) === "Ready") {
+              customerJobsUrl = "/customer/my-jobs?tab=completed";
+            }
+          }
+        } catch (error) {
+          console.error("Failed to resolve customer jobs tab:", error);
+        }
+      }
+
+      navigate(customerJobsUrl);
     });
   };
 

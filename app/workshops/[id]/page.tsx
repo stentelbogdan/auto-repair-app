@@ -14,6 +14,7 @@ import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
 type RepairImage = {
   name?: string;
@@ -328,6 +329,11 @@ export default function WorkshopRequestDetailsPage() {
       ? getMechanicalServiceDetailGroups(request.service_details)
       : [];
 
+  const wheelsSummary =
+    request.service_type === "wheels"
+      ? getWheelsDisplaySummary(request.service_details)
+      : undefined;
+
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
       <div className="mx-auto max-w-md">
@@ -366,6 +372,7 @@ export default function WorkshopRequestDetailsPage() {
             damageTypes={damageTypeLabels}
             mechanicalDetails={mechanicalDetails}
             showAllMechanicalDetails
+            wheelsSummary={wheelsSummary}
             details={[
               {
                 text: isClosed ? "Închisă" : "Deschisă",

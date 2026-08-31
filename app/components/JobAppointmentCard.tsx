@@ -1,7 +1,9 @@
 "use client";
 
 import { MessageCircle, Wrench } from "lucide-react";
-import CarHeader from "@/app/components/CarHeader";
+import CarHeader, {
+  type WheelsServiceSummary,
+} from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import RequestClientName from "@/app/components/RequestClientName";
 import { interactiveButton } from "@/lib/ui";
@@ -26,6 +28,7 @@ type JobAppointmentCardProps = {
   affectedParts?: string[];
   damageTypes?: string[];
   mechanicalDetails?: MechanicalServiceDetailGroup[];
+  wheelsSummary?: WheelsServiceSummary;
   description?: string | null;
   clientName?: string | null;
 
@@ -56,6 +59,7 @@ export default function JobAppointmentCard({
   affectedParts = [],
   damageTypes = [],
   mechanicalDetails = [],
+  wheelsSummary,
   description,
   clientName,
   price,
@@ -85,6 +89,7 @@ export default function JobAppointmentCard({
         affectedParts={affectedParts}
         damageTypes={damageTypes}
         mechanicalDetails={mechanicalDetails}
+        wheelsSummary={wheelsSummary}
         details={[
           {
             text: badgeText,

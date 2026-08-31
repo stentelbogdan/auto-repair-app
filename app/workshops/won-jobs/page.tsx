@@ -24,6 +24,7 @@ import {
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import { interactiveButton } from "@/lib/ui";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
@@ -876,6 +877,10 @@ export default function WorkshopWonJobsPage() {
                 displayedDamageTypeLabels,
                 mechanicalDetails,
               } = getJobDamageDetails(job.request);
+              const wheelsSummary =
+                job.request.serviceType === "wheels"
+                  ? getWheelsDisplaySummary(job.request.serviceDetails)
+                  : undefined;
               const latestProgressLabel = job.latestProgressStatus
                 ? formatJobStatus(job.latestProgressStatus)
                 : null;
@@ -908,8 +913,11 @@ export default function WorkshopWonJobsPage() {
                     city={job.request.city}
                     variant="listLarge"
                     affectedParts={affectedPartLabels}
-                    damageTypes={displayedDamageTypeLabels}
+                    damageTypes={
+                      wheelsSummary ? [] : displayedDamageTypeLabels
+                    }
                     mechanicalDetails={mechanicalDetails}
+                    wheelsSummary={wheelsSummary}
                     details={[
                       {
                         text: "În lucru",
@@ -995,6 +1003,10 @@ export default function WorkshopWonJobsPage() {
                 displayedDamageTypeLabels,
                 mechanicalDetails,
               } = getJobDamageDetails(job.request);
+              const wheelsSummary =
+                job.request.serviceType === "wheels"
+                  ? getWheelsDisplaySummary(job.request.serviceDetails)
+                  : undefined;
 
               const displayDate =
                 appointment?.proposed_date ||
@@ -1023,8 +1035,11 @@ export default function WorkshopWonJobsPage() {
                   carYear={job.request.carYear}
                   city={job.request.city}
                   affectedParts={affectedPartLabels}
-                  damageTypes={displayedDamageTypeLabels}
+                  damageTypes={
+                    wheelsSummary ? [] : displayedDamageTypeLabels
+                  }
                   mechanicalDetails={mechanicalDetails}
+                  wheelsSummary={wheelsSummary}
                   requestTypeLabel={getRequestTypeBadgeLabel(
                     job.request.serviceType,
                   )}
@@ -1078,6 +1093,10 @@ export default function WorkshopWonJobsPage() {
                 displayedDamageTypeLabels,
                 mechanicalDetails,
               } = getJobDamageDetails(job.request);
+              const wheelsSummary =
+                job.request.serviceType === "wheels"
+                  ? getWheelsDisplaySummary(job.request.serviceDetails)
+                  : undefined;
 
               return (
                 <article
@@ -1094,8 +1113,11 @@ export default function WorkshopWonJobsPage() {
                     variant="listLarge"
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
-                    damageTypes={displayedDamageTypeLabels}
+                    damageTypes={
+                      wheelsSummary ? [] : displayedDamageTypeLabels
+                    }
                     mechanicalDetails={mechanicalDetails}
+                    wheelsSummary={wheelsSummary}
                     details={[
                       {
                         text: jobState.label,

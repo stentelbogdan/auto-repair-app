@@ -140,9 +140,8 @@ function getLastMessageText(message?: Pick<MessageRow, "message" | "images"> | n
 
 function getCustomerPeerName(profile?: ProfileRow) {
   return (
-    profile?.full_name?.trim() ||
     profile?.display_name?.trim() ||
-    profile?.email?.trim() ||
+    profile?.full_name?.trim() ||
     "Client"
   );
 }

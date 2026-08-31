@@ -13,6 +13,7 @@ type ProfileRow = {
 type DashboardStats = {
   bodyworkRequests: number;
   mechanicalRequests: number;
+  wheelsRequests: number;
   myOffers: number;
   wonJobs: number;
   directBodyworkUnread: number;
@@ -50,6 +51,7 @@ function WorkshopDashboardContent() {
   const [stats, setStats] = useState<DashboardStats>({
     bodyworkRequests: 0,
     mechanicalRequests: 0,
+    wheelsRequests: 0,
     myOffers: 0,
     wonJobs: 0,
     directBodyworkUnread: 0,
@@ -195,6 +197,25 @@ function WorkshopDashboardContent() {
 
       const mechanicalRequestsCount = visibleMechanicalRows.length;
 
+      const visibleWheelsRows = rows.filter((req) => {
+        const requestType = req.request_type ?? "repair";
+
+        const isVisible =
+          requestType === "repair" ||
+          (requestType === "direct_request" &&
+            req.target_workshop_id === userId);
+
+        return (
+          req.service_type === "wheels" &&
+          req.status === "open" &&
+          !req.accepted_offer_id &&
+          isVisible &&
+          !offeredRequestIds.includes(req.id)
+        );
+      });
+
+      const wheelsRequestsCount = visibleWheelsRows.length;
+
       const directBodyworkUnreadResult = await supabase
         .from("repair_requests")
         .select("id", { count: "exact", head: true })
@@ -248,6 +269,7 @@ function WorkshopDashboardContent() {
       setStats({
         bodyworkRequests: bodyworkRequestsCount,
         mechanicalRequests: mechanicalRequestsCount,
+        wheelsRequests: wheelsRequestsCount,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
         directBodyworkUnread: directBodyworkUnreadResult.count || 0,
@@ -257,6 +279,7 @@ function WorkshopDashboardContent() {
       setStats({
         bodyworkRequests: 0,
         mechanicalRequests: 0,
+        wheelsRequests: 0,
         myOffers: 0,
         wonJobs: 0,
         directBodyworkUnread: 0,
@@ -315,6 +338,21 @@ function WorkshopDashboardContent() {
           />
 
           <DashboardCard
+            href="/workshops/wheels"
+            icon="🛞"
+            title="Roți și anvelope"
+            description="Cererile clienților"
+            value={stats.wheelsRequests}
+          />
+
+          <DashboardCard
+            icon="🚚"
+            title="Tractări auto"
+            description="În curând"
+            value="—"
+          />
+
+          <DashboardCard
             href="/workshops/my-offers"
             icon="€"
             title="Ofertele tale"
@@ -343,16 +381,21 @@ function DashboardCard({
   value,
   badge,
 }: {
-  href: string;
+  href?: string;
   icon: string;
   title: string;
   description: string;
   value: string | number;
   badge?: number;
 }) {
-  return (
-    <Link href={href} className="w-full">
-      <div className="relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl md:p-6">
+  const card = (
+    <div
+      className={`relative w-full rounded-[20px] bg-white p-4 text-center text-black shadow-lg transition duration-200 md:p-6 ${
+        href
+          ? "active:scale-[0.98] hover:scale-[1.02] md:hover:shadow-2xl"
+          : "cursor-default"
+      }`}
+    >
         <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
           {value}
         </div>
@@ -374,7 +417,20 @@ function DashboardCard({
         <p className="mt-1 text-xs leading-snug text-black/55 md:text-sm">
           {description}
         </p>
+    </div>
+  );
+
+  if (!href) {
+    return (
+      <div className="w-full" aria-disabled="true">
+        {card}
       </div>
+    );
+  }
+
+  return (
+    <Link href={href} className="w-full">
+      {card}
     </Link>
   );
 }

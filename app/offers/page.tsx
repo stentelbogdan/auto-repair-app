@@ -25,6 +25,7 @@ import {
   getDamageTypeLabels,
 } from "@/lib/car-damage";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
 type ProfileRow = {
   role: string[] | null;
@@ -364,6 +365,10 @@ export default function OffersPage() {
                 request.serviceType === "mechanical"
                   ? getMechanicalServiceDetailGroups(request.serviceDetails)
                   : [];
+              const wheelsSummary =
+                request.serviceType === "wheels"
+                  ? getWheelsDisplaySummary(request.serviceDetails)
+                  : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -388,11 +393,12 @@ export default function OffersPage() {
                       variant="listLarge"
                       affectedParts={affectedPartLabels}
                       damageTypes={
-                        mechanicalDetails.length > 0
+                        mechanicalDetails.length > 0 || wheelsSummary
                           ? []
                           : displayedDamageTypeLabels
                       }
                       mechanicalDetails={mechanicalDetails}
+                      wheelsSummary={wheelsSummary}
                     />
 
                     <div className="absolute left-0 top-[196px] flex w-[150px] flex-col items-center gap-1.5">

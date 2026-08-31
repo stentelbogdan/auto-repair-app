@@ -21,6 +21,7 @@ import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-se
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
 type ProfileRow = {
   role: string[] | null;
@@ -526,6 +527,10 @@ export default function WorkshopMyOffersPage() {
                 request?.service_type === "mechanical"
                   ? getMechanicalServiceDetailGroups(request.service_details)
                   : [];
+              const wheelsSummary =
+                request?.service_type === "wheels"
+                  ? getWheelsDisplaySummary(request.service_details)
+                  : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -588,11 +593,12 @@ export default function WorkshopMyOffersPage() {
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
                     damageTypes={
-                      mechanicalDetails.length > 0
+                      mechanicalDetails.length > 0 || wheelsSummary
                         ? []
                         : displayedDamageTypeLabels
                     }
                     mechanicalDetails={mechanicalDetails}
+                    wheelsSummary={wheelsSummary}
                     details={[
                       workshopBadge,
                       {
