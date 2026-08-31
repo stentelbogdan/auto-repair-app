@@ -10,6 +10,7 @@ import {
   formatProgressStatus,
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
+import { Eye } from "lucide-react";
 
 type RepairRequestCardProps = {
   request: RepairRequestRow;
@@ -122,6 +123,26 @@ export default function RepairRequestCard({
                   ]
                 : []),
 
+              ...(!isWorkshop && !isOpen
+                ? [
+                    {
+                      text: formatOffersCount(request.offers_count ?? 0),
+                      color: "blue" as const,
+                    },
+                  ]
+                : []),
+
+              ...(!isWorkshop
+                ? [
+                    {
+                      text: formatViewsCount(request.view_count ?? 0),
+                      color: "gray" as const,
+                      showDot: false,
+                      icon: Eye,
+                    },
+                  ]
+                : []),
+
               ...(showScheduledBadge
                 ? [{ text: "Programată", color: "blue" as const }]
                 : []),
@@ -183,4 +204,12 @@ function formatStatus(status?: string | null, acceptedOfferId?: string | null) {
     default:
       return status || "-";
   }
+}
+
+function formatOffersCount(count: number) {
+  return `${count} ${count === 1 ? "ofertă" : "oferte"}`;
+}
+
+function formatViewsCount(count: number) {
+  return `${count} ${count === 1 ? "vizualizare" : "vizualizări"}`;
 }

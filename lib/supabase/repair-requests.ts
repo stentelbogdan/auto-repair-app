@@ -54,6 +54,12 @@ export type RepairRequestRow = {
   accepted_offer_id: string | null;
   created_at: string;
   offers_count?: number;
+  view_count?: number;
+};
+
+type CustomerRequestViewCountRow = {
+  request_id: string;
+  view_count: number | string | null;
 };
 
 export async function createRepairRequest(input: {
@@ -139,26 +145,47 @@ export async function getOwnRepairRequests(userId: string) {
     return [];
   }
 
-  const { data: offers, error: offersError } = await supabase
-    .from("repair_offers")
-    .select("request_id")
-    .in("request_id", requestIds);
+  const [offersResult, viewCountsResult] = await Promise.all([
+    supabase
+      .from("repair_offers")
+      .select("request_id")
+      .in("request_id", requestIds),
+    supabase.rpc("get_customer_request_view_counts", {
+      p_request_ids: requestIds,
+    }),
+  ]);
 
-  if (offersError) {
-    throw offersError;
+  if (offersResult.error) {
+    throw offersResult.error;
+  }
+
+  if (viewCountsResult.error) {
+    throw viewCountsResult.error;
   }
 
   const offersCountByRequest = new Map<string, number>();
+  const viewCountByRequest = new Map<string, number>();
 
-  (offers ?? []).forEach((offer) => {
+  (offersResult.data ?? []).forEach((offer) => {
     offersCountByRequest.set(
       offer.request_id,
       (offersCountByRequest.get(offer.request_id) ?? 0) + 1,
     );
   });
 
+  ((viewCountsResult.data ?? []) as CustomerRequestViewCountRow[]).forEach(
+    (row) => {
+      const count = Number(row.view_count ?? 0);
+      viewCountByRequest.set(
+        row.request_id,
+        Number.isFinite(count) && count > 0 ? Math.floor(count) : 0,
+      );
+    },
+  );
+
   return requests.map((request) => ({
     ...request,
     offers_count: offersCountByRequest.get(request.id) ?? 0,
+    view_count: viewCountByRequest.get(request.id) ?? 0,
   }));
 }
