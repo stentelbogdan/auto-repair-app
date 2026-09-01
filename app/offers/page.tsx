@@ -36,6 +36,24 @@ type OfferGroup = {
   items: CustomerOfferItem[];
 };
 
+type OfferCategoryFilter =
+  | "all"
+  | "bodywork"
+  | "mechanical"
+  | "wheels"
+  | "towing";
+
+const OFFER_CATEGORY_FILTERS: Array<{
+  value: OfferCategoryFilter;
+  label: string;
+}> = [
+  { value: "all", label: "Toate" },
+  { value: "bodywork", label: "Estetică" },
+  { value: "mechanical", label: "Mecanică" },
+  { value: "wheels", label: "Roți" },
+  { value: "towing", label: "Tractări" },
+];
+
 export default function OffersPage() {
   /*
    * Routerul rămâne doar pentru redirecturile automate:
@@ -51,6 +69,8 @@ export default function OffersPage() {
   });
 
   const [items, setItems] = useState<CustomerOfferItem[]>([]);
+  const [activeCategory, setActiveCategory] =
+    useState<OfferCategoryFilter>("all");
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
@@ -80,6 +100,36 @@ export default function OffersPage() {
 
     return Array.from(groups.values());
   }, [items]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<OfferCategoryFilter, number> = {
+      all: items.length,
+      bodywork: 0,
+      mechanical: 0,
+      wheels: 0,
+      towing: 0,
+    };
+
+    offerGroups.forEach((group) => {
+      const category = getOfferCategory(group.request.serviceType);
+
+      if (category) {
+        counts[category] += group.items.length;
+      }
+    });
+
+    return counts;
+  }, [items.length, offerGroups]);
+
+  const filteredOfferGroups = useMemo(() => {
+    if (activeCategory === "all") {
+      return offerGroups;
+    }
+
+    return offerGroups.filter(
+      (group) => getOfferCategory(group.request.serviceType) === activeCategory,
+    );
+  }, [activeCategory, offerGroups]);
 
   useEffect(() => {
     const resetScroll = () => {
@@ -321,6 +371,35 @@ export default function OffersPage() {
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 md:py-10">
       <div className="mx-auto max-w-5xl space-y-4">
+        <header>
+          <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
+            Client
+          </p>
+          <h1 className="mt-1 text-2xl font-bold">Oferte primite</h1>
+        </header>
+
+        <div className="flex w-full items-center justify-between gap-1 pb-1 sm:gap-2">
+          {OFFER_CATEGORY_FILTERS.map((filter) => {
+            const isActive = activeCategory === filter.value;
+
+            return (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => setActiveCategory(filter.value)}
+                className={`shrink-0 whitespace-nowrap rounded-full px-[5px] py-2 text-[11px] font-semibold transition active:scale-[0.98] sm:px-4 sm:text-sm ${
+                  isActive
+                    ? "bg-orange-500 text-black shadow-lg shadow-orange-500/15"
+                    : "border border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white"
+                }`}
+                aria-pressed={isActive}
+              >
+                {filter.label} ({categoryCounts[filter.value]})
+              </button>
+            );
+          })}
+        </div>
+
         {loadingOffers ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
             Se încarcă ofertele...
@@ -332,9 +411,13 @@ export default function OffersPage() {
               Ofertele acceptate apar în Programări.
             </p>
           </div>
+        ) : filteredOfferGroups.length === 0 ? (
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/70">
+            Nu ai oferte pentru această categorie.
+          </div>
         ) : (
           <div className="space-y-4">
-            {offerGroups.map((group) => {
+            {filteredOfferGroups.map((group) => {
               const { request } = group;
               const configuredActiveOfferId =
                 activeOfferIdByRequestId[request.id];
@@ -583,4 +666,22 @@ export default function OffersPage() {
       </div>
     </main>
   );
+}
+
+function getOfferCategory(
+  serviceType: CustomerOfferRepairRequest["serviceType"],
+): Exclude<OfferCategoryFilter, "all" | "towing"> | null {
+  if (!serviceType || serviceType === "bodywork") {
+    return "bodywork";
+  }
+
+  if (serviceType === "mechanical") {
+    return "mechanical";
+  }
+
+  if (serviceType === "wheels") {
+    return "wheels";
+  }
+
+  return null;
 }
