@@ -45,13 +45,26 @@ type OfferCategoryFilter =
 
 const OFFER_CATEGORY_FILTERS: Array<{
   value: OfferCategoryFilter;
-  label: string;
+  ariaLabel: string;
+  Icon: typeof AllOffersIcon;
 }> = [
-  { value: "all", label: "Toate" },
-  { value: "bodywork", label: "Estetică" },
-  { value: "mechanical", label: "Mecanică" },
-  { value: "wheels", label: "Roți" },
-  { value: "towing", label: "Tractări" },
+  { value: "all", ariaLabel: "Toate", Icon: AllOffersIcon },
+  {
+    value: "bodywork",
+    ariaLabel: "Daune estetice",
+    Icon: BodyworkOffersIcon,
+  },
+  {
+    value: "mechanical",
+    ariaLabel: "Probleme mecanice",
+    Icon: MechanicalOffersIcon,
+  },
+  {
+    value: "wheels",
+    ariaLabel: "Roți și anvelope",
+    Icon: WheelsOffersIcon,
+  },
+  { value: "towing", ariaLabel: "Tractări", Icon: TowingOffersIcon },
 ];
 
 export default function OffersPage() {
@@ -378,23 +391,28 @@ export default function OffersPage() {
           <h1 className="mt-1 text-2xl font-bold">Oferte primite</h1>
         </header>
 
-        <div className="flex w-full items-center justify-between gap-1 pb-1 sm:gap-2">
+        <div className="grid w-full grid-cols-5 gap-1 pb-1 sm:gap-2">
           {OFFER_CATEGORY_FILTERS.map((filter) => {
             const isActive = activeCategory === filter.value;
+            const Icon = filter.Icon;
 
             return (
               <button
                 key={filter.value}
                 type="button"
                 onClick={() => setActiveCategory(filter.value)}
-                className={`shrink-0 whitespace-nowrap rounded-full px-[5px] py-2 text-[11px] font-semibold transition active:scale-[0.98] sm:px-4 sm:text-sm ${
+                className={`flex h-[78px] min-w-0 flex-col items-center justify-center gap-[6px] rounded-[18px] border transition active:scale-[0.98] ${
                   isActive
-                    ? "bg-orange-500 text-black shadow-lg shadow-orange-500/15"
-                    : "border border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white"
+                    ? "border-orange-400/80 bg-orange-500/[0.09] text-orange-400 shadow-[0_0_18px_rgba(249,115,22,0.12)]"
+                    : "border-white/10 bg-white/[0.035] text-white/75 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
                 }`}
                 aria-pressed={isActive}
+                aria-label={filter.ariaLabel}
               >
-                {filter.label} ({categoryCounts[filter.value]})
+                <Icon className="h-9 w-9" />
+                <span className="text-[11px] font-bold leading-none">
+                  ({categoryCounts[filter.value]})
+                </span>
               </button>
             );
           })}
@@ -684,4 +702,119 @@ function getOfferCategory(
   }
 
   return null;
+}
+
+type OfferFilterIconProps = {
+  className?: string;
+};
+
+function AllOffersIcon({ className }: OfferFilterIconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <rect x="5" y="5" width="8" height="8" rx="1.75" />
+      <rect x="19" y="5" width="8" height="8" rx="1.75" />
+      <rect x="5" y="19" width="8" height="8" rx="1.75" />
+      <rect x="19" y="19" width="8" height="8" rx="1.75" />
+    </svg>
+  );
+}
+
+function BodyworkOffersIcon({ className }: OfferFilterIconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 22h2l2-5h10l2 5h2v4H4z" />
+      <path d="M9.5 17l1.6-3h4.8l1.6 3" />
+      <circle cx="8" cy="26" r="1.7" />
+      <circle cx="19" cy="26" r="1.7" />
+      <path d="M20 7h6l2 2-2 2h-3v4h-3v-5h-2" />
+      <path d="M17 8h-3M17 11h-4M17 14h-2" />
+    </svg>
+  );
+}
+
+function MechanicalOffersIcon({ className }: OfferFilterIconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M4 22h2l2-5h10l2 5h2v4H4z" />
+      <path d="M9.5 17l1.6-3h4.8l1.6 3" />
+      <circle cx="8" cy="26" r="1.7" />
+      <circle cx="19" cy="26" r="1.7" />
+      <path d="M20.5 14.5l6.8-6.8" />
+      <path d="M24.4 6.2a4 4 0 0 0-4.8 5.3l-7.1 7.1" />
+      <path d="M25.5 11.6a4 4 0 0 0 1.3-4.8l-2.5 2.5-1.7-1.7z" />
+    </svg>
+  );
+}
+
+function WheelsOffersIcon({ className }: OfferFilterIconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="18" r="8" />
+      <circle cx="12" cy="18" r="3" />
+      <path d="M12 10v5M12 21v5M4 18h5M15 18h5" />
+      <path d="M19 22l7.8-7.8" />
+      <path d="M24 11.5a3.7 3.7 0 0 0-4.6 4.7l-2.1 2.1" />
+      <path d="M25.2 16.8a3.7 3.7 0 0 0 1.1-4.5l-2.2 2.2-1.5-1.5z" />
+    </svg>
+  );
+}
+
+function TowingOffersIcon({ className }: OfferFilterIconProps) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 23h20l5-4v6H3z" />
+      <path d="M5 21l4-6h10l4 6" />
+      <path d="M10 15l1.5-3h4.5l2 3" />
+      <circle cx="8" cy="26" r="2" />
+      <circle cx="24" cy="26" r="2" />
+      <path d="M22 9h4l2 4v6" />
+      <path d="M22 9v8" />
+      <path d="M22 12h5" />
+    </svg>
+  );
 }
