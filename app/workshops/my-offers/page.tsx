@@ -22,6 +22,11 @@ import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-na
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
+import RequestCategoryFilter, {
+  type RequestCategoryCounts,
+  type RequestCategoryFilter as RequestCategory,
+} from "@/app/components/RequestCategoryFilter";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type ProfileRow = {
   role: string[] | null;
@@ -88,6 +93,8 @@ export default function WorkshopMyOffersPage() {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] =
+    useState<RequestCategory>("all");
 
   const [confirmingOfferId, setConfirmingOfferId] = useState<string | null>(
     null,
@@ -371,6 +378,40 @@ export default function WorkshopMyOffersPage() {
       );
   }, [offers]);
 
+  const categoryCounts = useMemo(() => {
+    const counts: RequestCategoryCounts = {
+      all: normalizedOffers.length,
+      bodywork: 0,
+      mechanical: 0,
+      wheels: 0,
+      towing: 0,
+    };
+
+    normalizedOffers.forEach((offer) => {
+      const serviceType = resolveRepairServiceType(
+        offer.repair_requests?.service_type,
+      );
+
+      if (serviceType) {
+        counts[serviceType] += 1;
+      }
+    });
+
+    return counts;
+  }, [normalizedOffers]);
+
+  const filteredOffers = useMemo(() => {
+    if (activeCategory === "all") {
+      return normalizedOffers;
+    }
+
+    return normalizedOffers.filter(
+      (offer) =>
+        resolveRepairServiceType(offer.repair_requests?.service_type) ===
+        activeCategory,
+    );
+  }, [activeCategory, normalizedOffers]);
+
   if (checkingAccess) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -481,14 +522,12 @@ export default function WorkshopMyOffersPage() {
   return (
     <main className="min-h-screen bg-black px-6 py-10 text-white">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-8">
-          <p className="text-sm uppercase tracking-[0.24em] text-orange-400">
-            Service auto
-          </p>
-          <h1 className="mt-2 text-4xl font-black">Oferte trimise</h1>
-          <p className="mt-3 max-w-2xl text-white/60">
-            Aici vezi doar ofertele care așteaptă răspunsul clientului.
-          </p>
+        <div className="mb-5">
+          <RequestCategoryFilter
+            activeCategory={activeCategory}
+            counts={categoryCounts}
+            onChange={setActiveCategory}
+          />
         </div>
 
         {loading ? (
@@ -509,9 +548,13 @@ export default function WorkshopMyOffersPage() {
               Vezi daune disponibile
             </button>
           </div>
+        ) : filteredOffers.length === 0 ? (
+          <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/70">
+            Nu ai oferte pentru această categorie.
+          </div>
         ) : (
           <div className="space-y-6">
-            {normalizedOffers.map((offer) => {
+            {filteredOffers.map((offer) => {
               const request = offer.repair_requests;
               const appointment = offer.repair_appointments?.[0];
               const affectedPartLabels = getAffectedPartLabels(

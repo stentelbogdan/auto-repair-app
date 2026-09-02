@@ -22,14 +22,27 @@ import {
   getRequestTypeBadgeLabel,
 } from "@/lib/displayLabels";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
-import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import {
+  resolveRepairServiceType,
+  type RepairServiceType,
+} from "@/lib/repair-requests/service-types";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import { interactiveButton } from "@/lib/ui";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import RequestCategoryFilter, {
+  type RequestCategoryCounts,
+  type RequestCategoryFilter as RequestCategory,
+} from "@/app/components/RequestCategoryFilter";
 
 type JobFilter = "appointments" | "workshop" | "completed";
+
+const INITIAL_CATEGORY_BY_TAB: Record<JobFilter, RequestCategory> = {
+  appointments: "all",
+  workshop: "all",
+  completed: "all",
+};
 
 type JobStage = "appointments" | "workshop" | "completed";
 type JobPriority = "needs_action" | "waiting" | "ok";
@@ -150,6 +163,9 @@ export default function WorkshopWonJobsPage() {
   const [jobs, setJobs] = useState<WonJob[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<JobFilter>("appointments");
+  const [activeCategoryByTab, setActiveCategoryByTab] = useState<
+    Record<JobFilter, RequestCategory>
+  >(INITIAL_CATEGORY_BY_TAB);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -461,6 +477,8 @@ export default function WorkshopWonJobsPage() {
     }
   };
 
+  const activeCategory = activeCategoryByTab[activeTab];
+
   const filteredJobs = useMemo(() => {
     const query = search.trim().toLowerCase();
 
@@ -491,8 +509,13 @@ export default function WorkshopWonJobsPage() {
         .toLowerCase();
 
       const matchesSearch = query ? haystack.includes(query) : true;
+      const matchesCategory =
+        activeCategory === "all" ||
+        resolveRepairServiceType(job.request.serviceType) === activeCategory;
 
-      return shouldShowInWonJobs && matchesTab && matchesSearch;
+      return (
+        shouldShowInWonJobs && matchesTab && matchesSearch && matchesCategory
+      );
     });
 
     if (activeTab !== "completed") return matchingJobs;
@@ -519,7 +542,7 @@ export default function WorkshopWonJobsPage() {
 
       return secondFallback - firstFallback;
     });
-  }, [jobs, search, activeTab]);
+  }, [jobs, search, activeTab, activeCategory]);
 
   const appointmentsJobsCount = useMemo(() => {
     return jobs.filter(
@@ -535,6 +558,48 @@ export default function WorkshopWonJobsPage() {
 
   const completedJobsCount = useMemo(() => {
     return jobs.filter((job) => getJobState(job).stage === "completed").length;
+  }, [jobs]);
+
+  const categoryCountsByTab = useMemo(() => {
+    const tabJobs: Record<JobFilter, WonJob[]> = {
+      appointments: jobs.filter(
+        (job) =>
+          getJobState(job).stage === "appointments" &&
+          job.appointment?.status === "confirmed",
+      ),
+      workshop: jobs.filter(
+        (job) => getJobState(job).stage === "workshop",
+      ),
+      completed: jobs.filter(
+        (job) => getJobState(job).stage === "completed",
+      ),
+    };
+
+    const getCounts = (tabItems: WonJob[]): RequestCategoryCounts => {
+      const counts: RequestCategoryCounts = {
+        all: tabItems.length,
+        bodywork: 0,
+        mechanical: 0,
+        wheels: 0,
+        towing: 0,
+      };
+
+      tabItems.forEach((job) => {
+        const serviceType = resolveRepairServiceType(job.request.serviceType);
+
+        if (serviceType) {
+          counts[serviceType] += 1;
+        }
+      });
+
+      return counts;
+    };
+
+    return {
+      appointments: getCounts(tabJobs.appointments),
+      workshop: getCounts(tabJobs.workshop),
+      completed: getCounts(tabJobs.completed),
+    };
   }, [jobs]);
 
   const startJob = async (job: WonJob) => {
@@ -767,30 +832,13 @@ export default function WorkshopWonJobsPage() {
   return (
     <main className="min-h-screen bg-black px-6 pb-32 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Dashboard service
-            </p>
-
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Lucrări câștigate
-            </h1>
-
-            <p className="mt-3 max-w-2xl text-white/70">
-              Gestionează lucrările acceptate de client: programare, lucru în
-              curs și finalizare.
-            </p>
-          </div>
-
-          <div className="w-full lg:w-96">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Caută după mașină, oraș, tip daună..."
-              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
-            />
-          </div>
+        <div className="mb-8 w-full lg:ml-auto lg:w-96">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Caută după mașină, oraș, tip daună..."
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
+          />
         </div>
 
         <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
@@ -829,6 +877,19 @@ export default function WorkshopWonJobsPage() {
           >
             Finalizate ({completedJobsCount})
           </button>
+        </div>
+
+        <div className="mb-6">
+          <RequestCategoryFilter
+            activeCategory={activeCategory}
+            counts={categoryCountsByTab[activeTab]}
+            onChange={(category) => {
+              setActiveCategoryByTab((current) => ({
+                ...current,
+                [activeTab]: category,
+              }));
+            }}
+          />
         </div>
 
         {loadingJobs ? (
