@@ -35,6 +35,11 @@ import {
 } from "@/lib/work-progress/workflows";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
+import RequestCategoryFilter, {
+  type RequestCategoryCounts,
+  type RequestCategoryFilter as RequestCategory,
+} from "@/app/components/RequestCategoryFilter";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type RepairAppointment = {
   id: string;
@@ -57,6 +62,14 @@ type RepairAppointment = {
     | "confirmed"
     | "declined"
     | "cancelled";
+};
+
+type JobsTab = "scheduled" | "in_progress" | "completed";
+
+const INITIAL_CATEGORY_BY_TAB: Record<JobsTab, RequestCategory> = {
+  scheduled: "all",
+  in_progress: "all",
+  completed: "all",
 };
 
 export default function MyJobsPage() {
@@ -84,12 +97,13 @@ export default function MyJobsPage() {
     {},
   );
 
-  type JobsTab = "scheduled" | "in_progress" | "completed";
-
   const isValidTab = (tab: string | null): tab is JobsTab =>
     tab === "scheduled" || tab === "in_progress" || tab === "completed";
 
   const [activeTab, setActiveTab] = useState<JobsTab>("scheduled");
+  const [activeCategoryByTab, setActiveCategoryByTab] = useState<
+    Record<JobsTab, RequestCategory>
+  >(INITIAL_CATEGORY_BY_TAB);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -430,6 +444,45 @@ export default function MyJobsPage() {
         ? inProgressJobs
         : completedJobs;
 
+  const categoryCounts = useMemo(() => {
+    const getCounts = (
+      tabJobs: typeof visibleJobs,
+    ): RequestCategoryCounts => {
+      const counts: RequestCategoryCounts = {
+        all: tabJobs.length,
+        bodywork: 0,
+        mechanical: 0,
+        wheels: 0,
+        towing: 0,
+      };
+
+      tabJobs.forEach(({ request }) => {
+        const serviceType = resolveRepairServiceType(request.service_type);
+
+        if (serviceType) {
+          counts[serviceType] += 1;
+        }
+      });
+
+      return counts;
+    };
+
+    return {
+      scheduled: getCounts(scheduledJobs),
+      in_progress: getCounts(inProgressJobs),
+      completed: getCounts(completedJobs),
+    };
+  }, [completedJobs, inProgressJobs, scheduledJobs]);
+
+  const activeCategory = activeCategoryByTab[activeTab];
+  const filteredVisibleJobs =
+    activeCategory === "all"
+      ? visibleJobs
+      : visibleJobs.filter(
+          ({ request }) =>
+            resolveRepairServiceType(request.service_type) === activeCategory,
+        );
+
   const acceptAppointmentProposal = async (appointmentId: string) => {
     try {
       const { error } = await supabase
@@ -498,6 +551,19 @@ export default function MyJobsPage() {
           />
         </div>
 
+        <div className="mb-5">
+          <RequestCategoryFilter
+            activeCategory={activeCategory}
+            counts={categoryCounts[activeTab]}
+            onChange={(category) => {
+              setActiveCategoryByTab((current) => ({
+                ...current,
+                [activeTab]: category,
+              }));
+            }}
+          />
+        </div>
+
         {loading ? (
           <p className="text-white/60">Se încarcă programările...</p>
         ) : jobs.length === 0 ? (
@@ -516,15 +582,15 @@ export default function MyJobsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {visibleJobs.length === 0 && (
+            {filteredVisibleJobs.length === 0 && (
               <div className="rounded-[22px] bg-white p-6 text-center text-black">
                 <h2 className="text-xl font-bold">Nimic aici momentan</h2>
                 <p className="mt-2 text-sm text-black/60">
-                  Când apare o lucrare în această etapă, o vei vedea aici.
+                  Nu ai programări pentru această categorie.
                 </p>
               </div>
             )}
-            {visibleJobs.map(({ request, acceptedOffer, appointment }) => {
+            {filteredVisibleJobs.map(({ request, acceptedOffer, appointment }) => {
               const affectedPartLabels = getAffectedPartLabels(
                 request.service_details,
               );
