@@ -9,8 +9,19 @@ import {
 } from "@/lib/supabase/repair-requests";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import RepairRequestCard from "@/app/components/RepairRequestCard";
+import RequestCategoryFilter, {
+  type RequestCategoryCounts,
+  type RequestCategoryFilter as RequestCategory,
+} from "@/app/components/RequestCategoryFilter";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type MyRequestsTab = "waiting" | "with_offer" | "archive";
+
+const INITIAL_CATEGORY_BY_TAB: Record<MyRequestsTab, RequestCategory> = {
+  waiting: "all",
+  with_offer: "all",
+  archive: "all",
+};
 
 export default function MyRequestsPage() {
   /*
@@ -30,6 +41,9 @@ export default function MyRequestsPage() {
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<MyRequestsTab>("waiting");
+  const [activeCategoryByTab, setActiveCategoryByTab] = useState<
+    Record<MyRequestsTab, RequestCategory>
+  >(INITIAL_CATEGORY_BY_TAB);
 
   /*
    * Realtime poate trimite mai multe evenimente apropiate:
@@ -321,6 +335,42 @@ export default function MyRequestsPage() {
         ? withOfferRequests
         : archiveRequests;
 
+  const getCategoryCounts = (
+    tabRequests: RepairRequestRow[],
+  ): RequestCategoryCounts => {
+    const counts: RequestCategoryCounts = {
+      all: tabRequests.length,
+      bodywork: 0,
+      mechanical: 0,
+      wheels: 0,
+      towing: 0,
+    };
+
+    tabRequests.forEach((request) => {
+      const serviceType = resolveRepairServiceType(request.service_type);
+
+      if (serviceType) {
+        counts[serviceType] += 1;
+      }
+    });
+
+    return counts;
+  };
+
+  const categoryCountsByTab: Record<MyRequestsTab, RequestCategoryCounts> = {
+    waiting: getCategoryCounts(waitingRequests),
+    with_offer: getCategoryCounts(withOfferRequests),
+    archive: getCategoryCounts(archiveRequests),
+  };
+  const activeCategory = activeCategoryByTab[activeTab];
+  const filteredVisibleRequests =
+    activeCategory === "all"
+      ? visibleRequests
+      : visibleRequests.filter(
+          (request) =>
+            resolveRepairServiceType(request.service_type) === activeCategory,
+        );
+
   const changeTab = (tab: MyRequestsTab) => {
     setActiveTab(tab);
     sessionStorage.setItem("my-requests-active-tab", tab);
@@ -346,20 +396,12 @@ export default function MyRequestsPage() {
   return (
     <main className="min-h-[calc(100svh-236px)] bg-[#111111] px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-5 text-white">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-              Client
-            </p>
-
-            <h1 className="mt-1 text-2xl font-bold">Cererile mele</h1>
-          </div>
-
+        <div className="mb-3 flex justify-end">
           <button
             type="button"
             onClick={goToPostChoice}
             disabled={isNavigating}
-            className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-50"
+            className="-translate-y-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             + Postează
           </button>
@@ -406,9 +448,22 @@ export default function MyRequestsPage() {
           </button>
         </div>
 
+        <div className="mb-5">
+          <RequestCategoryFilter
+            activeCategory={activeCategory}
+            counts={categoryCountsByTab[activeTab]}
+            onChange={(category) => {
+              setActiveCategoryByTab((current) => ({
+                ...current,
+                [activeTab]: category,
+              }));
+            }}
+          />
+        </div>
+
         {loading ? (
           <p className="text-white/60">Se încarcă cererile...</p>
-        ) : visibleRequests.length === 0 ? (
+        ) : filteredVisibleRequests.length === 0 ? (
           <div className="rounded-[22px] bg-white p-6 text-center text-black">
             <h2 className="text-xl font-bold">
               {activeTab === "waiting"
@@ -435,7 +490,7 @@ export default function MyRequestsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {visibleRequests.map((request) => (
+            {filteredVisibleRequests.map((request) => (
               <RepairRequestCard
                 key={request.id}
                 request={request}

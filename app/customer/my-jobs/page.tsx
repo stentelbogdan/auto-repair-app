@@ -512,22 +512,6 @@ export default function MyJobsPage() {
   return (
     <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-              Client
-            </p>
-            <h1 className="mt-1 text-2xl font-bold">Programări</h1>
-          </div>
-
-          <button
-            onClick={() => router.push("/customer/dashboard")}
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-semibold text-white"
-          >
-            Dashboard
-          </button>
-        </div>
-
         <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
           <TabButton
             label="Programate"

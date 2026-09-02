@@ -357,13 +357,6 @@ export default function OffersPage() {
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 md:py-10">
       <div className="mx-auto max-w-5xl space-y-4">
-        <header>
-          <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-            Client
-          </p>
-          <h1 className="mt-1 text-2xl font-bold">Oferte primite</h1>
-        </header>
-
         <RequestCategoryFilter
           activeCategory={activeCategory}
           counts={categoryCounts}
