@@ -2,6 +2,7 @@ export const REPAIR_SERVICE_TYPES = [
   "bodywork",
   "mechanical",
   "wheels",
+  "towing",
 ] as const;
 
 export type RepairServiceType = (typeof REPAIR_SERVICE_TYPES)[number];

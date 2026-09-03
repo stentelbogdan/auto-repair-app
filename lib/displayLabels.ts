@@ -55,6 +55,7 @@ export const serviceTypeLabels: Record<string, string> = {
   bodywork: "Caroserie",
   mechanical: "Mecanică",
   wheels: "Roți și anvelope",
+  towing: "Tractări",
 };
 
 export const statusLabels: Record<string, string> = {
@@ -113,6 +114,7 @@ export function getRequestTypeBadgeLabel(serviceType?: string | null) {
   if (!serviceType || serviceType === "bodywork") return "Daună estetică";
   if (serviceType === "mechanical") return "Problemă mecanică";
   if (serviceType === "wheels") return "Roți și anvelope";
+  if (serviceType === "towing") return "Tractări";
   return "Tip cerere";
 }
 
