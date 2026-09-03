@@ -6,6 +6,7 @@ import {
   isMechanicalServiceDetails,
 } from "@/lib/mechanical/mechanical-service-details";
 import { getDetailedDamageTypeLabel } from "@/lib/displayLabels";
+import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import { isWheelsServiceDetails } from "@/lib/wheels/wheels-service-details";
 
 export function isStructuredServiceDetails(
@@ -15,6 +16,7 @@ export function isStructuredServiceDetails(
     !serviceDetails ||
     Array.isArray(serviceDetails) ||
     isMechanicalServiceDetails(serviceDetails) ||
+    isTowingServiceDetailsV1(serviceDetails) ||
     isWheelsServiceDetails(serviceDetails)
   ) {
     return false;

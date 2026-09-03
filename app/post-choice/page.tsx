@@ -45,6 +45,7 @@ function PostChoiceContent() {
   useEffect(() => {
     router.prefetch(createTargetUrl("/post-job"));
     router.prefetch(createTargetUrl("/post-mechanical"));
+    router.prefetch(createTargetUrl("/post-towing"));
   }, [router, createTargetUrl]);
 
   const goToBodywork = () => {
@@ -57,6 +58,10 @@ function PostChoiceContent() {
 
   const goToWheels = () => {
     navigate(createTargetUrl("/post-wheels"));
+  };
+
+  const goToTowing = () => {
+    navigate(createTargetUrl("/post-towing"));
   };
 
   return (
@@ -85,15 +90,21 @@ function PostChoiceContent() {
             onClick={goToMechanical}
           />
 
-          <div className="col-span-2 mx-auto w-[calc(50%_-_6px)] md:w-[calc(50%_-_12px)]">
-            <Card
-              title="Roți"
-              desc="Anvelope + jante"
-              icon="🛞"
-              disabled={isNavigating}
-              onClick={goToWheels}
-            />
-          </div>
+          <Card
+            title="Roți"
+            desc="Anvelope + jante"
+            icon="🛞"
+            disabled={isNavigating}
+            onClick={goToWheels}
+          />
+
+          <Card
+            title="Tractări auto"
+            desc="Preluare + destinație"
+            icon="🚛"
+            disabled={isNavigating}
+            onClick={goToTowing}
+          />
         </section>
       </div>
     </main>

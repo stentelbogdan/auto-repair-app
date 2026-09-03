@@ -3,6 +3,7 @@ import type {
   SupportedMechanicalServiceDetails,
 } from "@/lib/mechanical/mechanical-service-details";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import type { TowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import type { WheelsServiceDetails } from "@/lib/wheels/wheels-service-details";
 
@@ -23,7 +24,8 @@ export type RepairServiceDetails =
   | string[]
   | StructuredServiceDetails
   | SupportedMechanicalServiceDetails
-  | WheelsServiceDetails;
+  | WheelsServiceDetails
+  | TowingServiceDetailsV1;
 
 export type RepairRequestRow = {
   id: string;
