@@ -349,7 +349,7 @@ export default function Wheel3DSelector({
   return (
     <section className="w-full" aria-label="Selector roți">
       <div
-        className={`${heightClassName} w-full touch-none overflow-hidden rounded-[32px] bg-neutral-950`}
+        className={`${heightClassName} w-full touch-none overflow-hidden rounded-[32px] bg-gradient-to-b from-[#2a303a] via-[#222832] to-[#1b2028]`}
       >
         <Canvas
           frameloop="demand"
