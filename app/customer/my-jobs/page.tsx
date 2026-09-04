@@ -34,6 +34,7 @@ import {
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import RequestCategoryFilter, {
   type RequestCategoryCounts,
@@ -592,6 +593,10 @@ export default function MyJobsPage() {
                 request.service_type === "wheels"
                   ? getWheelsDisplaySummary(request.service_details)
                   : undefined;
+              const towingSummary =
+                activeTab === "scheduled" && request.service_type === "towing"
+                  ? getTowingDisplaySummary(request.service_details)
+                  : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -627,12 +632,15 @@ export default function MyJobsPage() {
                         variant="listLarge"
                         affectedParts={affectedPartLabels}
                         damageTypes={
-                          mechanicalDetails.length > 0 || wheelsSummary
+                          mechanicalDetails.length > 0 ||
+                          wheelsSummary ||
+                          towingSummary
                             ? []
                             : displayedDamageTypeLabels
                         }
                         mechanicalDetails={mechanicalDetails}
                         wheelsSummary={wheelsSummary}
+                        towingSummary={towingSummary}
                         details={[
                           {
                             text:
@@ -747,6 +755,13 @@ export default function MyJobsPage() {
                               : "Finalizată"
                         }
                       />
+                      {activeTab === "scheduled" &&
+                        appointment?.handover_method === "workshop_pickup" &&
+                        appointment.pickup_address && (
+                          <p className="mt-2 text-sm font-medium leading-5 text-black/60">
+                            Adresă ridicare: {appointment.pickup_address}
+                          </p>
+                        )}
                     </div>
                   )}
 

@@ -27,6 +27,7 @@ import {
   type RepairServiceType,
 } from "@/lib/repair-requests/service-types";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import { interactiveButton } from "@/lib/ui";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
@@ -1068,6 +1069,10 @@ export default function WorkshopWonJobsPage() {
                 job.request.serviceType === "wheels"
                   ? getWheelsDisplaySummary(job.request.serviceDetails)
                   : undefined;
+              const towingSummary =
+                job.request.serviceType === "towing"
+                  ? getTowingDisplaySummary(job.request.serviceDetails)
+                  : undefined;
 
               const displayDate =
                 appointment?.proposed_date ||
@@ -1097,10 +1102,13 @@ export default function WorkshopWonJobsPage() {
                   city={job.request.city}
                   affectedParts={affectedPartLabels}
                   damageTypes={
-                    wheelsSummary ? [] : displayedDamageTypeLabels
+                    wheelsSummary || towingSummary
+                      ? []
+                      : displayedDamageTypeLabels
                   }
                   mechanicalDetails={mechanicalDetails}
                   wheelsSummary={wheelsSummary}
+                  towingSummary={towingSummary}
                   requestTypeLabel={getRequestTypeBadgeLabel(
                     job.request.serviceType,
                   )}
@@ -1111,6 +1119,11 @@ export default function WorkshopWonJobsPage() {
                   appointmentDate={displayDate}
                   appointmentTime={displayTime}
                   handoverText={handoverText}
+                  pickupAddress={
+                    appointment?.handover_method === "workshop_pickup"
+                      ? appointment.pickup_address
+                      : null
+                  }
                   statusText={
                     appointment?.status === "confirmed"
                       ? "Confirmată"

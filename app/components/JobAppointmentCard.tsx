@@ -8,6 +8,7 @@ import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import RequestClientName from "@/app/components/RequestClientName";
 import { interactiveButton } from "@/lib/ui";
 import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
+import type { TowingDisplaySummary } from "@/lib/towing/towing-display";
 
 type JobImage = {
   name?: string;
@@ -29,6 +30,7 @@ type JobAppointmentCardProps = {
   damageTypes?: string[];
   mechanicalDetails?: MechanicalServiceDetailGroup[];
   wheelsSummary?: WheelsServiceSummary;
+  towingSummary?: TowingDisplaySummary;
   description?: string | null;
   clientName?: string | null;
 
@@ -38,6 +40,7 @@ type JobAppointmentCardProps = {
   appointmentDate?: string | null;
   appointmentTime?: string | null;
   handoverText?: string;
+  pickupAddress?: string | null;
   statusText?: string;
   badgeText?: string;
   badgeColor?: "yellow" | "orange" | "gray" | "green" | "blue" | "red";
@@ -60,6 +63,7 @@ export default function JobAppointmentCard({
   damageTypes = [],
   mechanicalDetails = [],
   wheelsSummary,
+  towingSummary,
   description,
   clientName,
   price,
@@ -67,6 +71,7 @@ export default function JobAppointmentCard({
   appointmentDate,
   appointmentTime,
   handoverText = "Predare: Clientul aduce mașina",
+  pickupAddress,
   statusText = "Confirmată",
   badgeText = "Programare confirmată",
   badgeColor = "blue",
@@ -90,6 +95,7 @@ export default function JobAppointmentCard({
         damageTypes={damageTypes}
         mechanicalDetails={mechanicalDetails}
         wheelsSummary={wheelsSummary}
+        towingSummary={towingSummary}
         details={[
           {
             text: badgeText,
@@ -113,6 +119,11 @@ export default function JobAppointmentCard({
           handoverText={handoverText}
           statusText={statusText}
         />
+        {pickupAddress && (
+          <p className="mt-2 text-sm font-medium leading-5 text-black/60">
+            Adresă ridicare: {pickupAddress}
+          </p>
+        )}
       </div>
 
       <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
