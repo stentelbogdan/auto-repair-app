@@ -952,6 +952,10 @@ export default function WorkshopWonJobsPage() {
                 job.request.serviceType === "wheels"
                   ? getWheelsDisplaySummary(job.request.serviceDetails)
                   : undefined;
+              const towingSummary =
+                job.request.serviceType === "towing"
+                  ? getTowingDisplaySummary(job.request.serviceDetails)
+                  : undefined;
               const latestProgressLabel = job.latestProgressStatus
                 ? formatJobStatus(job.latestProgressStatus)
                 : null;
@@ -985,10 +989,13 @@ export default function WorkshopWonJobsPage() {
                     variant="listLarge"
                     affectedParts={affectedPartLabels}
                     damageTypes={
-                      wheelsSummary ? [] : displayedDamageTypeLabels
+                      wheelsSummary || towingSummary
+                        ? []
+                        : displayedDamageTypeLabels
                     }
                     mechanicalDetails={mechanicalDetails}
                     wheelsSummary={wheelsSummary}
+                    towingSummary={towingSummary}
                     details={[
                       {
                         text: "În lucru",
@@ -1023,6 +1030,12 @@ export default function WorkshopWonJobsPage() {
                       handoverText={handoverText}
                       statusText="În lucru"
                     />
+                    {appointment?.handover_method === "workshop_pickup" &&
+                      appointment.pickup_address && (
+                        <p className="mt-2 text-sm font-medium leading-5 text-black/60">
+                          Adresă ridicare: {appointment.pickup_address}
+                        </p>
+                      )}
                   </div>
 
                   <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
