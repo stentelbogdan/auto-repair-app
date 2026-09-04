@@ -19,6 +19,9 @@ export type ProgressStatus =
   | "Inspection"
   | "Wheel / Tire service"
   | "Final check"
+  | "Dispatch"
+  | "Vehicle picked up"
+  | "In transit"
   | "Ready";
 
 export type ProgressWorkflowStep = {
@@ -59,11 +62,20 @@ export const wheelsProgressWorkflow = createWorkflow([
   ["Ready", "Gata"],
 ]);
 
+export const towingProgressWorkflow = createWorkflow([
+  ["Received", "Primită"],
+  ["Dispatch", "În deplasare"],
+  ["Vehicle picked up", "Vehicul preluat"],
+  ["In transit", "În tranzit"],
+  ["Ready", "Gata"],
+]);
+
 const progressLabels = new Map<ProgressStatus, string>(
   [
     ...bodyworkProgressWorkflow,
     ...mechanicalProgressWorkflow,
     ...wheelsProgressWorkflow,
+    ...towingProgressWorkflow,
   ].map(
     ({ status, label }) => [status, label],
   ),
@@ -104,6 +116,14 @@ const aliases: Record<string, ProgressStatus> = {
   "final check": "Final check",
   "verificare finală": "Final check",
   "verificare finala": "Final check",
+  dispatch: "Dispatch",
+  "în deplasare": "Dispatch",
+  "in deplasare": "Dispatch",
+  "vehicle picked up": "Vehicle picked up",
+  "vehicul preluat": "Vehicle picked up",
+  "in transit": "In transit",
+  "în tranzit": "In transit",
+  "in tranzit": "In transit",
   ready: "Ready",
   gata: "Ready",
 };
@@ -136,6 +156,7 @@ export function getProgressWorkflow(
   if (resolvedServiceType === "bodywork") return bodyworkProgressWorkflow;
   if (resolvedServiceType === "mechanical") return mechanicalProgressWorkflow;
   if (resolvedServiceType === "wheels") return wheelsProgressWorkflow;
+  if (resolvedServiceType === "towing") return towingProgressWorkflow;
   return [];
 }
 
