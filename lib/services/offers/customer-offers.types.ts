@@ -56,6 +56,8 @@ export type CustomerRepairAppointment = {
   appointmentTime: string | null;
   proposedDate: string | null;
   proposedTime: string | null;
+  handoverMethod: "customer_dropoff" | "workshop_pickup" | null;
+  pickupAddress: string | null;
 };
 
 export type CustomerOfferItem = {

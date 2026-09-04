@@ -21,6 +21,7 @@ import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-se
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import RequestCategoryFilter, {
   type RequestCategoryCounts,
@@ -63,6 +64,8 @@ type RepairAppointment = {
   appointment_time: string | null;
   proposed_date: string | null;
   proposed_time: string | null;
+  handover_method: "customer_dropoff" | "workshop_pickup" | null;
+  pickup_address: string | null;
   status: string | null;
 };
 
@@ -145,6 +148,8 @@ export default function WorkshopMyOffersPage() {
             appointment_time,
             proposed_date,
             proposed_time,
+            handover_method,
+            pickup_address,
             status
           )
         `,
@@ -222,6 +227,8 @@ export default function WorkshopMyOffersPage() {
                 appointment_time: appointment.appointment_time ?? null,
                 proposed_date: appointment.proposed_date ?? null,
                 proposed_time: appointment.proposed_time ?? null,
+                handover_method: appointment.handover_method ?? null,
+                pickup_address: appointment.pickup_address ?? null,
                 status: appointment.status ?? null,
               }))
             : [],
@@ -574,6 +581,10 @@ export default function WorkshopMyOffersPage() {
                 request?.service_type === "wheels"
                   ? getWheelsDisplaySummary(request.service_details)
                   : undefined;
+              const towingSummary =
+                request?.service_type === "towing"
+                  ? getTowingDisplaySummary(request.service_details)
+                  : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -636,12 +647,15 @@ export default function WorkshopMyOffersPage() {
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
                     damageTypes={
-                      mechanicalDetails.length > 0 || wheelsSummary
+                      mechanicalDetails.length > 0 ||
+                      wheelsSummary ||
+                      towingSummary
                         ? []
                         : displayedDamageTypeLabels
                     }
                     mechanicalDetails={mechanicalDetails}
                     wheelsSummary={wheelsSummary}
+                    towingSummary={towingSummary}
                     details={[
                       workshopBadge,
                       {
@@ -658,7 +672,11 @@ export default function WorkshopMyOffersPage() {
                     days={offer.days}
                     appointmentDate={displayDate}
                     appointmentTime={displayTime}
-                    handoverText="Predare la service"
+                    handoverText={
+                      appointment?.handover_method === "workshop_pickup"
+                        ? "Service-ul ridică mașina"
+                        : "Clientul aduce mașina"
+                    }
                     statusText={
                       appointment?.status === "customer_proposed"
                         ? "Clientul a propus altă dată"

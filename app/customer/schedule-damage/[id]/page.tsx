@@ -11,6 +11,7 @@ import {
   getOffersForCustomerRequests,
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
+import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 
 type HandoverMethod = "customer_dropoff" | "workshop_pickup";
 
@@ -96,6 +97,32 @@ export default function ScheduleDamagePage() {
             `availability-${requestId}`,
           );
           const parsedDraft = savedDraft ? JSON.parse(savedDraft) : {};
+          const explicitHandoverMethod =
+            parsedDraft.handoverMethod === "customer_dropoff" ||
+            parsedDraft.handoverMethod === "workshop_pickup"
+              ? parsedDraft.handoverMethod
+              : null;
+          const defaultHandoverMethod: HandoverMethod =
+            requestRow.service_type === "towing"
+              ? "workshop_pickup"
+              : "customer_dropoff";
+          const initialHandoverMethod =
+            explicitHandoverMethod ?? defaultHandoverMethod;
+          const towingDetails = isTowingServiceDetailsV1(
+            requestRow.service_details,
+          )
+            ? requestRow.service_details
+            : null;
+
+          setHandoverMethod(initialHandoverMethod);
+          setPickupAddress(
+            typeof parsedDraft.pickupAddress === "string" &&
+              parsedDraft.pickupAddress.trim()
+              ? parsedDraft.pickupAddress
+              : initialHandoverMethod === "workshop_pickup" && towingDetails
+                ? `${towingDetails.pickup.address}, ${towingDetails.pickup.city}`
+                : "",
+          );
 
           setOffer({
             id: "",

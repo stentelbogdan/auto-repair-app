@@ -26,6 +26,7 @@ import {
 } from "@/lib/car-damage";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
+import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import RequestCategoryFilter, {
   type RequestCategoryFilter as RequestCategory,
   type RequestCategoryCounts,
@@ -415,6 +416,10 @@ export default function OffersPage() {
                 request.serviceType === "wheels"
                   ? getWheelsDisplaySummary(request.serviceDetails)
                   : undefined;
+              const towingSummary =
+                request.serviceType === "towing"
+                  ? getTowingDisplaySummary(request.serviceDetails)
+                  : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -439,12 +444,15 @@ export default function OffersPage() {
                       variant="listLarge"
                       affectedParts={affectedPartLabels}
                       damageTypes={
-                        mechanicalDetails.length > 0 || wheelsSummary
+                        mechanicalDetails.length > 0 ||
+                        wheelsSummary ||
+                        towingSummary
                           ? []
                           : displayedDamageTypeLabels
                       }
                       mechanicalDetails={mechanicalDetails}
                       wheelsSummary={wheelsSummary}
+                      towingSummary={towingSummary}
                     />
 
                     <div className="absolute left-0 top-[196px] flex w-[150px] flex-col items-center gap-1.5">
@@ -536,7 +544,11 @@ export default function OffersPage() {
                             days={offer.days}
                             appointmentDate={displayedAppointmentDate}
                             appointmentTime={displayedAppointmentTime}
-                            handoverText="Predare la service"
+                            handoverText={
+                              appointment?.handoverMethod === "workshop_pickup"
+                                ? "Service-ul ridică mașina"
+                                : "Clientul aduce mașina"
+                            }
                             statusText={appointmentStatusText}
                           />
 
@@ -633,7 +645,7 @@ export default function OffersPage() {
 
 function getOfferCategory(
   serviceType: CustomerOfferRepairRequest["serviceType"],
-): Exclude<RequestCategory, "all" | "towing"> | null {
+): Exclude<RequestCategory, "all"> | null {
   if (!serviceType || serviceType === "bodywork") {
     return "bodywork";
   }
@@ -644,6 +656,10 @@ function getOfferCategory(
 
   if (serviceType === "wheels") {
     return "wheels";
+  }
+
+  if (serviceType === "towing") {
+    return "towing";
   }
 
   return null;

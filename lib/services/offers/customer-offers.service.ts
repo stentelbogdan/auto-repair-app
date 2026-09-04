@@ -31,6 +31,8 @@ type AppointmentRow = {
   appointment_time: string | null;
   proposed_date: string | null;
   proposed_time: string | null;
+  handover_method: "customer_dropoff" | "workshop_pickup" | null;
+  pickup_address: string | null;
 };
 
 type WorkshopProfileRow = {
@@ -101,7 +103,9 @@ async function loadAppointmentMap(
         appointment_date,
         appointment_time,
         proposed_date,
-        proposed_time
+        proposed_time,
+        handover_method,
+        pickup_address
       `,
     )
     .in("offer_id", offerIds);
@@ -137,6 +141,10 @@ async function loadAppointmentMap(
       proposedDate: appointment.proposed_date || null,
 
       proposedTime: appointment.proposed_time || null,
+
+      handoverMethod: appointment.handover_method || null,
+
+      pickupAddress: appointment.pickup_address || null,
     });
   });
 

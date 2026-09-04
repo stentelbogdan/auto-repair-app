@@ -250,6 +250,10 @@ export default function WorkshopRequestDetailsPage() {
       const parsedAvailability = savedAvailability
         ? JSON.parse(savedAvailability)
         : {};
+      const defaultHandoverMethod =
+        request.service_type === "towing"
+          ? "workshop_pickup"
+          : "customer_dropoff";
 
       await createRepairOffer({
         requestId: id,
@@ -260,8 +264,13 @@ export default function WorkshopRequestDetailsPage() {
         workshopName,
         availableDate: finalAvailableDate,
         availableTime: finalAvailableTime,
-        handoverMethod: parsedAvailability.handoverMethod || "customer_dropoff",
-        pickupAddress: parsedAvailability.pickupAddress || "",
+        handoverMethod:
+          parsedAvailability.handoverMethod || defaultHandoverMethod,
+        pickupAddress:
+          parsedAvailability.pickupAddress ||
+          (request.service_type === "towing" && towingSummary
+            ? `${towingSummary.pickup.address}, ${towingSummary.pickup.city}`
+            : ""),
       });
 
       sessionStorage.removeItem(`availability-${id}`);
