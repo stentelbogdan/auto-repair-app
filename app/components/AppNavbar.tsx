@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
 import { WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE } from "@/lib/notifications";
+import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
 
 type Role = "customer" | "workshop";
@@ -1276,6 +1277,54 @@ export default function AppNavbar() {
   const goJobs = () => {
     void runLocked(async ({ navigate }) => {
       const hasUnreadJobStarted = jobStartedUnreadCount > 0;
+      let workshopJobsUrl = "/workshops/won-jobs?tab=appointments";
+
+      if (
+        isWorkshopMode &&
+        userId &&
+        appointmentConfirmedUnreadCount > 0
+      ) {
+        try {
+          const { data: notification, error: notificationError } =
+            await supabase
+              .from("notifications")
+              .select("request_id")
+              .eq("recipient_id", userId)
+              .is("read_at", null)
+              .in("type", [
+                "customer_confirmed_appointment",
+                "workshop_confirmed_appointment",
+              ])
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle<{ request_id: string | null }>();
+
+          if (notificationError) throw notificationError;
+
+          if (notification?.request_id) {
+            const { data: request, error: requestError } = await supabase
+              .from("repair_requests")
+              .select("service_type")
+              .eq("id", notification.request_id)
+              .maybeSingle<{ service_type: string | null }>();
+
+            if (requestError) throw requestError;
+
+            const serviceType = resolveRepairServiceType(
+              request?.service_type,
+            );
+
+            if (serviceType) {
+              workshopJobsUrl += `&category=${serviceType}`;
+            }
+          }
+        } catch (error) {
+          console.error(
+            "Failed to resolve workshop appointment category:",
+            error,
+          );
+        }
+      }
 
       if (
         userId &&
@@ -1307,7 +1356,7 @@ export default function AppNavbar() {
 
       if (isWorkshopMode) {
         localStorage.setItem("activeRole", "workshop");
-        navigate("/workshops/won-jobs?tab=appointments");
+        navigate(workshopJobsUrl);
         return;
       }
 

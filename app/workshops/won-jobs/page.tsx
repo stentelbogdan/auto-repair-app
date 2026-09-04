@@ -23,6 +23,7 @@ import {
 } from "@/lib/displayLabels";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import {
+  isRepairServiceType,
   resolveRepairServiceType,
   type RepairServiceType,
 } from "@/lib/repair-requests/service-types";
@@ -171,9 +172,17 @@ export default function WorkshopWonJobsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
+    const category = params.get("category");
 
     if (tab === "appointments" || tab === "workshop" || tab === "completed") {
       setActiveTab(tab);
+
+      if (isRepairServiceType(category)) {
+        setActiveCategoryByTab((current) => ({
+          ...current,
+          [tab]: category,
+        }));
+      }
     }
   }, []);
 
