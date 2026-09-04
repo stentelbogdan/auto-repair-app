@@ -14,6 +14,7 @@ type DashboardStats = {
   bodyworkRequests: number;
   mechanicalRequests: number;
   wheelsRequests: number;
+  towingRequests: number;
   myOffers: number;
   wonJobs: number;
   directBodyworkUnread: number;
@@ -52,6 +53,7 @@ function WorkshopDashboardContent() {
     bodyworkRequests: 0,
     mechanicalRequests: 0,
     wheelsRequests: 0,
+    towingRequests: 0,
     myOffers: 0,
     wonJobs: 0,
     directBodyworkUnread: 0,
@@ -216,6 +218,25 @@ function WorkshopDashboardContent() {
 
       const wheelsRequestsCount = visibleWheelsRows.length;
 
+      const visibleTowingRows = rows.filter((req) => {
+        const requestType = req.request_type ?? "repair";
+
+        const isVisible =
+          requestType === "repair" ||
+          (requestType === "direct_request" &&
+            req.target_workshop_id === userId);
+
+        return (
+          req.service_type === "towing" &&
+          req.status === "open" &&
+          !req.accepted_offer_id &&
+          isVisible &&
+          !offeredRequestIds.includes(req.id)
+        );
+      });
+
+      const towingRequestsCount = visibleTowingRows.length;
+
       const directBodyworkUnreadResult = await supabase
         .from("repair_requests")
         .select("id", { count: "exact", head: true })
@@ -270,6 +291,7 @@ function WorkshopDashboardContent() {
         bodyworkRequests: bodyworkRequestsCount,
         mechanicalRequests: mechanicalRequestsCount,
         wheelsRequests: wheelsRequestsCount,
+        towingRequests: towingRequestsCount,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
         directBodyworkUnread: directBodyworkUnreadResult.count || 0,
@@ -280,6 +302,7 @@ function WorkshopDashboardContent() {
         bodyworkRequests: 0,
         mechanicalRequests: 0,
         wheelsRequests: 0,
+        towingRequests: 0,
         myOffers: 0,
         wonJobs: 0,
         directBodyworkUnread: 0,
@@ -346,10 +369,11 @@ function WorkshopDashboardContent() {
           />
 
           <DashboardCard
+            href="/workshops/towing"
             icon="🚚"
             title="Tractări auto"
-            description="În curând"
-            value="—"
+            description="Cererile clienților"
+            value={stats.towingRequests}
           />
 
           <DashboardCard

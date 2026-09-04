@@ -6,6 +6,7 @@ import ImageGallery from "@/app/components/ImageGallery";
 import LicensePlate from "@/app/components/LicensePlate";
 import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
 import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
+import type { TowingDisplaySummary } from "@/lib/towing/towing-display";
 
 type CarImage = {
   name?: string;
@@ -46,6 +47,7 @@ type CarHeaderProps = {
   damageTypes?: string[];
   mechanicalDetails?: MechanicalServiceDetailGroup[];
   wheelsSummary?: WheelsServiceSummary;
+  towingSummary?: TowingDisplaySummary;
   showAllMechanicalDetails?: boolean;
   showAllWheelsDetails?: boolean;
   onActiveInteraction?: () => void;
@@ -65,6 +67,7 @@ export default function CarHeader({
   damageTypes = [],
   mechanicalDetails = [],
   wheelsSummary,
+  towingSummary,
   showAllMechanicalDetails: forceShowAllMechanicalDetails = false,
   showAllWheelsDetails = false,
   onActiveInteraction,
@@ -412,7 +415,72 @@ export default function CarHeader({
             </p>
           </div>
         )}
+
+        {towingSummary && (
+          <div className="mt-4 space-y-3">
+            <TowingLocation label="Preluare" location={towingSummary.pickup} />
+            <TowingLocation
+              label="Destinație"
+              location={towingSummary.destination}
+            />
+            <TowingDetail label="Motiv" value={towingSummary.reasonLabel} />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+                Stare vehicul
+              </p>
+              <div className="mt-1.5 space-y-0.5">
+                {[
+                  towingSummary.startsLabel,
+                  towingSummary.canBePushedLabel,
+                  towingSummary.wheelsLabel,
+                ].map((label) => (
+                  <p
+                    key={label}
+                    className="text-[13px] font-semibold leading-[18px] text-black/70"
+                  >
+                    {label}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+function TowingLocation({
+  label,
+  location,
+}: {
+  label: string;
+  location: TowingDisplaySummary["pickup"];
+}) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+        {label}
+      </p>
+      <p className="mt-1.5 text-[13px] font-semibold leading-[18px] text-black/70">
+        {location.address}
+      </p>
+      <p className="text-[12px] font-semibold leading-[17px] text-black/50">
+        {location.city}
+      </p>
+    </div>
+  );
+}
+
+function TowingDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+        {label}
+      </p>
+      <p className="mt-1.5 text-[13px] font-semibold leading-[18px] text-black/70">
+        {value}
+      </p>
     </div>
   );
 }
