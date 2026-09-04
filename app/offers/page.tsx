@@ -31,6 +31,7 @@ import RequestCategoryFilter, {
   type RequestCategoryFilter as RequestCategory,
   type RequestCategoryCounts,
 } from "@/app/components/RequestCategoryFilter";
+import { isRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type ProfileRow = {
   role: string[] | null;
@@ -66,6 +67,16 @@ export default function OffersPage() {
     Record<string, string>
   >({});
   const carouselRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    const category = new URLSearchParams(window.location.search).get(
+      "category",
+    );
+
+    if (isRepairServiceType(category)) {
+      setActiveCategory(category);
+    }
+  }, []);
 
   const offerGroups = useMemo(() => {
     const groups = new Map<string, OfferGroup>();

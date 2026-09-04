@@ -1240,6 +1240,77 @@ export default function AppNavbar() {
 
   const goOffers = () => {
     void runLocked(async ({ navigate }) => {
+      let customerOffersUrl = "/offers";
+
+      if (!isWorkshopMode && userId) {
+        try {
+          let requestId: string | null = null;
+
+          if (appointmentProposalUnreadCount > 0) {
+            const { data: notification, error: notificationError } =
+              await supabase
+                .from("notifications")
+                .select("request_id")
+                .eq("recipient_id", userId)
+                .is("read_at", null)
+                .in("type", [
+                  "customer_proposed_appointment",
+                  "workshop_proposed_appointment",
+                ])
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle<{ request_id: string | null }>();
+
+            if (notificationError) throw notificationError;
+            requestId = notification?.request_id ?? null;
+          } else if (offerUnreadCount > 0) {
+            const { data: requests, error: requestsError } = await supabase
+              .from("repair_requests")
+              .select("id")
+              .eq("user_id", userId);
+
+            if (requestsError) throw requestsError;
+
+            const requestIds = (requests ?? []).map((request) => request.id);
+
+            if (requestIds.length > 0) {
+              const { data: offer, error: offerError } = await supabase
+                .from("repair_offers")
+                .select("request_id")
+                .in("request_id", requestIds)
+                .is("customer_read_at", null)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle<{ request_id: string | null }>();
+
+              if (offerError) throw offerError;
+              requestId = offer?.request_id ?? null;
+            }
+          }
+
+          if (requestId) {
+            const { data: request, error: requestError } = await supabase
+              .from("repair_requests")
+              .select("service_type")
+              .eq("id", requestId)
+              .eq("user_id", userId)
+              .maybeSingle<{ service_type: string | null }>();
+
+            if (requestError) throw requestError;
+
+            const serviceType = resolveRepairServiceType(
+              request?.service_type,
+            );
+
+            if (serviceType) {
+              customerOffersUrl += `?category=${serviceType}`;
+            }
+          }
+        } catch (error) {
+          console.error("Failed to resolve customer offers category:", error);
+        }
+      }
+
       if (userId && appointmentProposalUnreadCount > 0) {
         const { error } = await supabase
           .from("notifications")
@@ -1270,7 +1341,7 @@ export default function AppNavbar() {
       }
 
       localStorage.setItem("activeRole", "customer");
-      navigate("/offers");
+      navigate(customerOffersUrl);
     });
   };
 
