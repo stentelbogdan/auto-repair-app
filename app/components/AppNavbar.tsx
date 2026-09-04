@@ -1278,6 +1278,9 @@ export default function AppNavbar() {
     void runLocked(async ({ navigate }) => {
       const hasUnreadJobStarted = jobStartedUnreadCount > 0;
       let workshopJobsUrl = "/workshops/won-jobs?tab=appointments";
+      let customerStartedJobCategory: ReturnType<
+        typeof resolveRepairServiceType
+      > = null;
 
       if (
         isWorkshopMode &&
@@ -1327,6 +1330,47 @@ export default function AppNavbar() {
       }
 
       if (
+        !isWorkshopMode &&
+        userId &&
+        progressUnreadCount === 0 &&
+        hasUnreadJobStarted
+      ) {
+        try {
+          const { data: notification, error: notificationError } =
+            await supabase
+              .from("notifications")
+              .select("request_id")
+              .eq("recipient_id", userId)
+              .is("read_at", null)
+              .eq("type", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle<{ request_id: string | null }>();
+
+          if (notificationError) throw notificationError;
+
+          if (notification?.request_id) {
+            const { data: request, error: requestError } = await supabase
+              .from("repair_requests")
+              .select("service_type")
+              .eq("id", notification.request_id)
+              .maybeSingle<{ service_type: string | null }>();
+
+            if (requestError) throw requestError;
+
+            customerStartedJobCategory = resolveRepairServiceType(
+              request?.service_type,
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Failed to resolve started job category:",
+            error,
+          );
+        }
+      }
+
+      if (
         userId &&
         (appointmentConfirmedUnreadCount > 0 || hasUnreadJobStarted)
       ) {
@@ -1365,6 +1409,10 @@ export default function AppNavbar() {
         ? "/customer/my-jobs?tab=in_progress"
         : "/customer/my-jobs";
 
+      if (hasUnreadJobStarted && customerStartedJobCategory) {
+        customerJobsUrl += `&category=${customerStartedJobCategory}`;
+      }
+
       if (progressUnreadCount > 0) {
         customerJobsUrl = "/customer/my-jobs?tab=in_progress";
 
@@ -1386,16 +1434,37 @@ export default function AppNavbar() {
             const { data: latestProgress, error: latestProgressError } =
               await supabase
                 .from("work_progress_updates")
-                .select("status")
+                .select("request_id, status")
                 .in("request_id", unreadRequestIds)
                 .order("created_at", { ascending: false })
                 .limit(1)
-                .maybeSingle<{ status: string | null }>();
+                .maybeSingle<{
+                  request_id: string;
+                  status: string | null;
+                }>();
 
             if (latestProgressError) throw latestProgressError;
 
             if (normalizeProgressStatus(latestProgress?.status) === "Ready") {
               customerJobsUrl = "/customer/my-jobs?tab=completed";
+            }
+
+            if (latestProgress?.request_id) {
+              const { data: request, error: requestError } = await supabase
+                .from("repair_requests")
+                .select("service_type")
+                .eq("id", latestProgress.request_id)
+                .maybeSingle<{ service_type: string | null }>();
+
+              if (requestError) throw requestError;
+
+              const serviceType = resolveRepairServiceType(
+                request?.service_type,
+              );
+
+              if (serviceType) {
+                customerJobsUrl += `&category=${serviceType}`;
+              }
             }
           }
         } catch (error) {

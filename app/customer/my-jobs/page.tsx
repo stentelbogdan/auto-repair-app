@@ -40,7 +40,10 @@ import RequestCategoryFilter, {
   type RequestCategoryCounts,
   type RequestCategoryFilter as RequestCategory,
 } from "@/app/components/RequestCategoryFilter";
-import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
+import {
+  isRepairServiceType,
+  resolveRepairServiceType,
+} from "@/lib/repair-requests/service-types";
 
 type RepairAppointment = {
   id: string;
@@ -109,9 +112,17 @@ export default function MyJobsPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
+    const category = params.get("category");
 
     if (isValidTab(tab)) {
       setActiveTab(tab);
+
+      if (isRepairServiceType(category)) {
+        setActiveCategoryByTab((current) => ({
+          ...current,
+          [tab]: category,
+        }));
+      }
     }
   }, []);
 
