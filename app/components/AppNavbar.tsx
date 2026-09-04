@@ -1241,6 +1241,7 @@ export default function AppNavbar() {
   const goOffers = () => {
     void runLocked(async ({ navigate }) => {
       let customerOffersUrl = "/offers";
+      let workshopOffersUrl = "/workshops/my-offers";
 
       if (!isWorkshopMode && userId) {
         try {
@@ -1311,6 +1312,43 @@ export default function AppNavbar() {
         }
       }
 
+      if (isWorkshopMode && userId && appointmentProposalUnreadCount > 0) {
+        try {
+          const { data: notification, error: notificationError } =
+            await supabase
+              .from("notifications")
+              .select("request_id")
+              .eq("recipient_id", userId)
+              .is("read_at", null)
+              .eq("type", "customer_proposed_appointment")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle<{ request_id: string | null }>();
+
+          if (notificationError) throw notificationError;
+
+          if (notification?.request_id) {
+            const { data: request, error: requestError } = await supabase
+              .from("repair_requests")
+              .select("service_type")
+              .eq("id", notification.request_id)
+              .maybeSingle<{ service_type: string | null }>();
+
+            if (requestError) throw requestError;
+
+            const serviceType = resolveRepairServiceType(
+              request?.service_type,
+            );
+
+            if (serviceType) {
+              workshopOffersUrl += `?category=${serviceType}`;
+            }
+          }
+        } catch (error) {
+          console.error("Failed to resolve workshop offers category:", error);
+        }
+      }
+
       if (userId && appointmentProposalUnreadCount > 0) {
         const { error } = await supabase
           .from("notifications")
@@ -1336,7 +1374,7 @@ export default function AppNavbar() {
 
       if (isWorkshopMode) {
         localStorage.setItem("activeRole", "workshop");
-        navigate("/workshops/my-offers");
+        navigate(workshopOffersUrl);
         return;
       }
 

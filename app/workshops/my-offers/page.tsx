@@ -20,14 +20,17 @@ import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
-import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import {
+  isRepairServiceType,
+  resolveRepairServiceType,
+  type RepairServiceType,
+} from "@/lib/repair-requests/service-types";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import RequestCategoryFilter, {
   type RequestCategoryCounts,
   type RequestCategoryFilter as RequestCategory,
 } from "@/app/components/RequestCategoryFilter";
-import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
 
 type ProfileRow = {
   role: string[] | null;
@@ -102,6 +105,16 @@ export default function WorkshopMyOffersPage() {
   const [confirmingOfferId, setConfirmingOfferId] = useState<string | null>(
     null,
   );
+
+  useEffect(() => {
+    const category = new URLSearchParams(window.location.search).get(
+      "category",
+    );
+
+    if (isRepairServiceType(category)) {
+      setActiveCategory(category);
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
