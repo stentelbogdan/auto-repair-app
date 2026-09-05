@@ -1,7 +1,8 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { divIcon } from "leaflet";
+import { divIcon, type Marker as LeafletMarker } from "leaflet";
+import { useRef } from "react";
 import {
   AttributionControl,
   MapContainer,
@@ -19,10 +20,13 @@ const pickupIcon = divIcon({
 export default function TowingPickupMap({
   lat,
   lng,
+  onPositionChange,
 }: {
   lat: number;
   lng: number;
+  onPositionChange: (lat: number, lng: number) => void;
 }) {
+  const markerRef = useRef<LeafletMarker | null>(null);
   const mapsKey = process.env.NEXT_PUBLIC_GEOAPIFY_MAPS_KEY;
 
   if (!mapsKey) {
@@ -57,7 +61,18 @@ export default function TowingPickupMap({
           maxZoom={20}
           attribution='Powered by <a href="https://www.geoapify.com/" target="_blank">Geoapify</a> | <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap contributors</a>'
         />
-        <Marker position={[lat, lng]} icon={pickupIcon} interactive={false} />
+        <Marker
+          ref={markerRef}
+          position={[lat, lng]}
+          icon={pickupIcon}
+          draggable
+          eventHandlers={{
+            dragend: () => {
+              const position = markerRef.current?.getLatLng();
+              if (position) onPositionChange(position.lat, position.lng);
+            },
+          }}
+        />
         <AttributionControl position="bottomright" prefix={false} />
       </MapContainer>
     </div>

@@ -75,6 +75,8 @@ type ReverseGeocodingResult = {
   city: string | null;
 };
 
+type ReverseGeocodingSource = "gps" | "drag";
+
 type ValidationResult =
   | { valid: false; message: string }
   | { valid: true; serviceDetails: TowingServiceDetailsV1 };
@@ -234,6 +236,7 @@ function PostTowingContent() {
     useState<LocationFeedback | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
+  const reverseGeocodingControllerRef = useRef<AbortController | null>(null);
   const availableModels = carModelsByBrand[draft.carBrand] || [];
   const years = Array.from(
     { length: new Date().getFullYear() - 1989 },
@@ -253,6 +256,10 @@ function PostTowingContent() {
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [previewUrls]);
+
+  useEffect(() => {
+    return () => reverseGeocodingControllerRef.current?.abort();
+  }, []);
 
   function updateDraft(patch: Partial<TowingDraft>) {
     setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
@@ -275,6 +282,83 @@ function PostTowingContent() {
     );
   }
 
+  async function reverseGeocodePickup(
+    coordinates: PickupCoordinates,
+    source: ReverseGeocodingSource,
+  ) {
+    reverseGeocodingControllerRef.current?.abort();
+    const controller = new AbortController();
+    reverseGeocodingControllerRef.current = controller;
+
+    setPickupLocationFeedback({
+      type: "success",
+      message:
+        source === "drag"
+          ? "Se actualizează adresa..."
+          : "Se identifică adresa...",
+    });
+
+    try {
+      const response = await fetch("/api/geocoding/reverse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: coordinates.lat,
+          lng: coordinates.lng,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Reverse geocoding failed.");
+
+      const result = (await response.json()) as ReverseGeocodingResult;
+      if (reverseGeocodingControllerRef.current !== controller) return;
+
+      const pickupAddress = result.address?.trim() || "";
+      const pickupCity = result.city?.trim() || "";
+      updateDraft({ pickupAddress, pickupCity });
+
+      if (!pickupAddress || !pickupCity) {
+        throw new Error("Incomplete reverse geocoding result.");
+      }
+
+      setPickupLocationFeedback({
+        type: "success",
+        message:
+          source === "drag"
+            ? "Poziție ajustată pe hartă"
+            : coordinates.accuracy
+              ? `Locație detectată · Precizie ~${Math.round(coordinates.accuracy)} m`
+              : "Locație detectată",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (reverseGeocodingControllerRef.current !== controller) return;
+
+      if (source === "drag") {
+        updateDraft({ pickupAddress: "", pickupCity: "" });
+      }
+      setPickupLocationFeedback({
+        type: "error",
+        message:
+          source === "drag"
+            ? "Poziția a fost actualizată. Introdu adresa manual."
+            : "Locația a fost detectată, dar adresa nu a putut fi completată automat. Introdu adresa manual.",
+      });
+    } finally {
+      if (reverseGeocodingControllerRef.current === controller) {
+        reverseGeocodingControllerRef.current = null;
+        if (source === "gps") setIsLocatingPickup(false);
+      }
+    }
+  }
+
+  function handlePickupPositionChange(lat: number, lng: number) {
+    const coordinates = { lat, lng };
+    setPickupCoordinates(coordinates);
+    void reverseGeocodePickup(coordinates, "drag");
+  }
+
   function detectPickupLocation() {
     if (
       typeof navigator === "undefined" ||
@@ -293,7 +377,7 @@ function PostTowingContent() {
     setPickupLocationFeedback(null);
 
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
+      (position) => {
         const accuracy = Number.isFinite(position.coords.accuracy)
           ? position.coords.accuracy
           : undefined;
@@ -305,47 +389,7 @@ function PostTowingContent() {
         };
 
         setPickupCoordinates(coordinates);
-        setPickupLocationFeedback({
-          type: "success",
-          message: "Se identifică adresa...",
-        });
-
-        try {
-          const response = await fetch("/api/geocoding/reverse", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              lat: coordinates.lat,
-              lng: coordinates.lng,
-            }),
-          });
-
-          if (!response.ok) throw new Error("Reverse geocoding failed.");
-
-          const result = (await response.json()) as ReverseGeocodingResult;
-          if (!result.address || !result.city) {
-            throw new Error("Incomplete reverse geocoding result.");
-          }
-
-          updateDraft({
-            pickupAddress: result.address,
-            pickupCity: result.city,
-          });
-          setPickupLocationFeedback({
-            type: "success",
-            message: accuracy
-              ? `Locație detectată · Precizie ~${Math.round(accuracy)} m`
-              : "Locație detectată",
-          });
-        } catch {
-          setPickupLocationFeedback({
-            type: "error",
-            message:
-              "Locația a fost detectată, dar adresa nu a putut fi completată automat. Introdu adresa manual.",
-          });
-        } finally {
-          setIsLocatingPickup(false);
-        }
+        void reverseGeocodePickup(coordinates, "gps");
       },
       (error) => {
         let message =
@@ -596,11 +640,17 @@ function PostTowingContent() {
                 <TowingPickupMap
                   lat={pickupCoordinates.lat}
                   lng={pickupCoordinates.lng}
+                  onPositionChange={handlePickupPositionChange}
                 />
               ) : null
             }
             locationAction={
               <>
+                {pickupCoordinates && (
+                  <p className="mt-2 text-center text-xs text-white/45">
+                    Mută pinul pentru poziția exactă
+                  </p>
+                )}
                 <button
                   type="button"
                   onClick={detectPickupLocation}
