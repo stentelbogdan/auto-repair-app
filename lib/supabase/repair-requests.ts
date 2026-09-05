@@ -34,6 +34,10 @@ export type RepairRequestRow = {
   car_model: string;
   car_year: string;
   city: string;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  destination_lat?: number | null;
+  destination_lng?: number | null;
   license_plate: string | null;
   damage_type: string;
   service_details?: RepairServiceDetails;
@@ -70,6 +74,10 @@ export async function createRepairRequest(input: {
   carModel: string;
   carYear: string;
   city: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
+  destinationLat?: number | null;
+  destinationLng?: number | null;
   licensePlate?: string;
   damageType: string;
   serviceDetails?: RepairServiceDetails;
@@ -92,6 +100,10 @@ export async function createRepairRequest(input: {
       car_model: input.carModel,
       car_year: input.carYear,
       city: input.city,
+      pickup_lat: input.pickupLat,
+      pickup_lng: input.pickupLng,
+      destination_lat: input.destinationLat,
+      destination_lng: input.destinationLng,
       license_plate: formatLicensePlateForDb(input.licensePlate),
       damage_type: input.damageType,
       service_details: input.serviceDetails ?? [],
