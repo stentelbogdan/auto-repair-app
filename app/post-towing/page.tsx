@@ -13,8 +13,8 @@ import { CheckCircle2, MapPin, XCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import ImageGallery from "@/app/components/ImageGallery";
+import TowingLocationCombobox from "@/app/components/towing/TowingLocationCombobox";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
-import { romaniaCities } from "@/lib/data/romania-cities";
 import {
   prepareImageForUpload,
   type PreparedImage,
@@ -916,7 +916,8 @@ function PostTowingContent() {
             addressPlaceholder="Stradă, număr, reper"
             onAddressChange={handlePickupAddressChange}
             onCityChange={handlePickupCityChange}
-            allowDynamicCity
+            cityBiasLat={pickupCoordinates?.lat}
+            cityBiasLng={pickupCoordinates?.lng}
             locationPreview={
               pickupCoordinates ? (
                 <TowingLocationMap
@@ -987,7 +988,8 @@ function PostTowingContent() {
             addressPlaceholder="Adresa unde va fi transportată mașina"
             onAddressChange={handleDestinationAddressChange}
             onCityChange={handleDestinationCityChange}
-            allowDynamicCity
+            cityBiasLat={destinationCoordinates?.lat}
+            cityBiasLng={destinationCoordinates?.lng}
             locationPreview={
               destinationCoordinates ? (
                 <TowingLocationMap
@@ -1201,7 +1203,8 @@ function LocationSection({
   addressPlaceholder,
   onAddressChange,
   onCityChange,
-  allowDynamicCity = false,
+  cityBiasLat,
+  cityBiasLng,
   locationAction,
   locationPreview,
 }: {
@@ -1211,13 +1214,11 @@ function LocationSection({
   addressPlaceholder: string;
   onAddressChange: (value: string) => void;
   onCityChange: (value: string) => void;
-  allowDynamicCity?: boolean;
+  cityBiasLat?: number;
+  cityBiasLng?: number;
   locationAction?: React.ReactNode;
   locationPreview?: React.ReactNode;
 }) {
-  const hasDynamicCity =
-    allowDynamicCity && city !== "" && !romaniaCities.includes(city);
-
   return (
     <section className={darkSectionClassName}>
       <h2 className="text-base font-black">{title}</h2>
@@ -1236,25 +1237,20 @@ function LocationSection({
             required
           />
         </label>
-        <label>
+        <div>
           <span className="mb-2 block text-sm font-medium text-white/70">
             Oraș
           </span>
-          <select
+          <TowingLocationCombobox
             value={city}
-            onChange={(event) => onCityChange(event.target.value)}
+            onChange={onCityChange}
+            biasLat={cityBiasLat}
+            biasLng={cityBiasLng}
+            placeholder="Scrie localitatea"
             className={darkInputClassName}
             required
-          >
-            <option value="">Alege orașul</option>
-            {hasDynamicCity && <option value={city}>{city}</option>}
-            {romaniaCities.map((cityName) => (
-              <option key={cityName} value={cityName}>
-                {cityName}
-              </option>
-            ))}
-          </select>
-        </label>
+          />
+        </div>
       </div>
       {locationPreview}
     </section>
