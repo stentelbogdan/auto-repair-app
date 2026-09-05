@@ -64,6 +64,11 @@ type LocationFeedback = {
   message: string;
 };
 
+type ReverseGeocodingResult = {
+  address: string | null;
+  city: string | null;
+};
+
 type ValidationResult =
   | { valid: false; message: string }
   | { valid: true; serviceDetails: TowingServiceDetailsV1 };
@@ -282,23 +287,59 @@ function PostTowingContent() {
     setPickupLocationFeedback(null);
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const accuracy = Number.isFinite(position.coords.accuracy)
           ? position.coords.accuracy
           : undefined;
 
-        setPickupCoordinates({
+        const coordinates = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
           accuracy,
-        });
+        };
+
+        setPickupCoordinates(coordinates);
         setPickupLocationFeedback({
           type: "success",
-          message: accuracy
-            ? `Locație detectată · Precizie ~${Math.round(accuracy)} m`
-            : "Locație detectată",
+          message: "Se identifică adresa...",
         });
-        setIsLocatingPickup(false);
+
+        try {
+          const response = await fetch("/api/geocoding/reverse", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lat: coordinates.lat,
+              lng: coordinates.lng,
+            }),
+          });
+
+          if (!response.ok) throw new Error("Reverse geocoding failed.");
+
+          const result = (await response.json()) as ReverseGeocodingResult;
+          if (!result.address || !result.city) {
+            throw new Error("Incomplete reverse geocoding result.");
+          }
+
+          updateDraft({
+            pickupAddress: result.address,
+            pickupCity: result.city,
+          });
+          setPickupLocationFeedback({
+            type: "success",
+            message: accuracy
+              ? `Locație detectată · Precizie ~${Math.round(accuracy)} m`
+              : "Locație detectată",
+          });
+        } catch {
+          setPickupLocationFeedback({
+            type: "error",
+            message:
+              "Locația a fost detectată, dar adresa nu a putut fi completată automat. Introdu adresa manual.",
+          });
+        } finally {
+          setIsLocatingPickup(false);
+        }
       },
       (error) => {
         let message =
@@ -543,6 +584,7 @@ function PostTowingContent() {
               updateDraft({ pickupAddress })
             }
             onCityChange={(pickupCity) => updateDraft({ pickupCity })}
+            allowDynamicCity
             locationAction={
               <>
                 <button
@@ -766,6 +808,7 @@ function LocationSection({
   addressPlaceholder,
   onAddressChange,
   onCityChange,
+  allowDynamicCity = false,
   locationAction,
 }: {
   title: string;
@@ -774,8 +817,12 @@ function LocationSection({
   addressPlaceholder: string;
   onAddressChange: (value: string) => void;
   onCityChange: (value: string) => void;
+  allowDynamicCity?: boolean;
   locationAction?: React.ReactNode;
 }) {
+  const hasDynamicCity =
+    allowDynamicCity && city !== "" && !romaniaCities.includes(city);
+
   return (
     <section className={darkSectionClassName}>
       <h2 className="text-base font-black">{title}</h2>
@@ -805,6 +852,7 @@ function LocationSection({
             required
           >
             <option value="">Alege orașul</option>
+            {hasDynamicCity && <option value={city}>{city}</option>}
             {romaniaCities.map((cityName) => (
               <option key={cityName} value={cityName}>
                 {cityName}
