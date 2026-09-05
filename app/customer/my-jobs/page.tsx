@@ -353,11 +353,7 @@ export default function MyJobsPage() {
       )
       .subscribe((status, error) => {
         if (process.env.NODE_ENV === "development") {
-          if (
-            status === "CHANNEL_ERROR" ||
-            status === "TIMED_OUT" ||
-            status === "CLOSED"
-          ) {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
             console.warn(`[WORK-PROGRESS-RT] ${status}`, error ?? undefined);
           }
         }
