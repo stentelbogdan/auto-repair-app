@@ -598,6 +598,26 @@ function PostTowingContent() {
                     ? "Se caută locația..."
                     : "Folosește locația mea"}
                 </button>
+                <p className="mt-1.5 text-center text-[10px] leading-4 text-white/40">
+                  Powered by{" "}
+                  <a
+                    href="https://www.geoapify.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline decoration-white/20 underline-offset-2"
+                  >
+                    Geoapify
+                  </a>{" "}
+                  ·{" "}
+                  <a
+                    href="https://www.openstreetmap.org/copyright"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline decoration-white/20 underline-offset-2"
+                  >
+                    © OpenStreetMap contributors
+                  </a>
+                </p>
                 {pickupLocationFeedback && (
                   <p
                     className={`mt-2 text-sm font-medium leading-5 ${
