@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { CheckCircle2, MapPin, XCircle } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import ImageGallery from "@/app/components/ImageGallery";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
@@ -30,6 +31,11 @@ import {
   getLicensePlateError,
   isValidLicensePlate,
 } from "@/lib/utils/licensePlate";
+
+const TowingPickupMap = dynamic(
+  () => import("@/app/components/towing/TowingPickupMap"),
+  { ssr: false },
+);
 
 type StoredImage = {
   name: string;
@@ -585,6 +591,14 @@ function PostTowingContent() {
             }
             onCityChange={(pickupCity) => updateDraft({ pickupCity })}
             allowDynamicCity
+            locationPreview={
+              pickupCoordinates ? (
+                <TowingPickupMap
+                  lat={pickupCoordinates.lat}
+                  lng={pickupCoordinates.lng}
+                />
+              ) : null
+            }
             locationAction={
               <>
                 <button
@@ -830,6 +844,7 @@ function LocationSection({
   onCityChange,
   allowDynamicCity = false,
   locationAction,
+  locationPreview,
 }: {
   title: string;
   address: string;
@@ -839,6 +854,7 @@ function LocationSection({
   onCityChange: (value: string) => void;
   allowDynamicCity?: boolean;
   locationAction?: React.ReactNode;
+  locationPreview?: React.ReactNode;
 }) {
   const hasDynamicCity =
     allowDynamicCity && city !== "" && !romaniaCities.includes(city);
@@ -881,6 +897,7 @@ function LocationSection({
           </select>
         </label>
       </div>
+      {locationPreview}
     </section>
   );
 }
