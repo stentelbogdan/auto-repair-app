@@ -2,12 +2,13 @@
 
 import "leaflet/dist/leaflet.css";
 import { divIcon, type Marker as LeafletMarker } from "leaflet";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   AttributionControl,
   MapContainer,
   Marker,
   TileLayer,
+  useMap,
 } from "react-leaflet";
 
 const pickupIcon = divIcon({
@@ -16,6 +17,16 @@ const pickupIcon = divIcon({
   iconSize: [32, 38],
   iconAnchor: [16, 34],
 });
+
+function MapPositionSync({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.panTo([lat, lng]);
+  }, [lat, lng, map]);
+
+  return null;
+}
 
 export default function TowingPickupMap({
   lat,
@@ -43,19 +54,21 @@ export default function TowingPickupMap({
   return (
     <div className="mt-3 h-44 w-full overflow-hidden rounded-2xl border border-white/10">
       <MapContainer
-        key={`${lat}:${lng}`}
         center={[lat, lng]}
         zoom={17}
-        zoomControl={false}
+        minZoom={12}
+        maxZoom={20}
+        zoomControl
         dragging={false}
         scrollWheelZoom={false}
         doubleClickZoom={false}
-        touchZoom={false}
+        touchZoom
         boxZoom={false}
         keyboard={false}
         attributionControl={false}
         className="h-full w-full"
       >
+        <MapPositionSync lat={lat} lng={lng} />
         <TileLayer
           url={tileUrl}
           maxZoom={20}

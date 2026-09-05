@@ -75,6 +75,12 @@ type ReverseGeocodingResult = {
   city: string | null;
 };
 
+type ForwardGeocodingResult = {
+  lat: number | null;
+  lng: number | null;
+  matched: boolean;
+};
+
 type ReverseGeocodingSource = "gps" | "drag";
 
 type ValidationResult =
@@ -236,7 +242,10 @@ function PostTowingContent() {
     useState<LocationFeedback | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
-  const reverseGeocodingControllerRef = useRef<AbortController | null>(null);
+  const geocodingControllerRef = useRef<AbortController | null>(null);
+  const forwardGeocodingTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const availableModels = carModelsByBrand[draft.carBrand] || [];
   const years = Array.from(
     { length: new Date().getFullYear() - 1989 },
@@ -258,7 +267,12 @@ function PostTowingContent() {
   }, [previewUrls]);
 
   useEffect(() => {
-    return () => reverseGeocodingControllerRef.current?.abort();
+    return () => {
+      geocodingControllerRef.current?.abort();
+      if (forwardGeocodingTimerRef.current) {
+        clearTimeout(forwardGeocodingTimerRef.current);
+      }
+    };
   }, []);
 
   function updateDraft(patch: Partial<TowingDraft>) {
@@ -286,9 +300,13 @@ function PostTowingContent() {
     coordinates: PickupCoordinates,
     source: ReverseGeocodingSource,
   ) {
-    reverseGeocodingControllerRef.current?.abort();
+    if (forwardGeocodingTimerRef.current) {
+      clearTimeout(forwardGeocodingTimerRef.current);
+      forwardGeocodingTimerRef.current = null;
+    }
+    geocodingControllerRef.current?.abort();
     const controller = new AbortController();
-    reverseGeocodingControllerRef.current = controller;
+    geocodingControllerRef.current = controller;
 
     setPickupLocationFeedback({
       type: "success",
@@ -312,7 +330,7 @@ function PostTowingContent() {
       if (!response.ok) throw new Error("Reverse geocoding failed.");
 
       const result = (await response.json()) as ReverseGeocodingResult;
-      if (reverseGeocodingControllerRef.current !== controller) return;
+      if (geocodingControllerRef.current !== controller) return;
 
       const pickupAddress = result.address?.trim() || "";
       const pickupCity = result.city?.trim() || "";
@@ -333,7 +351,7 @@ function PostTowingContent() {
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      if (reverseGeocodingControllerRef.current !== controller) return;
+      if (geocodingControllerRef.current !== controller) return;
 
       if (source === "drag") {
         updateDraft({ pickupAddress: "", pickupCity: "" });
@@ -346,11 +364,89 @@ function PostTowingContent() {
             : "Locația a fost detectată, dar adresa nu a putut fi completată automat. Introdu adresa manual.",
       });
     } finally {
-      if (reverseGeocodingControllerRef.current === controller) {
-        reverseGeocodingControllerRef.current = null;
-        if (source === "gps") setIsLocatingPickup(false);
+      if (geocodingControllerRef.current === controller) {
+        geocodingControllerRef.current = null;
+      }
+      if (source === "gps") setIsLocatingPickup(false);
+    }
+  }
+
+  async function forwardGeocodePickup(address: string, city: string) {
+    geocodingControllerRef.current?.abort();
+    const controller = new AbortController();
+    geocodingControllerRef.current = controller;
+
+    try {
+      const response = await fetch("/api/geocoding/forward", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, city }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Forward geocoding failed.");
+
+      const result = (await response.json()) as ForwardGeocodingResult;
+      if (geocodingControllerRef.current !== controller) return;
+
+      if (
+        !result.matched ||
+        typeof result.lat !== "number" ||
+        !Number.isFinite(result.lat) ||
+        typeof result.lng !== "number" ||
+        !Number.isFinite(result.lng)
+      ) {
+        throw new Error("Address not matched.");
+      }
+
+      setPickupCoordinates({ lat: result.lat, lng: result.lng });
+      setPickupLocationFeedback({
+        type: "success",
+        message: "Pin actualizat după adresă",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (geocodingControllerRef.current !== controller) return;
+
+      setPickupLocationFeedback({
+        type: "error",
+        message: "Adresa nu a putut fi localizată exact. Verifică pinul.",
+      });
+    } finally {
+      if (geocodingControllerRef.current === controller) {
+        geocodingControllerRef.current = null;
       }
     }
+  }
+
+  function scheduleForwardGeocoding(address: string, city: string) {
+    if (forwardGeocodingTimerRef.current) {
+      clearTimeout(forwardGeocodingTimerRef.current);
+    }
+    geocodingControllerRef.current?.abort();
+    geocodingControllerRef.current = null;
+
+    const normalizedAddress = address.trim();
+    const normalizedCity = city.trim();
+    if (!normalizedAddress || !normalizedCity) {
+      forwardGeocodingTimerRef.current = null;
+      return;
+    }
+
+    forwardGeocodingTimerRef.current = setTimeout(() => {
+      forwardGeocodingTimerRef.current = null;
+      void forwardGeocodePickup(normalizedAddress, normalizedCity);
+    }, 900);
+  }
+
+  function handlePickupAddressChange(pickupAddress: string) {
+    updateDraft({ pickupAddress });
+    scheduleForwardGeocoding(pickupAddress, draft.pickupCity);
+  }
+
+  function handlePickupCityChange(pickupCity: string) {
+    updateDraft({ pickupCity });
+    scheduleForwardGeocoding(draft.pickupAddress, pickupCity);
   }
 
   function handlePickupPositionChange(lat: number, lng: number) {
@@ -630,10 +726,8 @@ function PostTowingContent() {
             address={draft.pickupAddress}
             city={draft.pickupCity}
             addressPlaceholder="Stradă, număr, reper"
-            onAddressChange={(pickupAddress) =>
-              updateDraft({ pickupAddress })
-            }
-            onCityChange={(pickupCity) => updateDraft({ pickupCity })}
+            onAddressChange={handlePickupAddressChange}
+            onCityChange={handlePickupCityChange}
             allowDynamicCity
             locationPreview={
               pickupCoordinates ? (
