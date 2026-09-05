@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, MapPin, XCircle } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ImageGallery from "@/app/components/ImageGallery";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
@@ -51,6 +51,17 @@ type TowingDraft = {
   canBePushed: boolean | null;
   wheels: TowingWheelState | "";
   description: string;
+};
+
+type PickupCoordinates = {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+};
+
+type LocationFeedback = {
+  type: "success" | "error";
+  message: string;
 };
 
 type ValidationResult =
@@ -205,6 +216,11 @@ function PostTowingContent() {
   const targetWorkshopId = searchParams.get("targetWorkshopId");
   const [draft, setDraft] = useState<TowingDraft>(initialDraft);
   const [files, setFiles] = useState<File[]>([]);
+  const [pickupCoordinates, setPickupCoordinates] =
+    useState<PickupCoordinates | null>(null);
+  const [isLocatingPickup, setIsLocatingPickup] = useState(false);
+  const [pickupLocationFeedback, setPickupLocationFeedback] =
+    useState<LocationFeedback | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
   const availableModels = carModelsByBrand[draft.carBrand] || [];
@@ -245,6 +261,68 @@ function PostTowingContent() {
   function removeFile(index: number) {
     setFiles((currentFiles) =>
       currentFiles.filter((_, currentIndex) => currentIndex !== index),
+    );
+  }
+
+  function detectPickupLocation() {
+    if (
+      typeof navigator === "undefined" ||
+      !("geolocation" in navigator)
+    ) {
+      setPickupLocationFeedback({
+        type: "error",
+        message: "Localizarea nu este disponibilă pe acest dispozitiv.",
+      });
+      return;
+    }
+
+    if (isLocatingPickup) return;
+
+    setIsLocatingPickup(true);
+    setPickupLocationFeedback(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const accuracy = Number.isFinite(position.coords.accuracy)
+          ? position.coords.accuracy
+          : undefined;
+
+        setPickupCoordinates({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy,
+        });
+        setPickupLocationFeedback({
+          type: "success",
+          message: accuracy
+            ? `Locație detectată · Precizie ~${Math.round(accuracy)} m`
+            : "Locație detectată",
+        });
+        setIsLocatingPickup(false);
+      },
+      (error) => {
+        let message =
+          "Locația nu a putut fi determinată. Introdu adresa manual.";
+
+        if (error.code === error.PERMISSION_DENIED) {
+          message =
+            "Accesul la locație a fost refuzat. Poți introduce adresa manual.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          message =
+            "Locația nu a putut fi determinată. Introdu adresa manual.";
+        } else if (error.code === error.TIMEOUT) {
+          message =
+            "Localizarea a durat prea mult. Încearcă din nou sau introdu adresa manual.";
+        }
+
+        setPickupLocationFeedback({ type: "error", message });
+        setIsLocatingPickup(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12_000,
+        maximumAge: 0,
+      },
     );
   }
 
@@ -305,6 +383,8 @@ function PostTowingContent() {
         carModel: draft.carModel,
         carYear: draft.carYear,
         city: validationResult.serviceDetails.pickup.city,
+        pickupLat: pickupCoordinates?.lat ?? null,
+        pickupLng: pickupCoordinates?.lng ?? null,
         licensePlate: draft.licensePlate,
         damageType: "towing",
         serviceDetails: validationResult.serviceDetails,
@@ -463,6 +543,33 @@ function PostTowingContent() {
               updateDraft({ pickupAddress })
             }
             onCityChange={(pickupCity) => updateDraft({ pickupCity })}
+            locationAction={
+              <>
+                <button
+                  type="button"
+                  onClick={detectPickupLocation}
+                  disabled={isLocatingPickup}
+                  className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-orange-400/60 bg-orange-500/10 px-4 py-3 text-sm font-bold text-orange-300 transition active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+                >
+                  <MapPin size={18} aria-hidden="true" />
+                  {isLocatingPickup
+                    ? "Se caută locația..."
+                    : "Folosește locația mea"}
+                </button>
+                {pickupLocationFeedback && (
+                  <p
+                    className={`mt-2 text-sm font-medium leading-5 ${
+                      pickupLocationFeedback.type === "success"
+                        ? "text-emerald-400"
+                        : "text-red-400"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {pickupLocationFeedback.message}
+                  </p>
+                )}
+              </>
+            }
           />
 
           <LocationSection
@@ -659,6 +766,7 @@ function LocationSection({
   addressPlaceholder,
   onAddressChange,
   onCityChange,
+  locationAction,
 }: {
   title: string;
   address: string;
@@ -666,10 +774,12 @@ function LocationSection({
   addressPlaceholder: string;
   onAddressChange: (value: string) => void;
   onCityChange: (value: string) => void;
+  locationAction?: React.ReactNode;
 }) {
   return (
     <section className={darkSectionClassName}>
       <h2 className="text-base font-black">{title}</h2>
+      {locationAction}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <label>
           <span className="mb-2 block text-sm font-medium text-white/70">
