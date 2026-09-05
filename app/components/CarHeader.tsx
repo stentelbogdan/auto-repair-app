@@ -425,7 +425,7 @@ export default function CarHeader({
             />
             <TowingDetail label="Motiv" value={towingSummary.reasonLabel} />
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+              <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
                 Stare vehicul
               </p>
               <div className="mt-1.5 space-y-0.5">
@@ -459,7 +459,7 @@ function TowingLocation({
 }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+      <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
         {label}
       </p>
       <p className="mt-1.5 text-[13px] font-semibold leading-[18px] text-black/70">
@@ -475,7 +475,7 @@ function TowingLocation({
 function TowingDetail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs font-bold uppercase tracking-wide text-black/60">
+      <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
         {label}
       </p>
       <p className="mt-1.5 text-[13px] font-semibold leading-[18px] text-black/70">
