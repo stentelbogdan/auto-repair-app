@@ -32,8 +32,8 @@ import {
   isValidLicensePlate,
 } from "@/lib/utils/licensePlate";
 
-const TowingPickupMap = dynamic(
-  () => import("@/app/components/towing/TowingPickupMap"),
+const TowingLocationMap = dynamic(
+  () => import("@/app/components/towing/TowingLocationMap"),
   { ssr: false },
 );
 
@@ -63,6 +63,11 @@ type PickupCoordinates = {
   lat: number;
   lng: number;
   accuracy?: number;
+};
+
+type DestinationCoordinates = {
+  lat: number;
+  lng: number;
 };
 
 type LocationFeedback = {
@@ -237,13 +242,22 @@ function PostTowingContent() {
   const [files, setFiles] = useState<File[]>([]);
   const [pickupCoordinates, setPickupCoordinates] =
     useState<PickupCoordinates | null>(null);
+  const [destinationCoordinates, setDestinationCoordinates] =
+    useState<DestinationCoordinates | null>(null);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
   const [pickupLocationFeedback, setPickupLocationFeedback] =
+    useState<LocationFeedback | null>(null);
+  const [destinationLocationFeedback, setDestinationLocationFeedback] =
     useState<LocationFeedback | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
   const geocodingControllerRef = useRef<AbortController | null>(null);
   const forwardGeocodingTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const destinationGeocodingControllerRef =
+    useRef<AbortController | null>(null);
+  const destinationForwardGeocodingTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
   const availableModels = carModelsByBrand[draft.carBrand] || [];
@@ -271,6 +285,10 @@ function PostTowingContent() {
       geocodingControllerRef.current?.abort();
       if (forwardGeocodingTimerRef.current) {
         clearTimeout(forwardGeocodingTimerRef.current);
+      }
+      destinationGeocodingControllerRef.current?.abort();
+      if (destinationForwardGeocodingTimerRef.current) {
+        clearTimeout(destinationForwardGeocodingTimerRef.current);
       }
     };
   }, []);
@@ -464,6 +482,165 @@ function PostTowingContent() {
     void reverseGeocodePickup(coordinates, "drag");
   }
 
+  async function reverseGeocodeDestination(
+    coordinates: DestinationCoordinates,
+  ) {
+    if (destinationForwardGeocodingTimerRef.current) {
+      clearTimeout(destinationForwardGeocodingTimerRef.current);
+      destinationForwardGeocodingTimerRef.current = null;
+    }
+    destinationGeocodingControllerRef.current?.abort();
+    const controller = new AbortController();
+    destinationGeocodingControllerRef.current = controller;
+
+    setDestinationLocationFeedback({
+      type: "success",
+      message: "Se actualizează adresa...",
+    });
+
+    try {
+      const response = await fetch("/api/geocoding/reverse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(coordinates),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Reverse geocoding failed.");
+
+      const result = (await response.json()) as ReverseGeocodingResult;
+      if (destinationGeocodingControllerRef.current !== controller) return;
+
+      const destinationAddress = result.address?.trim() || "";
+      const destinationCity = result.city?.trim() || "";
+      updateDraft({ destinationAddress, destinationCity });
+
+      if (!destinationAddress || !destinationCity) {
+        throw new Error("Incomplete reverse geocoding result.");
+      }
+
+      setDestinationLocationFeedback({
+        type: "success",
+        message: "Poziție ajustată pe hartă",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (destinationGeocodingControllerRef.current !== controller) return;
+
+      updateDraft({ destinationAddress: "", destinationCity: "" });
+      setDestinationLocationFeedback({
+        type: "error",
+        message: "Poziția a fost actualizată. Introdu adresa manual.",
+      });
+    } finally {
+      if (destinationGeocodingControllerRef.current === controller) {
+        destinationGeocodingControllerRef.current = null;
+      }
+    }
+  }
+
+  async function forwardGeocodeDestination(address: string, city: string) {
+    destinationGeocodingControllerRef.current?.abort();
+    const controller = new AbortController();
+    destinationGeocodingControllerRef.current = controller;
+
+    try {
+      const response = await fetch("/api/geocoding/forward", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address,
+          city,
+          ...(destinationCoordinates
+            ? {
+                lat: destinationCoordinates.lat,
+                lng: destinationCoordinates.lng,
+              }
+            : {}),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) throw new Error("Forward geocoding failed.");
+
+      const result = (await response.json()) as ForwardGeocodingResult;
+      if (destinationGeocodingControllerRef.current !== controller) return;
+
+      if (
+        !result.matched ||
+        typeof result.lat !== "number" ||
+        !Number.isFinite(result.lat) ||
+        typeof result.lng !== "number" ||
+        !Number.isFinite(result.lng)
+      ) {
+        throw new Error("Address not matched.");
+      }
+
+      setDestinationCoordinates({ lat: result.lat, lng: result.lng });
+      setDestinationLocationFeedback({
+        type: "success",
+        message: "Pin actualizat după adresă",
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      if (destinationGeocodingControllerRef.current !== controller) return;
+
+      setDestinationLocationFeedback({
+        type: "error",
+        message: "Adresa nu a putut fi localizată exact. Verifică pinul.",
+      });
+    } finally {
+      if (destinationGeocodingControllerRef.current === controller) {
+        destinationGeocodingControllerRef.current = null;
+      }
+    }
+  }
+
+  function scheduleDestinationForwardGeocoding(
+    address: string,
+    city: string,
+  ) {
+    if (destinationForwardGeocodingTimerRef.current) {
+      clearTimeout(destinationForwardGeocodingTimerRef.current);
+    }
+    destinationGeocodingControllerRef.current?.abort();
+    destinationGeocodingControllerRef.current = null;
+
+    const normalizedAddress = address.trim();
+    const normalizedCity = city.trim();
+    if (!normalizedAddress || !normalizedCity) {
+      destinationForwardGeocodingTimerRef.current = null;
+      return;
+    }
+
+    destinationForwardGeocodingTimerRef.current = setTimeout(() => {
+      destinationForwardGeocodingTimerRef.current = null;
+      void forwardGeocodeDestination(normalizedAddress, normalizedCity);
+    }, 900);
+  }
+
+  function handleDestinationAddressChange(destinationAddress: string) {
+    updateDraft({ destinationAddress });
+    scheduleDestinationForwardGeocoding(
+      destinationAddress,
+      draft.destinationCity,
+    );
+  }
+
+  function handleDestinationCityChange(destinationCity: string) {
+    updateDraft({ destinationCity });
+    scheduleDestinationForwardGeocoding(
+      draft.destinationAddress,
+      destinationCity,
+    );
+  }
+
+  function handleDestinationPositionChange(lat: number, lng: number) {
+    const coordinates = { lat, lng };
+    setDestinationCoordinates(coordinates);
+    void reverseGeocodeDestination(coordinates);
+  }
+
   function detectPickupLocation() {
     if (
       typeof navigator === "undefined" ||
@@ -581,6 +758,8 @@ function PostTowingContent() {
         city: validationResult.serviceDetails.pickup.city,
         pickupLat: pickupCoordinates?.lat ?? null,
         pickupLng: pickupCoordinates?.lng ?? null,
+        destinationLat: destinationCoordinates?.lat ?? null,
+        destinationLng: destinationCoordinates?.lng ?? null,
         licensePlate: draft.licensePlate,
         damageType: "towing",
         serviceDetails: validationResult.serviceDetails,
@@ -740,7 +919,7 @@ function PostTowingContent() {
             allowDynamicCity
             locationPreview={
               pickupCoordinates ? (
-                <TowingPickupMap
+                <TowingLocationMap
                   lat={pickupCoordinates.lat}
                   lng={pickupCoordinates.lng}
                   onPositionChange={handlePickupPositionChange}
@@ -806,11 +985,38 @@ function PostTowingContent() {
             address={draft.destinationAddress}
             city={draft.destinationCity}
             addressPlaceholder="Adresa unde va fi transportată mașina"
-            onAddressChange={(destinationAddress) =>
-              updateDraft({ destinationAddress })
+            onAddressChange={handleDestinationAddressChange}
+            onCityChange={handleDestinationCityChange}
+            allowDynamicCity
+            locationPreview={
+              destinationCoordinates ? (
+                <TowingLocationMap
+                  lat={destinationCoordinates.lat}
+                  lng={destinationCoordinates.lng}
+                  onPositionChange={handleDestinationPositionChange}
+                />
+              ) : null
             }
-            onCityChange={(destinationCity) =>
-              updateDraft({ destinationCity })
+            locationAction={
+              <>
+                {destinationCoordinates && (
+                  <p className="mt-2 text-center text-xs text-white/45">
+                    Mută pinul pentru poziția exactă
+                  </p>
+                )}
+                {destinationLocationFeedback && (
+                  <p
+                    className={`mt-2 text-sm font-medium leading-5 ${
+                      destinationLocationFeedback.type === "success"
+                        ? "text-emerald-400"
+                        : "text-red-400"
+                    }`}
+                    aria-live="polite"
+                  >
+                    {destinationLocationFeedback.message}
+                  </p>
+                )}
+              </>
             }
           />
 

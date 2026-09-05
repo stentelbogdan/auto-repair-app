@@ -11,7 +11,7 @@ import {
   useMap,
 } from "react-leaflet";
 
-const pickupIcon = divIcon({
+const locationIcon = divIcon({
   className: "",
   html: '<div style="width:26px;height:26px;border:3px solid white;border-radius:50% 50% 50% 0;background:#f97316;box-shadow:0 3px 10px rgba(0,0,0,.45);transform:rotate(-45deg)"><div style="width:8px;height:8px;margin:6px;border-radius:50%;background:white"></div></div>',
   iconSize: [32, 38],
@@ -28,7 +28,7 @@ function MapPositionSync({ lat, lng }: { lat: number; lng: number }) {
   return null;
 }
 
-export default function TowingPickupMap({
+export default function TowingLocationMap({
   lat,
   lng,
   onPositionChange,
@@ -77,7 +77,7 @@ export default function TowingPickupMap({
         <Marker
           ref={markerRef}
           position={[lat, lng]}
-          icon={pickupIcon}
+          icon={locationIcon}
           draggable
           eventHandlers={{
             dragend: () => {
