@@ -380,7 +380,16 @@ function PostTowingContent() {
       const response = await fetch("/api/geocoding/forward", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address, city }),
+        body: JSON.stringify({
+          address,
+          city,
+          ...(pickupCoordinates
+            ? {
+                lat: pickupCoordinates.lat,
+                lng: pickupCoordinates.lng,
+              }
+            : {}),
+        }),
         signal: controller.signal,
       });
 
