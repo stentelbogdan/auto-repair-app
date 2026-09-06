@@ -212,6 +212,7 @@ export default function TowingLocationCombobox({
   }
 
   function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    selectedValueRef.current = null;
     setIsOpen(true);
     onChange(event.target.value);
   }
@@ -272,7 +273,7 @@ export default function TowingLocationCombobox({
         <div
           id={listboxId}
           role="listbox"
-          className="absolute inset-x-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-2xl border border-white/15 bg-neutral-950 p-1 shadow-2xl shadow-black/50"
+          className="absolute inset-x-0 top-full z-[1100] mt-1 max-h-64 overflow-y-auto rounded-2xl border border-white/15 bg-neutral-950 p-1 shadow-2xl shadow-black/50"
         >
           {suggestions.map((suggestion, index) => (
             <button
