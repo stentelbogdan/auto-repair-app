@@ -2,6 +2,7 @@
 
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import CarHeader from "@/app/components/CarHeader";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
@@ -76,6 +77,16 @@ export default function RepairRequestCard({
             : undefined,
         )
       : undefined;
+  const towingPickup =
+    isFiniteCoordinate(request.pickup_lat, -90, 90) &&
+    isFiniteCoordinate(request.pickup_lng, -180, 180)
+      ? { lat: request.pickup_lat, lng: request.pickup_lng }
+      : null;
+  const towingDestination =
+    isFiniteCoordinate(request.destination_lat, -90, 90) &&
+    isFiniteCoordinate(request.destination_lng, -180, 180)
+      ? { lat: request.destination_lat, lng: request.destination_lng }
+      : null;
 
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"
@@ -185,6 +196,16 @@ export default function RepairRequestCard({
           </div>
         )}
 
+        {request.service_type === "towing" && hasValidTowingRoute && (
+          <TowingRouteEstimateCard
+            distanceMeters={request.route_distance_meters ?? null}
+            durationSeconds={request.route_duration_seconds ?? null}
+            pickup={towingPickup}
+            destination={towingDestination}
+            paths={request.route_paths}
+          />
+        )}
+
         <div className={descriptionBoxClassName}>
           <p className={descriptionTitleClassName}>📝 Descriere</p>
 
@@ -234,4 +255,17 @@ function formatOffersCount(count: number) {
 
 function formatViewsCount(count: number) {
   return `${count} ${count === 1 ? "vizualizare" : "vizualizări"}`;
+}
+
+function isFiniteCoordinate(
+  value: number | null | undefined,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
 }
