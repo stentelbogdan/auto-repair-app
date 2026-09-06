@@ -602,7 +602,9 @@ export default function MyJobsPage() {
                   ? getWheelsDisplaySummary(request.service_details)
                   : undefined;
               const showsTowingDetails =
-                (activeTab === "scheduled" || activeTab === "in_progress") &&
+                (activeTab === "scheduled" ||
+                  activeTab === "in_progress" ||
+                  activeTab === "completed") &&
                 request.service_type === "towing";
               const towingSummary =
                 showsTowingDetails
