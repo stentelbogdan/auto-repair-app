@@ -17,6 +17,12 @@ export type CustomerOfferRepairRequest = {
   damageType: string;
   serviceType?: RepairServiceType | null;
   serviceDetails?: RepairServiceDetails | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  destinationLat: number | null;
+  destinationLng: number | null;
+  routeDistanceMeters: number | null;
+  routeDurationSeconds: number | null;
   description: string;
   images: CustomerOfferImage[];
   status?: string;

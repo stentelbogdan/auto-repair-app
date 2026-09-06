@@ -228,6 +228,12 @@ function createRequestMap(
       damageType: request.damage_type,
       serviceType: request.service_type ?? null,
       serviceDetails: request.service_details,
+      pickupLat: request.pickup_lat ?? null,
+      pickupLng: request.pickup_lng ?? null,
+      destinationLat: request.destination_lat ?? null,
+      destinationLng: request.destination_lng ?? null,
+      routeDistanceMeters: request.route_distance_meters ?? null,
+      routeDurationSeconds: request.route_duration_seconds ?? null,
       description: request.description || "",
 
       images: Array.isArray(request.images) ? request.images : [],
