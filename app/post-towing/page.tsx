@@ -41,6 +41,11 @@ const TowingLocationMap = dynamic(
   { ssr: false },
 );
 
+const TowingRouteMap = dynamic(
+  () => import("@/app/components/towing/TowingRouteMap"),
+  { ssr: false },
+);
+
 type StoredImage = {
   name: string;
   url?: string;
@@ -95,6 +100,7 @@ type RouteSummary = {
   distanceKm: number;
   durationSeconds: number;
   durationMinutes: number;
+  paths: Array<Array<[number, number]>>;
 };
 
 type RouteStatus = "idle" | "loading" | "success" | "error";
@@ -102,6 +108,31 @@ type RouteStatus = "idle" | "loading" | "success" | "error";
 type RoutingResult = {
   route: RouteSummary;
 };
+
+function hasValidRoutePaths(paths: unknown): paths is RouteSummary["paths"] {
+  return (
+    Array.isArray(paths) &&
+    paths.length > 0 &&
+    paths.every(
+      (path) =>
+        Array.isArray(path) &&
+        path.length >= 2 &&
+        path.every(
+          (point) =>
+            Array.isArray(point) &&
+            point.length === 2 &&
+            typeof point[0] === "number" &&
+            Number.isFinite(point[0]) &&
+            point[0] >= -90 &&
+            point[0] <= 90 &&
+            typeof point[1] === "number" &&
+            Number.isFinite(point[1]) &&
+            point[1] >= -180 &&
+            point[1] <= 180,
+        ),
+    )
+  );
+}
 
 type ReverseGeocodingSource = "gps" | "drag";
 
@@ -364,7 +395,8 @@ function PostTowingContent() {
           !Number.isFinite(route.distanceMeters) ||
           !Number.isFinite(route.distanceKm) ||
           !Number.isFinite(route.durationSeconds) ||
-          !Number.isFinite(route.durationMinutes)
+          !Number.isFinite(route.durationMinutes) ||
+          !hasValidRoutePaths(route.paths)
         ) {
           throw new Error("Invalid routing response.");
         }
@@ -1144,10 +1176,19 @@ function PostTowingContent() {
               {routeStatus === "success" &&
               routeSummary &&
               routeSummaryKey === routeCoordinatesKey ? (
-                <p className="mt-2 text-lg font-bold text-orange-300">
-                  {formatTowingRouteDistance(routeSummary.distanceMeters)} ·{" "}
-                  {formatTowingRouteDuration(routeSummary.durationSeconds)}
-                </p>
+                <>
+                  <p className="mt-2 text-lg font-bold text-orange-300">
+                    {formatTowingRouteDistance(routeSummary.distanceMeters)} ·{" "}
+                    {formatTowingRouteDuration(routeSummary.durationSeconds)}
+                  </p>
+                  {routeSummary.paths.some((path) => path.length >= 2) && (
+                    <TowingRouteMap
+                      pickup={pickupCoordinates}
+                      destination={destinationCoordinates}
+                      paths={routeSummary.paths}
+                    />
+                  )}
+                </>
               ) : routeStatus === "error" ? (
                 <p className="mt-2 text-sm text-white/55">
                   Traseul nu este disponibil momentan.

@@ -30,6 +30,49 @@ function getRouteMetric(feature: GeoapifyFeature, key: "distance" | "time") {
     : null;
 }
 
+function normalizeRoutePoint(value: unknown): [number, number] | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+
+  const [lng, lat] = value;
+  if (
+    typeof lat !== "number" ||
+    !Number.isFinite(lat) ||
+    lat < -90 ||
+    lat > 90 ||
+    typeof lng !== "number" ||
+    !Number.isFinite(lng) ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    return null;
+  }
+
+  return [lat, lng];
+}
+
+function normalizeRoutePath(value: unknown): Array<[number, number]> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(normalizeRoutePoint)
+    .filter((point): point is [number, number] => point !== null);
+}
+
+function getRoutePaths(feature: GeoapifyFeature) {
+  if (!isRecord(feature.geometry) || !Array.isArray(feature.geometry.coordinates)) {
+    return [];
+  }
+
+  const { coordinates, type } = feature.geometry;
+  const paths =
+    type === "LineString"
+      ? [normalizeRoutePath(coordinates)]
+      : type === "MultiLineString"
+        ? coordinates.map(normalizeRoutePath)
+        : [];
+
+  return paths.filter((path) => path.length >= 2);
+}
+
 export async function POST(request: Request) {
   let input: unknown;
 
@@ -108,7 +151,12 @@ export async function POST(request: Request) {
 
     const distanceMeters = getRouteMetric(feature, "distance");
     const durationSeconds = getRouteMetric(feature, "time");
-    if (distanceMeters === null || durationSeconds === null) {
+    const paths = getRoutePaths(feature);
+    if (
+      distanceMeters === null ||
+      durationSeconds === null ||
+      paths.length === 0
+    ) {
       return Response.json(
         { error: "Ruta nu a putut fi calculată." },
         { status: 502 },
@@ -121,6 +169,7 @@ export async function POST(request: Request) {
         distanceKm: distanceMeters / 1000,
         durationSeconds,
         durationMinutes: durationSeconds / 60,
+        paths,
       },
     });
   } catch {
