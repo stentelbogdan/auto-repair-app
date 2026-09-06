@@ -32,17 +32,10 @@ const distanceFormatter = new Intl.NumberFormat("ro-RO", {
 
 function capitalizeDisplayValue(value: string) {
   const trimmed = value.trim();
-  const letterIndex = trimmed.search(/\p{L}/u);
-
-  if (letterIndex < 0) return trimmed;
-
-  const [firstLetter] = Array.from(trimmed.slice(letterIndex));
-  if (!firstLetter) return trimmed;
-
-  return (
-    trimmed.slice(0, letterIndex) +
-    firstLetter.toUpperCase() +
-    trimmed.slice(letterIndex + firstLetter.length)
+  return trimmed.replace(
+    /(^|[^\p{L}\p{N}])(\p{L})/gu,
+    (_, separator: string, letter: string) =>
+      `${separator}${letter.toUpperCase()}`,
   );
 }
 
