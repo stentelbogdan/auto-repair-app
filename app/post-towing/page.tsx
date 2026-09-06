@@ -22,6 +22,10 @@ import {
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { supabase } from "@/lib/supabase/client";
 import {
+  formatTowingRouteDistance,
+  formatTowingRouteDuration,
+} from "@/lib/towing/towing-display";
+import {
   type TowingReason,
   type TowingServiceDetailsV1,
   type TowingWheelState,
@@ -133,20 +137,6 @@ const wheelOptions: Array<{ value: TowingWheelState; label: string }> = [
   { value: "blocked", label: "Blocate" },
   { value: "unknown", label: "Nu știu" },
 ];
-
-const distanceFormatter = new Intl.NumberFormat("ro-RO", {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
-
-function formatRouteDuration(durationMinutes: number) {
-  const roundedMinutes = Math.round(durationMinutes);
-  const hours = Math.floor(roundedMinutes / 60);
-  const minutes = roundedMinutes % 60;
-
-  if (hours === 0) return `${minutes} min`;
-  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
-}
 
 async function uploadRepairImage(
   preparedImage: PreparedImage,
@@ -863,6 +853,17 @@ function PostTowingContent() {
         ),
       );
 
+      const routeSnapshot =
+        routeStatus === "success" &&
+        routeSummary !== null &&
+        routeSummaryKey === routeCoordinatesKey &&
+        Number.isFinite(routeSummary.distanceMeters) &&
+        routeSummary.distanceMeters >= 0 &&
+        Number.isFinite(routeSummary.durationSeconds) &&
+        routeSummary.durationSeconds >= 0
+          ? routeSummary
+          : null;
+
       await createRepairRequest({
         userId: authData.user.id,
         carBrand: draft.carBrand,
@@ -873,6 +874,8 @@ function PostTowingContent() {
         pickupLng: pickupCoordinates?.lng ?? null,
         destinationLat: destinationCoordinates?.lat ?? null,
         destinationLng: destinationCoordinates?.lng ?? null,
+        routeDistanceMeters: routeSnapshot?.distanceMeters ?? null,
+        routeDurationSeconds: routeSnapshot?.durationSeconds ?? null,
         licensePlate: draft.licensePlate,
         damageType: "towing",
         serviceDetails: validationResult.serviceDetails,
@@ -1142,8 +1145,8 @@ function PostTowingContent() {
               routeSummary &&
               routeSummaryKey === routeCoordinatesKey ? (
                 <p className="mt-2 text-lg font-bold text-orange-300">
-                  {distanceFormatter.format(routeSummary.distanceKm)} km ·{" "}
-                  {formatRouteDuration(routeSummary.durationMinutes)}
+                  {formatTowingRouteDistance(routeSummary.distanceMeters)} ·{" "}
+                  {formatTowingRouteDuration(routeSummary.durationSeconds)}
                 </p>
               ) : routeStatus === "error" ? (
                 <p className="mt-2 text-sm text-white/55">

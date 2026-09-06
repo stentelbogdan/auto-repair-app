@@ -12,7 +12,36 @@ export type TowingDisplaySummary = {
   startsLabel: string;
   canBePushedLabel: string;
   wheelsLabel: string;
+  route?: {
+    distanceMeters: number;
+    durationSeconds: number;
+    distanceLabel: string;
+    durationLabel: string;
+  };
 };
+
+type TowingRouteEstimate = {
+  distanceMeters: number;
+  durationSeconds: number;
+};
+
+const distanceFormatter = new Intl.NumberFormat("ro-RO", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+export function formatTowingRouteDistance(distanceMeters: number) {
+  return `${distanceFormatter.format(distanceMeters / 1000)} km`;
+}
+
+export function formatTowingRouteDuration(durationSeconds: number) {
+  const roundedMinutes = Math.round(durationSeconds / 60);
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  if (hours === 0) return `${minutes} min`;
+  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
+}
 
 const reasonLabels = {
   breakdown: "Defecțiune",
@@ -29,8 +58,17 @@ const wheelStateLabels = {
 
 export function getTowingDisplaySummary(
   serviceDetails: unknown,
+  routeEstimate?: TowingRouteEstimate | null,
 ): TowingDisplaySummary | undefined {
   if (!isTowingServiceDetailsV1(serviceDetails)) return undefined;
+
+  const hasValidRoute =
+    routeEstimate !== null &&
+    routeEstimate !== undefined &&
+    Number.isFinite(routeEstimate.distanceMeters) &&
+    routeEstimate.distanceMeters >= 0 &&
+    Number.isFinite(routeEstimate.durationSeconds) &&
+    routeEstimate.durationSeconds >= 0;
 
   return {
     pickup: serviceDetails.pickup,
@@ -43,5 +81,16 @@ export function getTowingDisplaySummary(
       ? "Poate fi împinsă"
       : "Nu poate fi împinsă",
     wheelsLabel: wheelStateLabels[serviceDetails.vehicleCondition.wheels],
+    route: hasValidRoute
+      ? {
+          ...routeEstimate,
+          distanceLabel: formatTowingRouteDistance(
+            routeEstimate.distanceMeters,
+          ),
+          durationLabel: formatTowingRouteDuration(
+            routeEstimate.durationSeconds,
+          ),
+        }
+      : undefined,
   };
 }

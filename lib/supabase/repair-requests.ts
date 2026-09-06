@@ -38,6 +38,8 @@ export type RepairRequestRow = {
   pickup_lng?: number | null;
   destination_lat?: number | null;
   destination_lng?: number | null;
+  route_distance_meters?: number | null;
+  route_duration_seconds?: number | null;
   license_plate: string | null;
   damage_type: string;
   service_details?: RepairServiceDetails;
@@ -78,6 +80,8 @@ export async function createRepairRequest(input: {
   pickupLng?: number | null;
   destinationLat?: number | null;
   destinationLng?: number | null;
+  routeDistanceMeters?: number | null;
+  routeDurationSeconds?: number | null;
   licensePlate?: string;
   damageType: string;
   serviceDetails?: RepairServiceDetails;
@@ -104,6 +108,8 @@ export async function createRepairRequest(input: {
       pickup_lng: input.pickupLng,
       destination_lat: input.destinationLat,
       destination_lng: input.destinationLng,
+      route_distance_meters: input.routeDistanceMeters,
+      route_duration_seconds: input.routeDurationSeconds,
       license_plate: formatLicensePlateForDb(input.licensePlate),
       damage_type: input.damageType,
       service_details: input.serviceDetails ?? [],
@@ -141,7 +147,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, created_at",
+      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, route_distance_meters, route_duration_seconds, created_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });

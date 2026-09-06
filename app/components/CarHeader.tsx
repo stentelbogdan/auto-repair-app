@@ -423,6 +423,12 @@ export default function CarHeader({
               label="Destinație"
               location={towingSummary.destination}
             />
+            {towingSummary.route && (
+              <TowingDetail
+                label="Traseu"
+                value={`${towingSummary.route.distanceLabel} · ${towingSummary.route.durationLabel}`}
+              />
+            )}
             <TowingDetail label="Motiv" value={towingSummary.reasonLabel} />
             <div>
               <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">

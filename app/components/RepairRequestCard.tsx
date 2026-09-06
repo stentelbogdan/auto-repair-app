@@ -5,6 +5,7 @@ import CarHeader from "@/app/components/CarHeader";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
+import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import {
   formatProgressStatus,
@@ -56,6 +57,26 @@ export default function RepairRequestCard({
       ? getWheelsDisplaySummary(request.service_details)
       : undefined;
 
+  const hasValidTowingRoute =
+    typeof request.route_distance_meters === "number" &&
+    Number.isFinite(request.route_distance_meters) &&
+    request.route_distance_meters >= 0 &&
+    typeof request.route_duration_seconds === "number" &&
+    Number.isFinite(request.route_duration_seconds) &&
+    request.route_duration_seconds >= 0;
+  const towingSummary =
+    request.service_type === "towing"
+      ? getTowingDisplaySummary(
+          request.service_details,
+          hasValidTowingRoute
+            ? {
+                distanceMeters: request.route_distance_meters as number,
+                durationSeconds: request.route_duration_seconds as number,
+              }
+            : undefined,
+        )
+      : undefined;
+
   const cardClassName = dark
     ? "w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/5 text-left text-white shadow-lg"
     : "w-full overflow-hidden rounded-[22px] bg-white text-left text-black shadow-lg";
@@ -89,6 +110,7 @@ export default function RepairRequestCard({
             damageTypes={damageTypeLabels}
             mechanicalDetails={mechanicalDetails}
             wheelsSummary={wheelsSummary}
+            towingSummary={towingSummary}
             details={[
               {
                 text: formatStatus(request.status, request.accepted_offer_id),
