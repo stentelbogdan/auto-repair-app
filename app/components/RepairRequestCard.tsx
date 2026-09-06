@@ -197,13 +197,15 @@ export default function RepairRequestCard({
         )}
 
         {request.service_type === "towing" && hasValidTowingRoute && (
-          <TowingRouteEstimateCard
-            distanceMeters={request.route_distance_meters ?? null}
-            durationSeconds={request.route_duration_seconds ?? null}
-            pickup={towingPickup}
-            destination={towingDestination}
-            paths={request.route_paths}
-          />
+          <div className="mt-4 [&>section]:mb-0">
+            <TowingRouteEstimateCard
+              distanceMeters={request.route_distance_meters ?? null}
+              durationSeconds={request.route_duration_seconds ?? null}
+              pickup={towingPickup}
+              destination={towingDestination}
+              paths={request.route_paths}
+            />
+          </div>
         )}
 
         <div className={descriptionBoxClassName}>
