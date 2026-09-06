@@ -87,7 +87,7 @@ export default function TowingRouteMap({
   const tileUrl = `https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}${tileScale}.png?apiKey=${mapsKey}`;
 
   return (
-    <div className="mt-3 h-48 w-full overflow-hidden rounded-2xl border border-white/10">
+    <div className="relative isolate z-0 mt-3 h-48 w-full overflow-hidden rounded-2xl border border-white/10">
       <MapContainer
         center={[pickup.lat, pickup.lng]}
         zoom={12}
