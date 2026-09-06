@@ -601,13 +601,15 @@ export default function MyJobsPage() {
                 request.service_type === "wheels"
                   ? getWheelsDisplaySummary(request.service_details)
                   : undefined;
+              const showsTowingDetails =
+                (activeTab === "scheduled" || activeTab === "in_progress") &&
+                request.service_type === "towing";
               const towingSummary =
-                activeTab === "scheduled" && request.service_type === "towing"
+                showsTowingDetails
                   ? getTowingDisplaySummary(request.service_details)
                   : undefined;
               const hasValidTowingRoute =
-                activeTab === "scheduled" &&
-                request.service_type === "towing" &&
+                showsTowingDetails &&
                 isNonNegativeFinite(request.route_distance_meters) &&
                 isNonNegativeFinite(request.route_duration_seconds);
               const towingPickup =
