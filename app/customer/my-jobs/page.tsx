@@ -15,6 +15,7 @@ import CarHeader from "@/app/components/CarHeader";
 import { Eye } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { interactiveButton } from "@/lib/ui";
 import {
   markNotificationsAsRead,
@@ -604,6 +605,24 @@ export default function MyJobsPage() {
                 activeTab === "scheduled" && request.service_type === "towing"
                   ? getTowingDisplaySummary(request.service_details)
                   : undefined;
+              const hasValidTowingRoute =
+                activeTab === "scheduled" &&
+                request.service_type === "towing" &&
+                isNonNegativeFinite(request.route_distance_meters) &&
+                isNonNegativeFinite(request.route_duration_seconds);
+              const towingPickup =
+                isFiniteCoordinate(request.pickup_lat, -90, 90) &&
+                isFiniteCoordinate(request.pickup_lng, -180, 180)
+                  ? { lat: request.pickup_lat, lng: request.pickup_lng }
+                  : null;
+              const towingDestination =
+                isFiniteCoordinate(request.destination_lat, -90, 90) &&
+                isFiniteCoordinate(request.destination_lng, -180, 180)
+                  ? {
+                      lat: request.destination_lat,
+                      lng: request.destination_lng,
+                    }
+                  : null;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -691,6 +710,23 @@ export default function MyJobsPage() {
                       />
                     </div>
                   </div>
+
+                  {hasValidTowingRoute && (
+                    <div
+                      className="mt-4 [&>section]:mb-0"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <TowingRouteEstimateCard
+                        distanceMeters={request.route_distance_meters ?? null}
+                        durationSeconds={
+                          request.route_duration_seconds ?? null
+                        }
+                        pickup={towingPickup}
+                        destination={towingDestination}
+                        paths={request.route_paths}
+                      />
+                    </div>
+                  )}
 
                   {acceptedOffer && (
                     <WorkshopSummaryCard
@@ -915,6 +951,25 @@ function getValidTimestamp(value?: string | null): number | null {
 
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function isNonNegativeFinite(
+  value: number | null | undefined,
+): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteCoordinate(
+  value: number | null | undefined,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
 }
 
 function formatJobStatus(status?: string | null) {
