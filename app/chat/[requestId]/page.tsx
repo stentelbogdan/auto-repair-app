@@ -285,21 +285,35 @@ export default function ChatPage() {
       return;
     }
 
-    const { data: authData } = await supabase.auth.getUser();
+    if (!userId) {
+      if (loadMessagesGenerationRef.current === generation) {
+        setMessagesLoading(false);
+      }
+      return;
+    }
 
-    if (!authData.user) return;
-
-    if (systemMessageCreatedRef.current) return;
+    if (systemMessageCreatedRef.current) {
+      if (loadMessagesGenerationRef.current === generation) {
+        setMessagesLoading(false);
+      }
+      return;
+    }
     systemMessageCreatedRef.current = true;
 
-    await supabase.from("messages").insert({
-      request_id: requestId,
-      offer_id: offerId,
-      sender_id: authData.user.id,
-      sender_role: "system",
-      message: "Conversația a fost începută din profilul service-ului.",
-      images: [],
-    });
+    const { error: systemMessageError } = await supabase
+      .from("messages")
+      .insert({
+        request_id: requestId,
+        offer_id: offerId,
+        sender_id: userId,
+        sender_role: "system",
+        message: "Conversația a fost începută din profilul service-ului.",
+        images: [],
+      });
+
+    if (systemMessageError) {
+      systemMessageCreatedRef.current = false;
+    }
 
     if (loadMessagesGenerationRef.current !== generation) {
       logPerf("loadMessages:staleIgnored", {
@@ -312,6 +326,7 @@ export default function ChatPage() {
     logPerf("loadMessages:emptyInsertedSystemMessage", {
       durationMs: Number((performance.now() - startedAt).toFixed(1)),
       generation,
+      inserted: !systemMessageError,
     });
     setMessagesLoading(false);
   }, [
@@ -320,6 +335,7 @@ export default function ChatPage() {
     logPerf,
     offerId,
     requestId,
+    userId,
   ]);
 
   const markConversationAsRead = useCallback(async () => {
@@ -460,7 +476,10 @@ export default function ChatPage() {
 
     if (data.user) {
       setUserId(data.user.id);
+      return;
     }
+
+    setMessagesLoading(false);
   };
 
   const loadRequest = useCallback(async () => {
@@ -594,8 +613,12 @@ export default function ChatPage() {
       };
     }
 
+    if (!userId) {
+      void getUser();
+      return;
+    }
+
     void loadMessages();
-    void getUser();
     void loadRequest();
     void loadWorkshopProfile();
 
