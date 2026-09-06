@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -9,6 +8,7 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import type {
@@ -27,28 +27,12 @@ import {
 } from "@/lib/car-damage";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
-import {
-  formatTowingRouteDistance,
-  formatTowingRouteDuration,
-  getTowingDisplaySummary,
-} from "@/lib/towing/towing-display";
+import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
 import RequestCategoryFilter, {
   type RequestCategoryFilter as RequestCategory,
   type RequestCategoryCounts,
 } from "@/app/components/RequestCategoryFilter";
 import { isRepairServiceType } from "@/lib/repair-requests/service-types";
-
-const TowingRouteMap = dynamic(
-  () => import("@/app/components/towing/TowingRouteMap"),
-  { ssr: false },
-);
-
-type RoutePath = Array<[number, number]>;
-
-type RouteGeometryState =
-  | { status: "loading" }
-  | { status: "success"; paths: RoutePath[] }
-  | { status: "error" };
 
 type ProfileRow = {
   role: string[] | null;
@@ -84,12 +68,6 @@ export default function OffersPage() {
     Record<string, string>
   >({});
   const carouselRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const [routeGeometryByKey, setRouteGeometryByKey] = useState<
-    Record<string, RouteGeometryState>
-  >({});
-  const routeControllersRef = useRef<Record<string, AbortController>>({});
-  const startedRouteKeysRef = useRef(new Set<string>());
-  const currentRouteKeyByRequestRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     const category = new URLSearchParams(window.location.search).get(
@@ -151,132 +129,6 @@ export default function OffersPage() {
       (group) => getOfferCategory(group.request.serviceType) === activeCategory,
     );
   }, [activeCategory, offerGroups]);
-
-  useEffect(() => {
-    const routeRequests = new Map<
-      string,
-      {
-        requestId: string;
-        pickupLat: number;
-        pickupLng: number;
-        destinationLat: number;
-        destinationLng: number;
-      }
-    >();
-    const currentKeys: Record<string, string> = {};
-
-    offerGroups.forEach(({ request }) => {
-      const routeKey = getTowingRouteKey(request);
-      if (!routeKey) return;
-
-      currentKeys[request.id] = routeKey;
-      routeRequests.set(routeKey, {
-        requestId: request.id,
-        pickupLat: request.pickupLat as number,
-        pickupLng: request.pickupLng as number,
-        destinationLat: request.destinationLat as number,
-        destinationLng: request.destinationLng as number,
-      });
-    });
-
-    currentRouteKeyByRequestRef.current = currentKeys;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-
-          const routeKey = (entry.target as HTMLElement).dataset.towingRouteKey;
-          const routeRequest = routeKey ? routeRequests.get(routeKey) : null;
-          if (
-            !routeKey ||
-            !routeRequest ||
-            startedRouteKeysRef.current.has(routeKey)
-          ) {
-            observer.unobserve(entry.target);
-            return;
-          }
-
-          startedRouteKeysRef.current.add(routeKey);
-          observer.unobserve(entry.target);
-          setRouteGeometryByKey((current) => ({
-            ...current,
-            [routeKey]: { status: "loading" },
-          }));
-
-          const controller = new AbortController();
-          routeControllersRef.current[routeKey] = controller;
-
-          void fetch("/api/routing/towing", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              pickupLat: routeRequest.pickupLat,
-              pickupLng: routeRequest.pickupLng,
-              destinationLat: routeRequest.destinationLat,
-              destinationLng: routeRequest.destinationLng,
-            }),
-            signal: controller.signal,
-          })
-            .then(async (response) => {
-              if (!response.ok) throw new Error("Route geometry unavailable");
-
-              const payload: unknown = await response.json();
-              const paths = getValidRoutePaths(payload);
-              if (!paths) throw new Error("Invalid route geometry");
-
-              if (
-                currentRouteKeyByRequestRef.current[routeRequest.requestId] !==
-                routeKey
-              ) {
-                return;
-              }
-
-              setRouteGeometryByKey((current) => ({
-                ...current,
-                [routeKey]: { status: "success", paths },
-              }));
-            })
-            .catch((error: unknown) => {
-              if (error instanceof DOMException && error.name === "AbortError") {
-                return;
-              }
-
-              if (
-                currentRouteKeyByRequestRef.current[routeRequest.requestId] !==
-                routeKey
-              ) {
-                return;
-              }
-
-              setRouteGeometryByKey((current) => ({
-                ...current,
-                [routeKey]: { status: "error" },
-              }));
-            })
-            .finally(() => {
-              delete routeControllersRef.current[routeKey];
-            });
-        });
-      },
-      { rootMargin: "200px 0px" },
-    );
-
-    document.querySelectorAll<HTMLElement>("[data-towing-route-key]").forEach(
-      (element) => observer.observe(element),
-    );
-
-    return () => observer.disconnect();
-  }, [filteredOfferGroups, offerGroups]);
-
-  useEffect(
-    () => () => {
-      Object.values(routeControllersRef.current).forEach((controller) =>
-        controller.abort(),
-      );
-    },
-    [],
-  );
 
   useEffect(() => {
     const resetScroll = () => {
@@ -584,10 +436,6 @@ export default function OffersPage() {
                 request.serviceType === "towing" &&
                 isNonNegativeFinite(request.routeDistanceMeters) &&
                 isNonNegativeFinite(request.routeDurationSeconds);
-              const towingRouteKey = getTowingRouteKey(request);
-              const routeGeometry = towingRouteKey
-                ? routeGeometryByKey[towingRouteKey]
-                : undefined;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -639,42 +487,29 @@ export default function OffersPage() {
                   </div>
 
                   {hasValidTowingRoute && (
-                    <section className="mb-4 rounded-2xl border border-white/10 bg-neutral-950 p-4 text-white">
-                      <h2 className="text-base font-black">Traseu estimat</h2>
-                      <p className="mt-2 text-lg font-bold text-orange-300">
-                        {formatTowingRouteDistance(
-                          request.routeDistanceMeters as number,
-                        )}{" "}
-                        ·{" "}
-                        {formatTowingRouteDuration(
-                          request.routeDurationSeconds as number,
-                        )}
-                      </p>
-
-                      {towingRouteKey && (
-                        <div data-towing-route-key={towingRouteKey}>
-                          {routeGeometry?.status === "success" ? (
-                            <TowingRouteMap
-                              pickup={{
-                                lat: request.pickupLat as number,
-                                lng: request.pickupLng as number,
-                              }}
-                              destination={{
-                                lat: request.destinationLat as number,
-                                lng: request.destinationLng as number,
-                              }}
-                              paths={routeGeometry.paths}
-                            />
-                          ) : routeGeometry?.status === "error" ? (
-                            <div className="mt-3 flex h-48 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-center text-sm text-white/50">
-                              Harta traseului nu este disponibilă momentan.
-                            </div>
-                          ) : (
-                            <div className="mt-3 h-48 animate-pulse rounded-2xl border border-white/10 bg-white/[0.06]" />
-                          )}
-                        </div>
-                      )}
-                    </section>
+                    <TowingRouteEstimateCard
+                      distanceMeters={request.routeDistanceMeters}
+                      durationSeconds={request.routeDurationSeconds}
+                      pickup={
+                        isCoordinate(request.pickupLat, -90, 90) &&
+                        isCoordinate(request.pickupLng, -180, 180)
+                          ? {
+                              lat: request.pickupLat,
+                              lng: request.pickupLng,
+                            }
+                          : null
+                      }
+                      destination={
+                        isCoordinate(request.destinationLat, -90, 90) &&
+                        isCoordinate(request.destinationLng, -180, 180)
+                          ? {
+                              lat: request.destinationLat,
+                              lng: request.destinationLng,
+                            }
+                          : null
+                      }
+                      paths={request.routePaths}
+                    />
                   )}
 
                   <div
@@ -887,56 +722,4 @@ function isCoordinate(
     value >= minimum &&
     value <= maximum
   );
-}
-
-function getTowingRouteKey(request: CustomerOfferRepairRequest) {
-  if (
-    request.serviceType !== "towing" ||
-    !isCoordinate(request.pickupLat, -90, 90) ||
-    !isCoordinate(request.pickupLng, -180, 180) ||
-    !isCoordinate(request.destinationLat, -90, 90) ||
-    !isCoordinate(request.destinationLng, -180, 180)
-  ) {
-    return null;
-  }
-
-  return `${request.id}:${request.pickupLat},${request.pickupLng}:${request.destinationLat},${request.destinationLng}`;
-}
-
-function getValidRoutePaths(payload: unknown): RoutePath[] | null {
-  if (typeof payload !== "object" || payload === null || !("route" in payload)) {
-    return null;
-  }
-
-  const route = payload.route;
-  if (
-    typeof route !== "object" ||
-    route === null ||
-    !("paths" in route) ||
-    !Array.isArray(route.paths)
-  ) {
-    return null;
-  }
-
-  const paths = route.paths;
-  const validPaths = paths.every(
-    (path) =>
-      Array.isArray(path) &&
-      path.length >= 2 &&
-      path.every(
-        (point) =>
-          Array.isArray(point) &&
-          point.length === 2 &&
-          typeof point[0] === "number" &&
-          Number.isFinite(point[0]) &&
-          point[0] >= -90 &&
-          point[0] <= 90 &&
-          typeof point[1] === "number" &&
-          Number.isFinite(point[1]) &&
-          point[1] >= -180 &&
-          point[1] <= 180,
-      ),
-  );
-
-  return validPaths && paths.length > 0 ? (paths as RoutePath[]) : null;
 }

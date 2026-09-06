@@ -1,5 +1,6 @@
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 
 export type CustomerOfferImage = {
   name: string;
@@ -23,6 +24,7 @@ export type CustomerOfferRepairRequest = {
   destinationLng: number | null;
   routeDistanceMeters: number | null;
   routeDurationSeconds: number | null;
+  routePaths: TowingRoutePaths | null;
   description: string;
   images: CustomerOfferImage[];
   status?: string;

@@ -31,6 +31,10 @@ import {
   type TowingWheelState,
 } from "@/lib/towing/towing-service-details";
 import {
+  isValidTowingRoutePaths,
+  type TowingRoutePaths,
+} from "@/lib/towing/towing-route";
+import {
   formatLicensePlateInput,
   getLicensePlateError,
   isValidLicensePlate,
@@ -100,7 +104,7 @@ type RouteSummary = {
   distanceKm: number;
   durationSeconds: number;
   durationMinutes: number;
-  paths: Array<Array<[number, number]>>;
+  paths: TowingRoutePaths;
 };
 
 type RouteStatus = "idle" | "loading" | "success" | "error";
@@ -108,31 +112,6 @@ type RouteStatus = "idle" | "loading" | "success" | "error";
 type RoutingResult = {
   route: RouteSummary;
 };
-
-function hasValidRoutePaths(paths: unknown): paths is RouteSummary["paths"] {
-  return (
-    Array.isArray(paths) &&
-    paths.length > 0 &&
-    paths.every(
-      (path) =>
-        Array.isArray(path) &&
-        path.length >= 2 &&
-        path.every(
-          (point) =>
-            Array.isArray(point) &&
-            point.length === 2 &&
-            typeof point[0] === "number" &&
-            Number.isFinite(point[0]) &&
-            point[0] >= -90 &&
-            point[0] <= 90 &&
-            typeof point[1] === "number" &&
-            Number.isFinite(point[1]) &&
-            point[1] >= -180 &&
-            point[1] <= 180,
-        ),
-    )
-  );
-}
 
 type ReverseGeocodingSource = "gps" | "drag";
 
@@ -396,7 +375,7 @@ function PostTowingContent() {
           !Number.isFinite(route.distanceKm) ||
           !Number.isFinite(route.durationSeconds) ||
           !Number.isFinite(route.durationMinutes) ||
-          !hasValidRoutePaths(route.paths)
+          !isValidTowingRoutePaths(route.paths)
         ) {
           throw new Error("Invalid routing response.");
         }
@@ -892,7 +871,8 @@ function PostTowingContent() {
         Number.isFinite(routeSummary.distanceMeters) &&
         routeSummary.distanceMeters >= 0 &&
         Number.isFinite(routeSummary.durationSeconds) &&
-        routeSummary.durationSeconds >= 0
+        routeSummary.durationSeconds >= 0 &&
+        isValidTowingRoutePaths(routeSummary.paths)
           ? routeSummary
           : null;
 
@@ -908,6 +888,7 @@ function PostTowingContent() {
         destinationLng: destinationCoordinates?.lng ?? null,
         routeDistanceMeters: routeSnapshot?.distanceMeters ?? null,
         routeDurationSeconds: routeSnapshot?.durationSeconds ?? null,
+        routePaths: routeSnapshot?.paths ?? null,
         licensePlate: draft.licensePlate,
         damageType: "towing",
         serviceDetails: validationResult.serviceDetails,

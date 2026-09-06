@@ -4,6 +4,7 @@ import type {
 } from "@/lib/mechanical/mechanical-service-details";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import type { TowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import type { WheelsServiceDetails } from "@/lib/wheels/wheels-service-details";
 
@@ -40,6 +41,7 @@ export type RepairRequestRow = {
   destination_lng?: number | null;
   route_distance_meters?: number | null;
   route_duration_seconds?: number | null;
+  route_paths: TowingRoutePaths | null;
   license_plate: string | null;
   damage_type: string;
   service_details?: RepairServiceDetails;
@@ -82,6 +84,7 @@ export async function createRepairRequest(input: {
   destinationLng?: number | null;
   routeDistanceMeters?: number | null;
   routeDurationSeconds?: number | null;
+  routePaths?: TowingRoutePaths | null;
   licensePlate?: string;
   damageType: string;
   serviceDetails?: RepairServiceDetails;
@@ -110,6 +113,7 @@ export async function createRepairRequest(input: {
       destination_lng: input.destinationLng,
       route_distance_meters: input.routeDistanceMeters,
       route_duration_seconds: input.routeDurationSeconds,
+      route_paths: input.routePaths ?? null,
       license_plate: formatLicensePlateForDb(input.licensePlate),
       damage_type: input.damageType,
       service_details: input.serviceDetails ?? [],
@@ -147,7 +151,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, created_at",
+      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, created_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });

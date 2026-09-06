@@ -234,6 +234,7 @@ function createRequestMap(
       destinationLng: request.destination_lng ?? null,
       routeDistanceMeters: request.route_distance_meters ?? null,
       routeDurationSeconds: request.route_duration_seconds ?? null,
+      routePaths: request.route_paths ?? null,
       description: request.description || "",
 
       images: Array.isArray(request.images) ? request.images : [],
