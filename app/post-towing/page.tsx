@@ -86,6 +86,19 @@ type ForwardGeocodingResult = {
   matched: boolean;
 };
 
+type RouteSummary = {
+  distanceMeters: number;
+  distanceKm: number;
+  durationSeconds: number;
+  durationMinutes: number;
+};
+
+type RouteStatus = "idle" | "loading" | "success" | "error";
+
+type RoutingResult = {
+  route: RouteSummary;
+};
+
 type ReverseGeocodingSource = "gps" | "drag";
 
 type ValidationResult =
@@ -120,6 +133,20 @@ const wheelOptions: Array<{ value: TowingWheelState; label: string }> = [
   { value: "blocked", label: "Blocate" },
   { value: "unknown", label: "Nu știu" },
 ];
+
+const distanceFormatter = new Intl.NumberFormat("ro-RO", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+function formatRouteDuration(durationMinutes: number) {
+  const roundedMinutes = Math.round(durationMinutes);
+  const hours = Math.floor(roundedMinutes / 60);
+  const minutes = roundedMinutes % 60;
+
+  if (hours === 0) return `${minutes} min`;
+  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
+}
 
 async function uploadRepairImage(
   preparedImage: PreparedImage,
@@ -249,6 +276,9 @@ function PostTowingContent() {
     useState<LocationFeedback | null>(null);
   const [destinationLocationFeedback, setDestinationLocationFeedback] =
     useState<LocationFeedback | null>(null);
+  const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
+  const [routeSummaryKey, setRouteSummaryKey] = useState<string | null>(null);
+  const [routeStatus, setRouteStatus] = useState<RouteStatus>("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
   const geocodingControllerRef = useRef<AbortController | null>(null);
@@ -260,6 +290,8 @@ function PostTowingContent() {
   const destinationForwardGeocodingTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const routingControllerRef = useRef<AbortController | null>(null);
+  const routingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const availableModels = carModelsByBrand[draft.carBrand] || [];
   const years = Array.from(
     { length: new Date().getFullYear() - 1989 },
@@ -273,6 +305,10 @@ function PostTowingContent() {
     draft.licensePlate.length > 0 &&
     !isValidLicensePlate(draft.licensePlate);
   const licensePlateErrorMessage = getLicensePlateError(draft.licensePlate);
+  const routeCoordinatesKey =
+    pickupCoordinates && destinationCoordinates
+      ? `${pickupCoordinates.lat},${pickupCoordinates.lng}|${destinationCoordinates.lat},${destinationCoordinates.lng}`
+      : null;
 
   useEffect(() => {
     return () => {
@@ -292,6 +328,83 @@ function PostTowingContent() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (routingTimerRef.current) {
+      clearTimeout(routingTimerRef.current);
+      routingTimerRef.current = null;
+    }
+    routingControllerRef.current?.abort();
+    routingControllerRef.current = null;
+    setRouteSummary(null);
+    setRouteSummaryKey(null);
+
+    if (!pickupCoordinates || !destinationCoordinates) {
+      setRouteStatus("idle");
+      return;
+    }
+
+    setRouteStatus("loading");
+    const requestCoordinatesKey = `${pickupCoordinates.lat},${pickupCoordinates.lng}|${destinationCoordinates.lat},${destinationCoordinates.lng}`;
+    routingTimerRef.current = setTimeout(async () => {
+      routingTimerRef.current = null;
+      const controller = new AbortController();
+      routingControllerRef.current = controller;
+
+      try {
+        const response = await fetch("/api/routing/towing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pickupLat: pickupCoordinates.lat,
+            pickupLng: pickupCoordinates.lng,
+            destinationLat: destinationCoordinates.lat,
+            destinationLng: destinationCoordinates.lng,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) throw new Error("Routing failed.");
+        const result = (await response.json()) as RoutingResult;
+        if (routingControllerRef.current !== controller) return;
+
+        const { route } = result;
+        if (
+          !route ||
+          !Number.isFinite(route.distanceMeters) ||
+          !Number.isFinite(route.distanceKm) ||
+          !Number.isFinite(route.durationSeconds) ||
+          !Number.isFinite(route.durationMinutes)
+        ) {
+          throw new Error("Invalid routing response.");
+        }
+
+        setRouteSummary(route);
+        setRouteSummaryKey(requestCoordinatesKey);
+        setRouteStatus("success");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (routingControllerRef.current !== controller) return;
+
+        setRouteSummary(null);
+        setRouteSummaryKey(null);
+        setRouteStatus("error");
+      } finally {
+        if (routingControllerRef.current === controller) {
+          routingControllerRef.current = null;
+        }
+      }
+    }, 700);
+
+    return () => {
+      if (routingTimerRef.current) {
+        clearTimeout(routingTimerRef.current);
+        routingTimerRef.current = null;
+      }
+      routingControllerRef.current?.abort();
+      routingControllerRef.current = null;
+    };
+  }, [pickupCoordinates, destinationCoordinates]);
 
   function updateDraft(patch: Partial<TowingDraft>) {
     setDraft((currentDraft) => ({ ...currentDraft, ...patch }));
@@ -1021,6 +1134,28 @@ function PostTowingContent() {
               </>
             }
           />
+
+          {pickupCoordinates && destinationCoordinates && (
+            <section className={darkSectionClassName}>
+              <h2 className="text-base font-black">Traseu estimat</h2>
+              {routeStatus === "success" &&
+              routeSummary &&
+              routeSummaryKey === routeCoordinatesKey ? (
+                <p className="mt-2 text-lg font-bold text-orange-300">
+                  {distanceFormatter.format(routeSummary.distanceKm)} km ·{" "}
+                  {formatRouteDuration(routeSummary.durationMinutes)}
+                </p>
+              ) : routeStatus === "error" ? (
+                <p className="mt-2 text-sm text-white/55">
+                  Traseul nu este disponibil momentan.
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-white/55">
+                  Se calculează traseul...
+                </p>
+              )}
+            </section>
+          )}
 
           <section className={darkSectionClassName}>
             <h2 className="text-base font-black">Motiv tractare</h2>
