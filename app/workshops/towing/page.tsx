@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import CarHeader from "@/app/components/CarHeader";
 import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 import RequestClientName from "@/app/components/RequestClientName";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
@@ -27,6 +28,13 @@ type WorkshopRequest = {
   city: string;
   licensePlate: string | null;
   serviceDetails: RepairRequestRow["service_details"];
+  pickupLat: number | null;
+  pickupLng: number | null;
+  destinationLat: number | null;
+  destinationLng: number | null;
+  routeDistanceMeters: number | null;
+  routeDurationSeconds: number | null;
+  routePaths: RepairRequestRow["route_paths"];
   description: string;
   images: RepairRequestRow["images"];
   postedAt: string;
@@ -192,6 +200,13 @@ export default function WorkshopTowingPage() {
         city: request.city || "-",
         licensePlate: request.license_plate,
         serviceDetails: request.service_details,
+        pickupLat: request.pickup_lat ?? null,
+        pickupLng: request.pickup_lng ?? null,
+        destinationLat: request.destination_lat ?? null,
+        destinationLng: request.destination_lng ?? null,
+        routeDistanceMeters: request.route_distance_meters ?? null,
+        routeDurationSeconds: request.route_duration_seconds ?? null,
+        routePaths: request.route_paths,
         description: request.description || "Fără descriere.",
         images: Array.isArray(request.images) ? request.images : [],
         postedAt: formatPostedAt(request.created_at),
@@ -444,9 +459,31 @@ export default function WorkshopTowingPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {requests.map((request) => {
+              const routeEstimate =
+                isNonNegativeFinite(request.routeDistanceMeters) &&
+                isNonNegativeFinite(request.routeDurationSeconds)
+                  ? {
+                      distanceMeters: request.routeDistanceMeters,
+                      durationSeconds: request.routeDurationSeconds,
+                    }
+                  : null;
               const towingSummary = getTowingDisplaySummary(
                 request.serviceDetails,
+                routeEstimate,
               );
+              const towingPickup =
+                isFiniteCoordinate(request.pickupLat, -90, 90) &&
+                isFiniteCoordinate(request.pickupLng, -180, 180)
+                  ? { lat: request.pickupLat, lng: request.pickupLng }
+                  : null;
+              const towingDestination =
+                isFiniteCoordinate(request.destinationLat, -90, 90) &&
+                isFiniteCoordinate(request.destinationLng, -180, 180)
+                  ? {
+                      lat: request.destinationLat,
+                      lng: request.destinationLng,
+                    }
+                  : null;
 
               return (
                 <div
@@ -477,7 +514,25 @@ export default function WorkshopTowingPage() {
                     ]}
                   />
 
-                  <RequestClientName name={request.clientName} />
+                  {routeEstimate && (
+                    <div className="mt-4 [&>section]:mb-0">
+                      <TowingRouteEstimateCard
+                        distanceMeters={routeEstimate.distanceMeters}
+                        durationSeconds={routeEstimate.durationSeconds}
+                        pickup={towingPickup}
+                        destination={towingDestination}
+                        paths={request.routePaths}
+                      />
+                    </div>
+                  )}
+
+                  {routeEstimate ? (
+                    <div className="mt-4 [&>div]:mt-0">
+                      <RequestClientName name={request.clientName} />
+                    </div>
+                  ) : (
+                    <RequestClientName name={request.clientName} />
+                  )}
                   <RepairRequestMetrics
                     viewCount={request.viewCount}
                     offerCount={request.offerCount}
@@ -545,6 +600,23 @@ function formatPostedAt(value: string) {
   if (diffHours < 24) return `${diffHours}h`;
   if (diffDays < 7) return `${diffDays}zile`;
   return createdAt.toLocaleDateString();
+}
+
+function isNonNegativeFinite(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteCoordinate(
+  value: number | null | undefined,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= minimum &&
+    value <= maximum
+  );
 }
 
 function logEnrichmentFailure(
