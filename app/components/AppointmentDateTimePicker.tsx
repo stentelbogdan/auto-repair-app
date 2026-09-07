@@ -1,11 +1,14 @@
 "use client";
 
+import TimeWheelPicker from "@/app/components/TimeWheelPicker";
+
 type AppointmentDateTimePickerProps = {
   date: string;
   dateInput: string;
   dateError: string;
   time: string;
-  timeSlots: readonly string[];
+  timeSlots?: readonly string[];
+  timeSelectionMode?: "grid" | "wheel";
   disabledTimes?: readonly string[];
   loadingTimes?: boolean;
   minDate: string;
@@ -20,7 +23,8 @@ export default function AppointmentDateTimePicker({
   dateInput,
   dateError,
   time,
-  timeSlots,
+  timeSlots = [],
+  timeSelectionMode = "grid",
   disabledTimes = [],
   loadingTimes = false,
   minDate,
@@ -163,32 +167,47 @@ export default function AppointmentDateTimePicker({
 
       <label className="mt-5 block text-sm font-bold text-black/70">Ora</label>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        {timeSlots.map((slot) => {
-          const isDisabled = disabledTimes.includes(slot);
-          const isPast = isPastDateTime(date, slot, new Date());
+      <div className="mt-3">
+        {timeSelectionMode === "wheel" ? (
+          <TimeWheelPicker
+            date={date}
+            value={time}
+            onChange={onTimeChange}
+            isTimeDisabled={(candidateTime) =>
+              isPastDateTime(date, candidateTime, new Date())
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {timeSlots.map((slot) => {
+              const isDisabled = disabledTimes.includes(slot);
+              const isPast = isPastDateTime(date, slot, new Date());
 
-          return (
-            <button
-              key={slot}
-              type="button"
-              disabled={!date || isDisabled || isPast || loadingTimes}
-              onClick={() => onTimeChange(slot)}
-              className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
-                time === slot
-                  ? "bg-orange-500 text-black"
-                  : isDisabled
-                    ? "cursor-not-allowed bg-black/10 text-black/30 line-through"
-                    : !date || isPast || loadingTimes
-                      ? "cursor-not-allowed bg-black/[0.04] text-black/30"
-                      : "bg-black/[0.05] text-black"
-              }`}
-            >
-              {slot}
-              {isDisabled && <span className="block text-[10px]">Ocupat</span>}
-            </button>
-          );
-        })}
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  disabled={!date || isDisabled || isPast || loadingTimes}
+                  onClick={() => onTimeChange(slot)}
+                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                    time === slot
+                      ? "bg-orange-500 text-black"
+                      : isDisabled
+                        ? "cursor-not-allowed bg-black/10 text-black/30 line-through"
+                        : !date || isPast || loadingTimes
+                          ? "cursor-not-allowed bg-black/[0.04] text-black/30"
+                          : "bg-black/[0.05] text-black"
+                  }`}
+                >
+                  {slot}
+                  {isDisabled && (
+                    <span className="block text-[10px]">Ocupat</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

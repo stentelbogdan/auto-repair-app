@@ -12,6 +12,10 @@ import {
 import { CheckCircle2, MapPin, XCircle } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
+import AppointmentDateTimePicker, {
+  toLocalDateTime,
+  toLocalDateValue,
+} from "@/app/components/AppointmentDateTimePicker";
 import ImageGallery from "@/app/components/ImageGallery";
 import TowingLocationCombobox from "@/app/components/towing/TowingLocationCombobox";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
@@ -19,7 +23,10 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
-import { createRepairRequest } from "@/lib/supabase/repair-requests";
+import {
+  createRepairRequest,
+  type TowingScheduleType,
+} from "@/lib/supabase/repair-requests";
 import { supabase } from "@/lib/supabase/client";
 import {
   formatTowingRouteDistance,
@@ -65,6 +72,9 @@ type TowingDraft = {
   pickupCity: string;
   destinationAddress: string;
   destinationCity: string;
+  scheduleType: TowingScheduleType;
+  requestedDate: string;
+  requestedTime: string;
   reason: TowingReason | "";
   starts: boolean | null;
   canBePushed: boolean | null;
@@ -119,6 +129,14 @@ type ValidationResult =
   | { valid: false; message: string }
   | { valid: true; serviceDetails: TowingServiceDetailsV1 };
 
+type ScheduleValidationResult =
+  | { valid: false; message: string }
+  | {
+      valid: true;
+      requestedAt: string | null;
+      requestedTimezone: string | null;
+    };
+
 const initialDraft: TowingDraft = {
   carBrand: "",
   carModel: "",
@@ -128,6 +146,9 @@ const initialDraft: TowingDraft = {
   pickupCity: "",
   destinationAddress: "",
   destinationCity: "",
+  scheduleType: "asap",
+  requestedDate: "",
+  requestedTime: "",
   reason: "",
   starts: null,
   canBePushed: null,
@@ -247,6 +268,62 @@ function validateDraft(draft: TowingDraft): ValidationResult {
   };
 }
 
+function validateSchedule(draft: TowingDraft): ScheduleValidationResult {
+  if (draft.scheduleType === "asap") {
+    return {
+      valid: true,
+      requestedAt: null,
+      requestedTimezone: null,
+    };
+  }
+
+  if (!draft.requestedDate) {
+    return { valid: false, message: "Alege data tractării." };
+  }
+
+  if (!draft.requestedTime) {
+    return { valid: false, message: "Alege ora tractării." };
+  }
+
+  const requestedDateTime = toLocalDateTime(
+    draft.requestedDate,
+    draft.requestedTime,
+  );
+
+  if (!requestedDateTime) {
+    return { valid: false, message: "Alege o dată și o oră valide." };
+  }
+
+  if (requestedDateTime.getTime() <= Date.now()) {
+    return {
+      valid: false,
+      message: "Data și ora selectate nu pot fi în trecut.",
+    };
+  }
+
+  let requestedTimezone = "";
+
+  try {
+    requestedTimezone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone?.trim() ?? "";
+  } catch {
+    requestedTimezone = "";
+  }
+
+  if (!requestedTimezone) {
+    return {
+      valid: false,
+      message: "Nu am putut determina fusul orar. Reîncearcă.",
+    };
+  }
+
+  return {
+    valid: true,
+    requestedAt: requestedDateTime.toISOString(),
+    requestedTimezone,
+  };
+}
+
 export default function PostTowingPage() {
   return (
     <Suspense
@@ -279,6 +356,9 @@ function PostTowingContent() {
   const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
   const [routeSummaryKey, setRouteSummaryKey] = useState<string | null>(null);
   const [routeStatus, setRouteStatus] = useState<RouteStatus>("idle");
+  const [scheduleDateInput, setScheduleDateInput] = useState("");
+  const [scheduleDateError, setScheduleDateError] = useState("");
+  const [scheduleError, setScheduleError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
   const geocodingControllerRef = useRef<AbortController | null>(null);
@@ -309,6 +389,7 @@ function PostTowingContent() {
     pickupCoordinates && destinationCoordinates
       ? `${pickupCoordinates.lat},${pickupCoordinates.lng}|${destinationCoordinates.lat},${destinationCoordinates.lng}`
       : null;
+  const scheduleMinDate = useMemo(() => toLocalDateValue(new Date()), []);
 
   useEffect(() => {
     return () => {
@@ -817,6 +898,15 @@ function PostTowingContent() {
     event.preventDefault();
     if (isSubmittingRef.current) return;
 
+    const scheduleValidationResult = validateSchedule(draft);
+
+    if (!scheduleValidationResult.valid) {
+      setScheduleError(scheduleValidationResult.message);
+      return;
+    }
+
+    setScheduleError("");
+
     const validationResult = validateDraft(draft);
 
     if (!validationResult.valid) {
@@ -889,6 +979,9 @@ function PostTowingContent() {
         routeDistanceMeters: routeSnapshot?.distanceMeters ?? null,
         routeDurationSeconds: routeSnapshot?.durationSeconds ?? null,
         routePaths: routeSnapshot?.paths ?? null,
+        towingScheduleType: draft.scheduleType,
+        towingRequestedAt: scheduleValidationResult.requestedAt,
+        towingRequestedTimezone: scheduleValidationResult.requestedTimezone,
         licensePlate: draft.licensePlate,
         damageType: "towing",
         serviceDetails: validationResult.serviceDetails,
@@ -1181,6 +1274,66 @@ function PostTowingContent() {
               )}
             </section>
           )}
+
+          <section className={darkSectionClassName}>
+            <h2 className="text-base font-black">
+              Când ai nevoie de tractare?
+            </h2>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <ChoiceButton
+                selected={draft.scheduleType === "asap"}
+                onClick={() => {
+                  updateDraft({ scheduleType: "asap" });
+                  setScheduleError("");
+                  setScheduleDateError("");
+                }}
+              >
+                Cât mai repede
+              </ChoiceButton>
+              <ChoiceButton
+                selected={draft.scheduleType === "scheduled"}
+                onClick={() => {
+                  updateDraft({ scheduleType: "scheduled" });
+                  setScheduleError("");
+                }}
+              >
+                Alege data și ora
+              </ChoiceButton>
+            </div>
+
+            {draft.scheduleType === "scheduled" && (
+              <div className="mt-4">
+                <AppointmentDateTimePicker
+                  date={draft.requestedDate}
+                  dateInput={scheduleDateInput}
+                  dateError={scheduleDateError}
+                  time={draft.requestedTime}
+                  timeSelectionMode="wheel"
+                  minDate={scheduleMinDate}
+                  onDateChange={(requestedDate) => {
+                    updateDraft({ requestedDate });
+                    setScheduleError("");
+                  }}
+                  onDateInputChange={setScheduleDateInput}
+                  onDateErrorChange={setScheduleDateError}
+                  onTimeChange={(requestedTime) => {
+                    updateDraft({ requestedTime });
+                    setScheduleError("");
+                  }}
+                />
+              </div>
+            )}
+
+            {scheduleError && (
+              <p
+                className="mt-3 text-sm font-medium text-red-400"
+                aria-live="polite"
+              >
+                {scheduleError}
+              </p>
+            )}
+          </section>
 
           <section className={darkSectionClassName}>
             <h2 className="text-base font-black">Motiv tractare</h2>
