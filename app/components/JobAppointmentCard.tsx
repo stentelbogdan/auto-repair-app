@@ -6,9 +6,11 @@ import CarHeader, {
 } from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import RequestClientName from "@/app/components/RequestClientName";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { interactiveButton } from "@/lib/ui";
 import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
 import type { TowingDisplaySummary } from "@/lib/towing/towing-display";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 
 type JobImage = {
   name?: string;
@@ -31,6 +33,11 @@ type JobAppointmentCardProps = {
   mechanicalDetails?: MechanicalServiceDetailGroup[];
   wheelsSummary?: WheelsServiceSummary;
   towingSummary?: TowingDisplaySummary;
+  routeDistanceMeters?: number | null;
+  routeDurationSeconds?: number | null;
+  pickup?: { lat: number; lng: number } | null;
+  destination?: { lat: number; lng: number } | null;
+  routePaths?: TowingRoutePaths | null;
   description?: string | null;
   clientName?: string | null;
 
@@ -64,6 +71,11 @@ export default function JobAppointmentCard({
   mechanicalDetails = [],
   wheelsSummary,
   towingSummary,
+  routeDistanceMeters,
+  routeDurationSeconds,
+  pickup,
+  destination,
+  routePaths,
   description,
   clientName,
   price,
@@ -80,6 +92,14 @@ export default function JobAppointmentCard({
   onChat,
   onStartJob,
 }: JobAppointmentCardProps) {
+  const hasValidTowingRoute =
+    typeof routeDistanceMeters === "number" &&
+    Number.isFinite(routeDistanceMeters) &&
+    routeDistanceMeters >= 0 &&
+    typeof routeDurationSeconds === "number" &&
+    Number.isFinite(routeDurationSeconds) &&
+    routeDurationSeconds >= 0;
+
   return (
     <article className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl">
       <CarHeader
@@ -126,7 +146,21 @@ export default function JobAppointmentCard({
         )}
       </div>
 
-      <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+      {hasValidTowingRoute && (
+        <div className="mt-4 [&>section]:mb-0">
+          <TowingRouteEstimateCard
+            distanceMeters={routeDistanceMeters}
+            durationSeconds={routeDurationSeconds}
+            pickup={pickup}
+            destination={destination}
+            paths={routePaths}
+          />
+        </div>
+      )}
+
+      <div
+        className={`${hasValidTowingRoute ? "mt-4" : "mt-5"} rounded-2xl border border-black/10 bg-black/[0.03] p-3`}
+      >
         <p className="mb-2 text-[13px] font-semibold leading-[18px] text-black/60">
           📝 Descriere
         </p>

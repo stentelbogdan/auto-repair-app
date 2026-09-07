@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
 import { markNotificationsAsRead } from "@/lib/notifications";
@@ -29,6 +30,7 @@ import {
 } from "@/lib/repair-requests/service-types";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import { interactiveButton } from "@/lib/ui";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
@@ -69,6 +71,13 @@ type WonJobRequestRow = {
   damage_type: string | null;
   service_type: RepairServiceType | null;
   service_details: RepairServiceDetails | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  destination_lat: number | null;
+  destination_lng: number | null;
+  route_distance_meters: number | null;
+  route_duration_seconds: number | null;
+  route_paths: TowingRoutePaths | null;
   description: string | null;
   images: Array<{
     name?: string | null;
@@ -123,6 +132,13 @@ type WonJob = {
     damageType: string;
     serviceType: RepairServiceType | null;
     serviceDetails: RepairServiceDetails | null;
+    pickupLat: number | null;
+    pickupLng: number | null;
+    destinationLat: number | null;
+    destinationLng: number | null;
+    routeDistanceMeters: number | null;
+    routeDurationSeconds: number | null;
+    routePaths: TowingRoutePaths | null;
     description: string;
     images: JobImage[];
     status: string;
@@ -153,6 +169,31 @@ function getJobDamageDetails(request: WonJob["request"]) {
     mechanicalDetails,
     displayedDamageTypeLabels,
   };
+}
+
+function getTowingRouteData(request: WonJob["request"]) {
+  if (request.serviceType !== "towing") return null;
+
+  const routeEstimate =
+    isNonNegativeFinite(request.routeDistanceMeters) &&
+    isNonNegativeFinite(request.routeDurationSeconds)
+      ? {
+          distanceMeters: request.routeDistanceMeters,
+          durationSeconds: request.routeDurationSeconds,
+        }
+      : null;
+  const pickup =
+    isFiniteCoordinate(request.pickupLat, -90, 90) &&
+    isFiniteCoordinate(request.pickupLng, -180, 180)
+      ? { lat: request.pickupLat, lng: request.pickupLng }
+      : null;
+  const destination =
+    isFiniteCoordinate(request.destinationLat, -90, 90) &&
+    isFiniteCoordinate(request.destinationLng, -180, 180)
+      ? { lat: request.destinationLat, lng: request.destinationLng }
+      : null;
+
+  return { routeEstimate, pickup, destination };
 }
 
 export default function WorkshopWonJobsPage() {
@@ -404,6 +445,13 @@ export default function WorkshopWonJobsPage() {
             damage_type,
             service_type,
             service_details,
+            pickup_lat,
+            pickup_lng,
+            destination_lat,
+            destination_lng,
+            route_distance_meters,
+            route_duration_seconds,
+            route_paths,
             description,
             images,
             status,
@@ -450,6 +498,13 @@ export default function WorkshopWonJobsPage() {
             damageType: request?.damage_type || "other",
             serviceType: request?.service_type ?? null,
             serviceDetails: request?.service_details ?? null,
+            pickupLat: request?.pickup_lat ?? null,
+            pickupLng: request?.pickup_lng ?? null,
+            destinationLat: request?.destination_lat ?? null,
+            destinationLng: request?.destination_lng ?? null,
+            routeDistanceMeters: request?.route_distance_meters ?? null,
+            routeDurationSeconds: request?.route_duration_seconds ?? null,
+            routePaths: request?.route_paths ?? null,
             description:
               request?.description ||
               "Această lucrare acceptată este acum disponibilă aici.",
@@ -952,9 +1007,13 @@ export default function WorkshopWonJobsPage() {
                 job.request.serviceType === "wheels"
                   ? getWheelsDisplaySummary(job.request.serviceDetails)
                   : undefined;
+              const towingRoute = getTowingRouteData(job.request);
               const towingSummary =
                 job.request.serviceType === "towing"
-                  ? getTowingDisplaySummary(job.request.serviceDetails)
+                  ? getTowingDisplaySummary(
+                      job.request.serviceDetails,
+                      towingRoute?.routeEstimate,
+                    )
                   : undefined;
               const latestProgressLabel = job.latestProgressStatus
                 ? formatJobStatus(job.latestProgressStatus)
@@ -1038,7 +1097,25 @@ export default function WorkshopWonJobsPage() {
                       )}
                   </div>
 
-                  <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                  {towingRoute?.routeEstimate && (
+                    <div className="mt-4 [&>section]:mb-0">
+                      <TowingRouteEstimateCard
+                        distanceMeters={
+                          towingRoute.routeEstimate.distanceMeters
+                        }
+                        durationSeconds={
+                          towingRoute.routeEstimate.durationSeconds
+                        }
+                        pickup={towingRoute.pickup}
+                        destination={towingRoute.destination}
+                        paths={job.request.routePaths}
+                      />
+                    </div>
+                  )}
+
+                  <div
+                    className={`${towingRoute?.routeEstimate ? "mt-4" : "mt-5"} rounded-2xl border border-black/10 bg-black/[0.03] p-3`}
+                  >
                     <p className="mb-2 text-xs font-semibold text-black/45">
                       📝 Descriere
                     </p>
@@ -1091,9 +1168,13 @@ export default function WorkshopWonJobsPage() {
                 job.request.serviceType === "wheels"
                   ? getWheelsDisplaySummary(job.request.serviceDetails)
                   : undefined;
+              const towingRoute = getTowingRouteData(job.request);
               const towingSummary =
                 job.request.serviceType === "towing"
-                  ? getTowingDisplaySummary(job.request.serviceDetails)
+                  ? getTowingDisplaySummary(
+                      job.request.serviceDetails,
+                      towingRoute?.routeEstimate,
+                    )
                   : undefined;
 
               const displayDate =
@@ -1131,6 +1212,15 @@ export default function WorkshopWonJobsPage() {
                   mechanicalDetails={mechanicalDetails}
                   wheelsSummary={wheelsSummary}
                   towingSummary={towingSummary}
+                  routeDistanceMeters={
+                    towingRoute?.routeEstimate?.distanceMeters
+                  }
+                  routeDurationSeconds={
+                    towingRoute?.routeEstimate?.durationSeconds
+                  }
+                  pickup={towingRoute?.pickup}
+                  destination={towingRoute?.destination}
+                  routePaths={job.request.routePaths}
                   requestTypeLabel={getRequestTypeBadgeLabel(
                     job.request.serviceType,
                   )}
@@ -1193,6 +1283,14 @@ export default function WorkshopWonJobsPage() {
                 job.request.serviceType === "wheels"
                   ? getWheelsDisplaySummary(job.request.serviceDetails)
                   : undefined;
+              const towingRoute = getTowingRouteData(job.request);
+              const towingSummary =
+                job.request.serviceType === "towing"
+                  ? getTowingDisplaySummary(
+                      job.request.serviceDetails,
+                      towingRoute?.routeEstimate,
+                    )
+                  : undefined;
 
               return (
                 <article
@@ -1210,10 +1308,13 @@ export default function WorkshopWonJobsPage() {
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
                     damageTypes={
-                      wheelsSummary ? [] : displayedDamageTypeLabels
+                      wheelsSummary || towingSummary
+                        ? []
+                        : displayedDamageTypeLabels
                     }
                     mechanicalDetails={mechanicalDetails}
                     wheelsSummary={wheelsSummary}
+                    towingSummary={towingSummary}
                     details={[
                       {
                         text: jobState.label,
@@ -1240,6 +1341,22 @@ export default function WorkshopWonJobsPage() {
                   />
 
                   <RequestClientName name={job.clientName} />
+
+                  {towingRoute?.routeEstimate && (
+                    <div className="mt-4 [&>section]:mb-0">
+                      <TowingRouteEstimateCard
+                        distanceMeters={
+                          towingRoute.routeEstimate.distanceMeters
+                        }
+                        durationSeconds={
+                          towingRoute.routeEstimate.durationSeconds
+                        }
+                        pickup={towingRoute.pickup}
+                        destination={towingRoute.destination}
+                        paths={job.request.routePaths}
+                      />
+                    </div>
+                  )}
 
                   <div
                     onClick={() =>
@@ -1579,6 +1696,23 @@ export default function WorkshopWonJobsPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function isNonNegativeFinite(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteCoordinate(
+  value: number | null,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= minimum &&
+    value <= maximum
   );
 }
 
