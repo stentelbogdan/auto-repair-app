@@ -7,7 +7,10 @@ import CarHeader from "@/app/components/CarHeader";
 import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
-import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import type {
+  RepairServiceDetails,
+  TowingScheduleType,
+} from "@/lib/supabase/repair-requests";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
@@ -16,6 +19,7 @@ import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-na
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
+import { getTowingScheduleDisplay } from "@/lib/towing/towing-schedule-display";
 import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
@@ -47,6 +51,9 @@ type RepairRequestRow = {
   route_distance_meters: number | null;
   route_duration_seconds: number | null;
   route_paths: TowingRoutePaths | null;
+  towing_schedule_type: TowingScheduleType | null;
+  towing_requested_at: string | null;
+  towing_requested_timezone: string | null;
   description: string | null;
   images: RepairImage[];
   status: string;
@@ -104,7 +111,7 @@ export default function WorkshopRequestDetailsPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, description, images, status",
+            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, towing_schedule_type, towing_requested_at, towing_requested_timezone, description, images, status",
           )
           .eq("id", id)
           .single<RepairRequestRow>();
@@ -376,6 +383,14 @@ export default function WorkshopRequestDetailsPage() {
     isFiniteCoordinate(request.destination_lng, -180, 180)
       ? { lat: request.destination_lat, lng: request.destination_lng }
       : null;
+  const towingScheduleDisplay =
+    request.service_type === "towing"
+      ? getTowingScheduleDisplay(
+          request.towing_schedule_type,
+          request.towing_requested_at,
+          request.towing_requested_timezone,
+        )
+      : null;
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
@@ -430,6 +445,17 @@ export default function WorkshopRequestDetailsPage() {
           />
 
           <RequestClientName name={clientName} variant="detail" />
+
+          {towingScheduleDisplay && (
+            <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-4">
+              <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
+                Solicitare transport
+              </p>
+              <p className="mt-1 text-sm font-bold text-black/75">
+                {towingScheduleDisplay}
+              </p>
+            </div>
+          )}
 
           {routeEstimate && (
             <div className="mt-4 [&>section]:mb-0">

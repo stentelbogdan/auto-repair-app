@@ -19,6 +19,7 @@ import {
 } from "@/lib/supabase/repair-requests";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
+import { getTowingScheduleDisplay } from "@/lib/towing/towing-schedule-display";
 
 type WorkshopRequest = {
   id: string;
@@ -35,6 +36,9 @@ type WorkshopRequest = {
   routeDistanceMeters: number | null;
   routeDurationSeconds: number | null;
   routePaths: RepairRequestRow["route_paths"];
+  towingScheduleType: RepairRequestRow["towing_schedule_type"];
+  towingRequestedAt: RepairRequestRow["towing_requested_at"];
+  towingRequestedTimezone: RepairRequestRow["towing_requested_timezone"];
   description: string;
   images: RepairRequestRow["images"];
   postedAt: string;
@@ -207,6 +211,9 @@ export default function WorkshopTowingPage() {
         routeDistanceMeters: request.route_distance_meters ?? null,
         routeDurationSeconds: request.route_duration_seconds ?? null,
         routePaths: request.route_paths,
+        towingScheduleType: request.towing_schedule_type ?? null,
+        towingRequestedAt: request.towing_requested_at ?? null,
+        towingRequestedTimezone: request.towing_requested_timezone ?? null,
         description: request.description || "Fără descriere.",
         images: Array.isArray(request.images) ? request.images : [],
         postedAt: formatPostedAt(request.created_at),
@@ -484,6 +491,11 @@ export default function WorkshopTowingPage() {
                       lng: request.destinationLng,
                     }
                   : null;
+              const towingScheduleDisplay = getTowingScheduleDisplay(
+                request.towingScheduleType,
+                request.towingRequestedAt,
+                request.towingRequestedTimezone,
+              );
 
               return (
                 <div
@@ -521,6 +533,17 @@ export default function WorkshopTowingPage() {
                   <div className="mt-4 [&>div]:mt-0">
                     <RequestClientName name={request.clientName} />
                   </div>
+
+                  {towingScheduleDisplay && (
+                    <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
+                      <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
+                        Solicitare transport
+                      </p>
+                      <p className="mt-1 text-sm font-bold text-black/75">
+                        {towingScheduleDisplay}
+                      </p>
+                    </div>
+                  )}
 
                   {routeEstimate && (
                     <div className="mt-4 [&>section]:mb-0">
