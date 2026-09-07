@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
 import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
@@ -15,6 +16,7 @@ import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-na
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
 type RepairImage = {
@@ -38,6 +40,13 @@ type RepairRequestRow = {
   damage_type: string;
   service_details: RepairServiceDetails | null;
   service_type: RepairServiceType | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  destination_lat: number | null;
+  destination_lng: number | null;
+  route_distance_meters: number | null;
+  route_duration_seconds: number | null;
+  route_paths: TowingRoutePaths | null;
   description: string | null;
   images: RepairImage[];
   status: string;
@@ -95,7 +104,7 @@ export default function WorkshopRequestDetailsPage() {
         const { data, error } = await supabase
           .from("repair_requests")
           .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, description, images, status",
+            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, description, images, status",
           )
           .eq("id", id)
           .single<RepairRequestRow>();
@@ -344,10 +353,29 @@ export default function WorkshopRequestDetailsPage() {
       ? getWheelsDisplaySummary(request.service_details)
       : undefined;
 
+  const routeEstimate =
+    request.service_type === "towing" &&
+    isNonNegativeFinite(request.route_distance_meters) &&
+    isNonNegativeFinite(request.route_duration_seconds)
+      ? {
+          distanceMeters: request.route_distance_meters,
+          durationSeconds: request.route_duration_seconds,
+        }
+      : null;
   const towingSummary =
     request.service_type === "towing"
-      ? getTowingDisplaySummary(request.service_details)
+      ? getTowingDisplaySummary(request.service_details, routeEstimate)
       : undefined;
+  const towingPickup =
+    isFiniteCoordinate(request.pickup_lat, -90, 90) &&
+    isFiniteCoordinate(request.pickup_lng, -180, 180)
+      ? { lat: request.pickup_lat, lng: request.pickup_lng }
+      : null;
+  const towingDestination =
+    isFiniteCoordinate(request.destination_lat, -90, 90) &&
+    isFiniteCoordinate(request.destination_lng, -180, 180)
+      ? { lat: request.destination_lat, lng: request.destination_lng }
+      : null;
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
@@ -403,7 +431,21 @@ export default function WorkshopRequestDetailsPage() {
 
           <RequestClientName name={clientName} variant="detail" />
 
-          <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-4">
+          {routeEstimate && (
+            <div className="mt-4 [&>section]:mb-0">
+              <TowingRouteEstimateCard
+                distanceMeters={routeEstimate.distanceMeters}
+                durationSeconds={routeEstimate.durationSeconds}
+                pickup={towingPickup}
+                destination={towingDestination}
+                paths={request.route_paths}
+              />
+            </div>
+          )}
+
+          <div
+            className={`${routeEstimate ? "mt-4" : "mt-5"} rounded-2xl border border-black/10 bg-black/[0.03] p-4`}
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/40">
               Descriere client
             </p>
@@ -514,5 +556,22 @@ export default function WorkshopRequestDetailsPage() {
         </form>
       </div>
     </main>
+  );
+}
+
+function isNonNegativeFinite(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteCoordinate(
+  value: number | null,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= minimum &&
+    value <= maximum
   );
 }
