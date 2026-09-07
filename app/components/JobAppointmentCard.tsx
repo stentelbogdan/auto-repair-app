@@ -129,7 +129,19 @@ export default function JobAppointmentCard({
 
       <RequestClientName name={clientName} />
 
-      <div className="mt-5">
+      {hasValidTowingRoute && (
+        <div className="mt-4 [&>section]:mb-0">
+          <TowingRouteEstimateCard
+            distanceMeters={routeDistanceMeters}
+            durationSeconds={routeDurationSeconds}
+            pickup={pickup}
+            destination={destination}
+            paths={routePaths}
+          />
+        </div>
+      )}
+
+      <div className={hasValidTowingRoute ? "mt-4" : "mt-5"}>
         <OfferSummaryCard
           title="Programare confirmată"
           price={price}
@@ -146,21 +158,7 @@ export default function JobAppointmentCard({
         )}
       </div>
 
-      {hasValidTowingRoute && (
-        <div className="mt-4 [&>section]:mb-0">
-          <TowingRouteEstimateCard
-            distanceMeters={routeDistanceMeters}
-            durationSeconds={routeDurationSeconds}
-            pickup={pickup}
-            destination={destination}
-            paths={routePaths}
-          />
-        </div>
-      )}
-
-      <div
-        className={`${hasValidTowingRoute ? "mt-4" : "mt-5"} rounded-2xl border border-black/10 bg-black/[0.03] p-3`}
-      >
+      <div className="mt-5 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
         <p className="mb-2 text-[13px] font-semibold leading-[18px] text-black/60">
           📝 Descriere
         </p>
