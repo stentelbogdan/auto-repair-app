@@ -28,6 +28,8 @@ export type RepairServiceDetails =
   | WheelsServiceDetails
   | TowingServiceDetailsV1;
 
+export type TowingScheduleType = "asap" | "scheduled";
+
 export type RepairRequestRow = {
   id: string;
   user_id: string;
@@ -42,6 +44,9 @@ export type RepairRequestRow = {
   route_distance_meters?: number | null;
   route_duration_seconds?: number | null;
   route_paths: TowingRoutePaths | null;
+  towing_schedule_type?: TowingScheduleType | null;
+  towing_requested_at?: string | null;
+  towing_requested_timezone?: string | null;
   license_plate: string | null;
   damage_type: string;
   service_details?: RepairServiceDetails;
@@ -85,6 +90,9 @@ export async function createRepairRequest(input: {
   routeDistanceMeters?: number | null;
   routeDurationSeconds?: number | null;
   routePaths?: TowingRoutePaths | null;
+  towingScheduleType?: TowingScheduleType | null;
+  towingRequestedAt?: string | null;
+  towingRequestedTimezone?: string | null;
   licensePlate?: string;
   damageType: string;
   serviceDetails?: RepairServiceDetails;
@@ -114,6 +122,9 @@ export async function createRepairRequest(input: {
       route_distance_meters: input.routeDistanceMeters,
       route_duration_seconds: input.routeDurationSeconds,
       route_paths: input.routePaths ?? null,
+      towing_schedule_type: input.towingScheduleType ?? null,
+      towing_requested_at: input.towingRequestedAt ?? null,
+      towing_requested_timezone: input.towingRequestedTimezone ?? null,
       license_plate: formatLicensePlateForDb(input.licensePlate),
       damage_type: input.damageType,
       service_details: input.serviceDetails ?? [],
@@ -151,7 +162,7 @@ export async function getOwnRepairRequests(userId: string) {
   const { data, error } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, created_at",
+      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, request_type, target_workshop_id, description, images, status, accepted_offer_id, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, towing_schedule_type, towing_requested_at, towing_requested_timezone, created_at",
     )
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
