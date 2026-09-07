@@ -514,11 +514,13 @@ export default function WorkshopTowingPage() {
                     ]}
                   />
 
-                  <RequestClientName name={request.clientName} />
                   <RepairRequestMetrics
                     viewCount={request.viewCount}
                     offerCount={request.offerCount}
                   />
+                  <div className="mt-4 [&>div]:mt-0">
+                    <RequestClientName name={request.clientName} />
+                  </div>
 
                   {routeEstimate && (
                     <div className="mt-4 [&>section]:mb-0">
