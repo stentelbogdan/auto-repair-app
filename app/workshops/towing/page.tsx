@@ -514,6 +514,12 @@ export default function WorkshopTowingPage() {
                     ]}
                   />
 
+                  <RequestClientName name={request.clientName} />
+                  <RepairRequestMetrics
+                    viewCount={request.viewCount}
+                    offerCount={request.offerCount}
+                  />
+
                   {routeEstimate && (
                     <div className="mt-4 [&>section]:mb-0">
                       <TowingRouteEstimateCard
@@ -525,18 +531,6 @@ export default function WorkshopTowingPage() {
                       />
                     </div>
                   )}
-
-                  {routeEstimate ? (
-                    <div className="mt-4 [&>div]:mt-0">
-                      <RequestClientName name={request.clientName} />
-                    </div>
-                  ) : (
-                    <RequestClientName name={request.clientName} />
-                  )}
-                  <RepairRequestMetrics
-                    viewCount={request.viewCount}
-                    offerCount={request.offerCount}
-                  />
 
                   <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
                     <p className="mb-2 text-xs font-semibold text-black/45">
