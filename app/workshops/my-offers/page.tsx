@@ -7,6 +7,7 @@ import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
+import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import {
   getDamageTypeLabel,
@@ -26,6 +27,7 @@ import {
   type RepairServiceType,
 } from "@/lib/repair-requests/service-types";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import RequestCategoryFilter, {
   type RequestCategoryCounts,
@@ -52,6 +54,13 @@ type RepairRequest = {
   damage_type: string | null;
   service_type: RepairServiceType | null;
   service_details?: RepairServiceDetails | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  destination_lat: number | null;
+  destination_lng: number | null;
+  route_distance_meters: number | null;
+  route_duration_seconds: number | null;
+  route_paths: TowingRoutePaths | null;
   description: string | null;
   status?: string | null;
   accepted_offer_id?: string | null;
@@ -148,6 +157,13 @@ export default function WorkshopMyOffersPage() {
             damage_type,
             service_type,
             service_details,
+            pickup_lat,
+            pickup_lng,
+            destination_lat,
+            destination_lng,
+            route_distance_meters,
+            route_duration_seconds,
+            route_paths,
             description,
             status,
             accepted_offer_id,
@@ -222,6 +238,15 @@ export default function WorkshopMyOffersPage() {
                 damage_type: request.damage_type ?? null,
                 service_type: request.service_type ?? null,
                 service_details: request.service_details ?? null,
+                pickup_lat: request.pickup_lat ?? null,
+                pickup_lng: request.pickup_lng ?? null,
+                destination_lat: request.destination_lat ?? null,
+                destination_lng: request.destination_lng ?? null,
+                route_distance_meters:
+                  request.route_distance_meters ?? null,
+                route_duration_seconds:
+                  request.route_duration_seconds ?? null,
+                route_paths: request.route_paths ?? null,
                 description: request.description ?? null,
                 status: request.status ?? null,
                 accepted_offer_id: request.accepted_offer_id ?? null,
@@ -594,10 +619,32 @@ export default function WorkshopMyOffersPage() {
                 request?.service_type === "wheels"
                   ? getWheelsDisplaySummary(request.service_details)
                   : undefined;
+              const routeEstimate =
+                request?.service_type === "towing" &&
+                isNonNegativeFinite(request.route_distance_meters) &&
+                isNonNegativeFinite(request.route_duration_seconds)
+                  ? {
+                      distanceMeters: request.route_distance_meters,
+                      durationSeconds: request.route_duration_seconds,
+                    }
+                  : null;
               const towingSummary =
                 request?.service_type === "towing"
-                  ? getTowingDisplaySummary(request.service_details)
+                  ? getTowingDisplaySummary(request.service_details, routeEstimate)
                   : undefined;
+              const towingPickup =
+                isFiniteCoordinate(request?.pickup_lat, -90, 90) &&
+                isFiniteCoordinate(request?.pickup_lng, -180, 180)
+                  ? { lat: request.pickup_lat, lng: request.pickup_lng }
+                  : null;
+              const towingDestination =
+                isFiniteCoordinate(request?.destination_lat, -90, 90) &&
+                isFiniteCoordinate(request?.destination_lng, -180, 180)
+                  ? {
+                      lat: request.destination_lat,
+                      lng: request.destination_lng,
+                    }
+                  : null;
               const displayedDamageTypeLabels =
                 detailedDamageTypeLabels.length > 0
                   ? detailedDamageTypeLabels
@@ -680,6 +727,18 @@ export default function WorkshopMyOffersPage() {
 
                   <RequestClientName name={request?.clientName} />
 
+                  {routeEstimate && (
+                    <div className="mt-4 [&>section]:mb-0">
+                      <TowingRouteEstimateCard
+                        distanceMeters={routeEstimate.distanceMeters}
+                        durationSeconds={routeEstimate.durationSeconds}
+                        pickup={towingPickup}
+                        destination={towingDestination}
+                        paths={request?.route_paths ?? null}
+                      />
+                    </div>
+                  )}
+
                   <OfferSummaryCard
                     price={offer.price}
                     days={offer.days}
@@ -750,5 +809,24 @@ export default function WorkshopMyOffersPage() {
         )}
       </div>
     </main>
+  );
+}
+
+function isNonNegativeFinite(
+  value: number | null | undefined,
+): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isFiniteCoordinate(
+  value: number | null | undefined,
+  minimum: number,
+  maximum: number,
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= minimum &&
+    value <= maximum
   );
 }
