@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import AppointmentDateTimePicker, {
   toLocalDateTime,
@@ -16,6 +16,7 @@ import {
   type RepairOfferRow,
 } from "@/lib/supabase/repair-offers";
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
+import { getTowingRequestedDateTime } from "@/lib/towing/towing-schedule-display";
 
 type HandoverMethod = "customer_dropoff" | "workshop_pickup";
 
@@ -62,6 +63,7 @@ export default function ScheduleDamagePage() {
   const [customerNote, setCustomerNote] = useState("");
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const preserveInitialTowingTimeRef = useRef(false);
 
   const minDate = useMemo(() => {
     return toLocalDateValue(new Date());
@@ -111,21 +113,35 @@ export default function ScheduleDamagePage() {
               ? "workshop_pickup"
               : "customer_dropoff";
           const initialHandoverMethod =
-            explicitHandoverMethod ?? defaultHandoverMethod;
+            requestRow.service_type === "towing"
+              ? "workshop_pickup"
+              : explicitHandoverMethod ?? defaultHandoverMethod;
           const towingDetails = isTowingServiceDetailsV1(
             requestRow.service_details,
           )
             ? requestRow.service_details
             : null;
+          const towingPickupAddress = towingDetails
+            ? `${towingDetails.pickup.address}, ${towingDetails.pickup.city}`
+            : "";
+          const requestedDateTime = getTowingRequestedDateTime(
+            requestRow.towing_schedule_type,
+            requestRow.towing_requested_at,
+            requestRow.towing_requested_timezone,
+          );
+          const initialDate = parsedDraft.date || requestedDateTime?.date || "";
+          const initialTime = parsedDraft.time || requestedDateTime?.time || "";
 
           setHandoverMethod(initialHandoverMethod);
           setPickupAddress(
-            typeof parsedDraft.pickupAddress === "string" &&
-              parsedDraft.pickupAddress.trim()
-              ? parsedDraft.pickupAddress
-              : initialHandoverMethod === "workshop_pickup" && towingDetails
-                ? `${towingDetails.pickup.address}, ${towingDetails.pickup.city}`
-                : "",
+            requestRow.service_type === "towing"
+              ? towingPickupAddress
+              : typeof parsedDraft.pickupAddress === "string" &&
+                  parsedDraft.pickupAddress.trim()
+                ? parsedDraft.pickupAddress
+                : initialHandoverMethod === "workshop_pickup" && towingDetails
+                  ? towingPickupAddress
+                  : "",
           );
 
           setOffer({
@@ -136,19 +152,21 @@ export default function ScheduleDamagePage() {
             days: parsedDraft.days || "",
             message: parsedDraft.message || null,
             workshop_name: parsedDraft.workshopName || "Service",
-            available_date: parsedDraft.date || null,
-            available_time: parsedDraft.time || null,
+            available_date: initialDate || null,
+            available_time: initialTime || null,
             status: "draft",
             created_at: new Date().toISOString(),
           } as RepairOffer);
 
-          if (parsedDraft.date) {
-            setAppointmentDate(parsedDraft.date);
-            setDateInput(parsedDraft.date.split("-").reverse().join("."));
+          if (initialDate) {
+            setAppointmentDate(initialDate);
+            setDateInput(initialDate.split("-").reverse().join("."));
           }
 
-          if (parsedDraft.time) {
-            setAppointmentTime(parsedDraft.time);
+          if (initialTime) {
+            preserveInitialTowingTimeRef.current =
+              requestRow.service_type === "towing";
+            setAppointmentTime(initialTime);
           }
 
           return;
@@ -290,7 +308,11 @@ export default function ScheduleDamagePage() {
         currentAppointmentId = currentAppointment?.id || null;
       }
 
-      setAppointmentTime("");
+      if (preserveInitialTowingTimeRef.current) {
+        preserveInitialTowingTimeRef.current = false;
+      } else {
+        setAppointmentTime("");
+      }
 
       await loadBookedSlots(
         appointmentDate,
@@ -306,10 +328,29 @@ export default function ScheduleDamagePage() {
     offer?.id,
     isInitialOfferMode,
     requestId,
+    request?.service_type,
   ]);
 
   const submitAppointment = async () => {
     if (!request || !offer) return;
+
+    const towingDetails =
+      request.service_type === "towing" &&
+      isTowingServiceDetailsV1(request.service_details)
+        ? request.service_details
+        : null;
+    const towingPickupAddress = towingDetails
+      ? `${towingDetails.pickup.address}, ${towingDetails.pickup.city}`
+      : null;
+    const effectiveHandoverMethod: HandoverMethod =
+      request.service_type === "towing" ? "workshop_pickup" : handoverMethod;
+    const effectivePickupAddress =
+      request.service_type === "towing" ? towingPickupAddress : pickupAddress;
+
+    if (request.service_type === "towing" && !effectivePickupAddress) {
+      alert("Adresa de preluare a cererii Towing nu este disponibilă.");
+      return;
+    }
 
     if (!appointmentDate) {
       alert("Alege data programării.");
@@ -392,8 +433,8 @@ export default function ScheduleDamagePage() {
     }
 
     if (
-      handoverMethod === "workshop_pickup" &&
-      pickupAddress.trim().length < 5
+      effectiveHandoverMethod === "workshop_pickup" &&
+      (effectivePickupAddress?.trim().length ?? 0) < 5
     ) {
       alert("Introdu adresa de ridicare.");
       return;
@@ -419,9 +460,11 @@ export default function ScheduleDamagePage() {
             ...parsedDraft,
             date: appointmentDate,
             time: appointmentTime,
-            handoverMethod,
+            handoverMethod: effectiveHandoverMethod,
             pickupAddress:
-              handoverMethod === "workshop_pickup" ? pickupAddress.trim() : "",
+              effectiveHandoverMethod === "workshop_pickup"
+                ? effectivePickupAddress?.trim() || ""
+                : "",
           }),
         );
 
@@ -472,11 +515,11 @@ export default function ScheduleDamagePage() {
               proposed_date: appointmentDate,
               proposed_time: appointmentTime,
 
-              handover_method: handoverMethod,
+              handover_method: effectiveHandoverMethod,
 
               pickup_address:
-                handoverMethod === "workshop_pickup"
-                  ? pickupAddress.trim()
+                effectiveHandoverMethod === "workshop_pickup"
+                  ? effectivePickupAddress?.trim() || null
                   : null,
 
               customer_note: customerNote.trim() || null,
@@ -540,10 +583,12 @@ export default function ScheduleDamagePage() {
           proposed_date: appointmentDate,
           proposed_time: appointmentTime,
 
-          handover_method: handoverMethod,
+          handover_method: effectiveHandoverMethod,
 
           pickup_address:
-            handoverMethod === "workshop_pickup" ? pickupAddress.trim() : null,
+            effectiveHandoverMethod === "workshop_pickup"
+              ? effectivePickupAddress?.trim() || null
+              : null,
 
           customer_note: customerNote.trim() || null,
           workshop_note: null,
@@ -617,10 +662,20 @@ export default function ScheduleDamagePage() {
               <div className="mt-4 rounded-2xl bg-black/[0.04] p-4">
                 <p className="text-xs text-black/45">Service</p>
                 <p className="font-bold">{offer.workshop_name}</p>
-                <p className="mt-1 text-sm text-black/60">
-                  €{offer.price} • {offer.days}{" "}
-                  {String(offer.days) === "1" ? "zi" : "zile"}
-                </p>
+                {request.service_type === "towing" ? (
+                  offer.price !== null &&
+                  offer.price !== undefined &&
+                  offer.price !== "" && (
+                    <p className="mt-1 text-sm text-black/60">
+                      €{offer.price}
+                    </p>
+                  )
+                ) : (
+                  <p className="mt-1 text-sm text-black/60">
+                    €{offer.price} • {offer.days}{" "}
+                    {String(offer.days) === "1" ? "zi" : "zile"}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -630,6 +685,9 @@ export default function ScheduleDamagePage() {
               dateError={dateError}
               time={appointmentTime}
               timeSlots={timeSlots}
+              timeSelectionMode={
+                request.service_type === "towing" ? "wheel" : "grid"
+              }
               disabledTimes={bookedSlots}
               loadingTimes={loadingSlots}
               minDate={minDate}
@@ -640,57 +698,63 @@ export default function ScheduleDamagePage() {
             />
 
             <div className="rounded-[26px] bg-white p-5 text-black">
-              <p className="text-sm font-bold text-black/70">
-                Cum predai mașina?
-              </p>
-
-              <div className="mt-3 grid gap-3">
-                <button
-                  type="button"
-                  onClick={() => setHandoverMethod("customer_dropoff")}
-                  className={`rounded-2xl border p-4 text-left ${
-                    handoverMethod === "customer_dropoff"
-                      ? "border-orange-500 bg-orange-50"
-                      : "border-black/10 bg-gray-50"
-                  }`}
-                >
-                  <p className="font-black">Aduc eu mașina la service</p>
-                  <p className="mt-1 text-sm text-black/55">
-                    Te prezinți la service la data și ora aleasă.
+              {request.service_type !== "towing" && (
+                <>
+                  <p className="text-sm font-bold text-black/70">
+                    Cum predai mașina?
                   </p>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setHandoverMethod("workshop_pickup")}
-                  className={`rounded-2xl border p-4 text-left ${
-                    handoverMethod === "workshop_pickup"
-                      ? "border-orange-500 bg-orange-50"
-                      : "border-black/10 bg-gray-50"
-                  }`}
-                >
-                  <p className="font-black">Service-ul ridică mașina</p>
-                  <p className="mt-1 text-sm text-black/55">
-                    Completezi adresa de unde poate fi ridicată mașina.
-                  </p>
-                </button>
-              </div>
+                  <div className="mt-3 grid gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setHandoverMethod("customer_dropoff")}
+                      className={`rounded-2xl border p-4 text-left ${
+                        handoverMethod === "customer_dropoff"
+                          ? "border-orange-500 bg-orange-50"
+                          : "border-black/10 bg-gray-50"
+                      }`}
+                    >
+                      <p className="font-black">Aduc eu mașina la service</p>
+                      <p className="mt-1 text-sm text-black/55">
+                        Te prezinți la service la data și ora aleasă.
+                      </p>
+                    </button>
 
-              {handoverMethod === "workshop_pickup" && (
-                <div className="mt-4">
-                  <label className="text-sm font-bold text-black/70">
-                    Adresă ridicare
-                  </label>
-                  <input
-                    value={pickupAddress}
-                    onChange={(event) => setPickupAddress(event.target.value)}
-                    placeholder="Ex: Strada Principală 10, Iași"
-                    className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 outline-none focus:border-orange-500"
-                  />
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setHandoverMethod("workshop_pickup")}
+                      className={`rounded-2xl border p-4 text-left ${
+                        handoverMethod === "workshop_pickup"
+                          ? "border-orange-500 bg-orange-50"
+                          : "border-black/10 bg-gray-50"
+                      }`}
+                    >
+                      <p className="font-black">Service-ul ridică mașina</p>
+                      <p className="mt-1 text-sm text-black/55">
+                        Completezi adresa de unde poate fi ridicată mașina.
+                      </p>
+                    </button>
+                  </div>
+
+                  {handoverMethod === "workshop_pickup" && (
+                    <div className="mt-4">
+                      <label className="text-sm font-bold text-black/70">
+                        Adresă ridicare
+                      </label>
+                      <input
+                        value={pickupAddress}
+                        onChange={(event) =>
+                          setPickupAddress(event.target.value)
+                        }
+                        placeholder="Ex: Strada Principală 10, Iași"
+                        className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 outline-none focus:border-orange-500"
+                      />
+                    </div>
+                  )}
+                </>
               )}
 
-              <div className="mt-4">
+              <div className={request.service_type === "towing" ? "" : "mt-4"}>
                 <label className="text-sm font-bold text-black/70">
                   Mesaj opțional
                 </label>

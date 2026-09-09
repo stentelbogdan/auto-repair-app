@@ -73,7 +73,7 @@ export default function TimeWheelPicker({
     const nextTime = `${draftHour}:${draftMinute}`;
 
     if (date && isTimeDisabled(nextTime)) {
-      setError("Alege o oră care nu a trecut.");
+      setError("Ora selectată nu este disponibilă.");
       return;
     }
 

@@ -1,14 +1,15 @@
 import type { TowingScheduleType } from "@/lib/supabase/repair-requests";
 
-export function getTowingScheduleDisplay(
+export type TowingRequestedDateTime = {
+  date: string;
+  time: string;
+};
+
+export function getTowingRequestedDateTime(
   scheduleType: TowingScheduleType | null | undefined,
   requestedAt: string | null | undefined,
   requestedTimezone: string | null | undefined,
-): string | null {
-  if (scheduleType === "asap") {
-    return "Cât mai repede";
-  }
-
+): TowingRequestedDateTime | null {
   const timezone = requestedTimezone?.trim();
 
   if (scheduleType !== "scheduled" || !requestedAt || !timezone) {
@@ -22,7 +23,7 @@ export function getTowingScheduleDisplay(
   }
 
   try {
-    const parts = new Intl.DateTimeFormat("ro-RO", {
+    const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone,
       day: "2-digit",
       month: "2-digit",
@@ -42,8 +43,35 @@ export function getTowingScheduleDisplay(
       return null;
     }
 
-    return `${day}.${month}.${year} · ${hour}:${minute}`;
+    return {
+      date: `${year}-${month}-${day}`,
+      time: `${hour}:${minute}`,
+    };
   } catch {
     return null;
   }
+}
+
+export function getTowingScheduleDisplay(
+  scheduleType: TowingScheduleType | null | undefined,
+  requestedAt: string | null | undefined,
+  requestedTimezone: string | null | undefined,
+): string | null {
+  if (scheduleType === "asap") {
+    return "Cât mai repede";
+  }
+
+  const requestedDateTime = getTowingRequestedDateTime(
+    scheduleType,
+    requestedAt,
+    requestedTimezone,
+  );
+
+  if (!requestedDateTime) {
+    return null;
+  }
+
+  const [year, month, day] = requestedDateTime.date.split("-");
+
+  return `${day}.${month}.${year} · ${requestedDateTime.time}`;
 }

@@ -256,12 +256,14 @@ export default function CustomerJobDetailPage() {
                 </p>
               </div>
 
-              <div className="rounded-2xl bg-white/10 p-4">
-                <p className="text-xs text-white/50">Durată</p>
-                <p className="mt-1 text-lg font-black">
-                  {offer?.days ? `${offer.days} zile` : "—"}
-                </p>
-              </div>
+              {request.service_type !== "towing" && (
+                <div className="rounded-2xl bg-white/10 p-4">
+                  <p className="text-xs text-white/50">Durată</p>
+                  <p className="mt-1 text-lg font-black">
+                    {offer?.days ? `${offer.days} zile` : "—"}
+                  </p>
+                </div>
+              )}
             </div>
 
             {offer?.message && (

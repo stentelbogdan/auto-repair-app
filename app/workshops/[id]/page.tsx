@@ -18,8 +18,12 @@ import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
-import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
+import {
+  formatTowingRouteDuration,
+  getTowingDisplaySummary,
+} from "@/lib/towing/towing-display";
 import { getTowingScheduleDisplay } from "@/lib/towing/towing-schedule-display";
+import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
@@ -169,25 +173,19 @@ export default function WorkshopRequestDetailsPage() {
   useEffect(() => {
     localStorage.setItem("activeRole", "workshop");
 
-    // Dacă venim din calendar, folosim direct valorile din URL.
-    if (dateFromUrl) {
-      setAvailableDate(dateFromUrl);
-    }
-
-    if (timeFromUrl) {
-      setAvailableTime(timeFromUrl);
-    }
-
     const savedAvailability = sessionStorage.getItem(`availability-${id}`);
 
     if (savedAvailability) {
       const parsed = JSON.parse(savedAvailability);
 
-      setAvailableDate(parsed.date || "");
-      setAvailableTime(parsed.time || "");
+      setAvailableDate(parsed.date || dateFromUrl || "");
+      setAvailableTime(parsed.time || timeFromUrl || "");
       setPrice(parsed.price || "");
       setDays(parsed.days || "");
       setMessage(parsed.message || "");
+    } else {
+      setAvailableDate(dateFromUrl || "");
+      setAvailableTime(timeFromUrl || "");
     }
 
     void loadRequest();
@@ -232,8 +230,14 @@ export default function WorkshopRequestDetailsPage() {
 
     const finalAvailableDate = availableDate;
     const finalAvailableTime = availableTime;
+    const finalDays =
+      request.service_type === "towing"
+        ? isNonNegativeFinite(request.route_duration_seconds)
+          ? formatTowingRouteDuration(request.route_duration_seconds)
+          : "Durată transport nespecificată"
+        : days;
 
-    if (!price || !days || !finalAvailableDate || !finalAvailableTime) {
+    if (!price || !finalDays || !finalAvailableDate || !finalAvailableTime) {
       alert("Completează prețul, durata, data și ora.");
       return;
     }
@@ -270,23 +274,31 @@ export default function WorkshopRequestDetailsPage() {
         request.service_type === "towing"
           ? "workshop_pickup"
           : "customer_dropoff";
+      const towingDetails = isTowingServiceDetailsV1(request.service_details)
+        ? request.service_details
+        : null;
+
+      if (request.service_type === "towing" && !towingDetails) {
+        throw new Error("Adresa de preluare a cererii Towing nu este disponibilă.");
+      }
 
       await createRepairOffer({
         requestId: id,
         workshopUserId: authData.user.id,
         price,
-        days,
+        days: finalDays,
         message,
         workshopName,
         availableDate: finalAvailableDate,
         availableTime: finalAvailableTime,
         handoverMethod:
-          parsedAvailability.handoverMethod || defaultHandoverMethod,
+          request.service_type === "towing"
+            ? "workshop_pickup"
+            : parsedAvailability.handoverMethod || defaultHandoverMethod,
         pickupAddress:
-          parsedAvailability.pickupAddress ||
-          (request.service_type === "towing" && towingSummary
-            ? `${towingSummary.pickup.address}, ${towingSummary.pickup.city}`
-            : ""),
+          request.service_type === "towing" && towingDetails
+            ? `${towingDetails.pickup.address}, ${towingDetails.pickup.city}`
+            : parsedAvailability.pickupAddress || "",
       });
 
       sessionStorage.removeItem(`availability-${id}`);
@@ -506,30 +518,32 @@ export default function WorkshopRequestDetailsPage() {
             />
           </div>
 
-          <div className="mt-4">
-            <label className="mb-2 block text-sm font-bold">
-              Durată estimată
-            </label>
+          {request.service_type !== "towing" && (
+            <div className="mt-4">
+              <label className="mb-2 block text-sm font-bold">
+                Durată estimată
+              </label>
 
-            <select
-              value={days}
-              onChange={(e) => setDays(e.target.value)}
-              className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-4 text-base outline-none"
-              required
-            >
-              <option value="">Alege durata estimată</option>
-              <option value="30 minute">30 minute</option>
-              <option value="1 oră">1 oră</option>
-              <option value="2 ore">2 ore</option>
-              <option value="3 ore">3 ore</option>
-              <option value="Jumătate de zi">Jumătate de zi</option>
-              <option value="1 zi">1 zi</option>
-              <option value="2 zile">2 zile</option>
-              <option value="3 zile">3 zile</option>
-              <option value="4-5 zile">4-5 zile</option>
-              <option value="O săptămână">O săptămână</option>
-            </select>
-          </div>
+              <select
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-4 text-base outline-none"
+                required
+              >
+                <option value="">Alege durata estimată</option>
+                <option value="30 minute">30 minute</option>
+                <option value="1 oră">1 oră</option>
+                <option value="2 ore">2 ore</option>
+                <option value="3 ore">3 ore</option>
+                <option value="Jumătate de zi">Jumătate de zi</option>
+                <option value="1 zi">1 zi</option>
+                <option value="2 zile">2 zile</option>
+                <option value="3 zile">3 zile</option>
+                <option value="4-5 zile">4-5 zile</option>
+                <option value="O săptămână">O săptămână</option>
+              </select>
+            </div>
+          )}
 
           <AppointmentSummaryCard
             date={availableDate}
@@ -542,7 +556,14 @@ export default function WorkshopRequestDetailsPage() {
                   date: availableDate,
                   time: availableTime,
                   price,
-                  days,
+                  days:
+                    request.service_type === "towing"
+                      ? isNonNegativeFinite(request.route_duration_seconds)
+                        ? formatTowingRouteDuration(
+                            request.route_duration_seconds,
+                          )
+                        : "Durată transport nespecificată"
+                      : days,
                   message,
                 }),
               );

@@ -174,6 +174,8 @@ export default function AppointmentDateTimePicker({
             value={time}
             onChange={onTimeChange}
             isTimeDisabled={(candidateTime) =>
+              loadingTimes ||
+              disabledTimes.includes(candidateTime) ||
               isPastDateTime(date, candidateTime, new Date())
             }
           />

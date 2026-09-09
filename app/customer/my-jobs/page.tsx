@@ -770,7 +770,11 @@ export default function MyJobsPage() {
                               : "Lucrare finalizată"
                         }
                         price={acceptedOffer.price}
-                        days={acceptedOffer.days}
+                        days={
+                          request.service_type === "towing"
+                            ? null
+                            : acceptedOffer.days
+                        }
                         appointmentDate={
                           appointment?.status === "workshop_proposed"
                             ? appointment.proposed_date ||

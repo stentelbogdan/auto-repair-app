@@ -741,7 +741,9 @@ export default function WorkshopMyOffersPage() {
 
                   <OfferSummaryCard
                     price={offer.price}
-                    days={offer.days}
+                    days={
+                      request?.service_type === "towing" ? null : offer.days
+                    }
                     appointmentDate={displayDate}
                     appointmentTime={displayTime}
                     handoverText={

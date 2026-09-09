@@ -1083,7 +1083,9 @@ export default function WorkshopWonJobsPage() {
                     <OfferSummaryCard
                       title="Lucrare în lucru"
                       price={job.price}
-                      days={job.days}
+                      days={
+                        job.request.serviceType === "towing" ? null : job.days
+                      }
                       appointmentDate={displayDate}
                       appointmentTime={displayTime}
                       handoverText={handoverText}
@@ -1227,7 +1229,9 @@ export default function WorkshopWonJobsPage() {
                   description={job.request.description}
                   clientName={job.clientName}
                   price={job.price}
-                  days={job.days}
+                  days={
+                    job.request.serviceType === "towing" ? null : job.days
+                  }
                   appointmentDate={displayDate}
                   appointmentTime={displayTime}
                   handoverText={handoverText}
@@ -1366,9 +1370,11 @@ export default function WorkshopWonJobsPage() {
                   >
                     <div className="pt-5">
                       <div className="mb-4 flex flex-wrap gap-2">
-                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
-                          {job.days}
-                        </span>
+                        {job.request.serviceType !== "towing" && (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                            {job.days}
+                          </span>
+                        )}
 
                         <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
                           {job.workshopName}

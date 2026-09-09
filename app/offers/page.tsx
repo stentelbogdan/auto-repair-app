@@ -583,7 +583,11 @@ export default function OffersPage() {
                           <OfferSummaryCard
                             title="Oferta service-ului"
                             price={offer.price}
-                            days={offer.days}
+                            days={
+                              request.serviceType === "towing"
+                                ? null
+                                : offer.days
+                            }
                             appointmentDate={displayedAppointmentDate}
                             appointmentTime={displayedAppointmentTime}
                             handoverText={
