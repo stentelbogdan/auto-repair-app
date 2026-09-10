@@ -5,6 +5,9 @@ export type NotificationRecipientRole = "customer" | "workshop";
 export const WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE =
   "workshop_started_job";
 
+export const WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE =
+  "workshop_offer_rejected";
+
 type MarkNotificationsAsReadInput = {
   types: string[];
   recipientRole: NotificationRecipientRole;

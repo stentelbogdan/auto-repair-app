@@ -12,8 +12,14 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
-import { WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE } from "@/lib/notifications";
-import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
+import {
+  WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+  WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+} from "@/lib/notifications";
+import {
+  isRepairServiceType,
+  resolveRepairServiceType,
+} from "@/lib/repair-requests/service-types";
 import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
 
 type Role = "customer" | "workshop";
@@ -61,6 +67,7 @@ export default function AppNavbar() {
   const [newRequestsUnreadCount, setNewRequestsUnreadCount] = useState(0);
   const [appointmentProposalUnreadCount, setAppointmentProposalUnreadCount] =
     useState(0);
+  const [rejectedOfferUnreadCount, setRejectedOfferUnreadCount] = useState(0);
 
   const [appointmentConfirmedUnreadCount, setAppointmentConfirmedUnreadCount] =
     useState(0);
@@ -244,6 +251,7 @@ export default function AppNavbar() {
       setDirectRequestsUnreadCount(0);
       setNewRequestsUnreadCount(0);
       setAppointmentProposalUnreadCount(0);
+      setRejectedOfferUnreadCount(0);
       setAppointmentConfirmedUnreadCount(0);
       setAppointmentToast(null);
       return;
@@ -666,6 +674,7 @@ export default function AppNavbar() {
         { count: proposalCount, error: proposalError },
         { count: confirmedCount, error: confirmedError },
         { count: jobStartedCount, error: jobStartedError },
+        { count: rejectedOfferCount, error: rejectedOfferError },
       ] = await Promise.all([
         supabase
           .from("notifications")
@@ -693,23 +702,41 @@ export default function AppNavbar() {
           .eq("recipient_id", userId)
           .is("read_at", null)
           .eq("type", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE),
+
+        supabase
+          .from("notifications")
+          .select("id", { count: "exact", head: true })
+          .eq("recipient_id", userId)
+          .eq("recipient_role", "workshop")
+          .is("read_at", null)
+          .eq("type", WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE),
       ]);
 
-      if (proposalError || confirmedError || jobStartedError) {
+      if (
+        proposalError ||
+        confirmedError ||
+        jobStartedError ||
+        rejectedOfferError
+      ) {
         console.error(
           "Failed to load appointment notifications:",
-          proposalError || confirmedError || jobStartedError,
+          proposalError ||
+            confirmedError ||
+            jobStartedError ||
+            rejectedOfferError,
         );
 
         setAppointmentProposalUnreadCount(0);
         setAppointmentConfirmedUnreadCount(0);
         setJobStartedUnreadCount(0);
+        setRejectedOfferUnreadCount(0);
         return;
       }
 
       setAppointmentProposalUnreadCount(proposalCount || 0);
       setAppointmentConfirmedUnreadCount(confirmedCount || 0);
       setJobStartedUnreadCount(jobStartedCount || 0);
+      setRejectedOfferUnreadCount(rejectedOfferCount || 0);
     };
 
     const loadUnreadWonJobs = async () => {
@@ -1349,6 +1376,41 @@ export default function AppNavbar() {
         }
       }
 
+      if (isWorkshopMode && userId && rejectedOfferUnreadCount > 0) {
+        try {
+          const { data: notification, error: notificationError } =
+            await supabase
+              .from("notifications")
+              .select("target_url")
+              .eq("recipient_id", userId)
+              .eq("recipient_role", "workshop")
+              .is("read_at", null)
+              .eq("type", WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle<{ target_url: string | null }>();
+
+          if (notificationError) throw notificationError;
+
+          if (notification?.target_url) {
+            const targetUrl = new URL(notification.target_url, window.origin);
+            const category = targetUrl.searchParams.get("category");
+            const focusOffer = targetUrl.searchParams.get("focusOffer");
+
+            if (
+              targetUrl.origin === window.origin &&
+              targetUrl.pathname === "/workshops/my-offers" &&
+              isRepairServiceType(category) &&
+              focusOffer
+            ) {
+              workshopOffersUrl = `${targetUrl.pathname}${targetUrl.search}`;
+            }
+          }
+        } catch (error) {
+          console.error("Failed to resolve rejected offer target:", error);
+        }
+      }
+
       if (userId && appointmentProposalUnreadCount > 0) {
         const { error } = await supabase
           .from("notifications")
@@ -1595,6 +1657,10 @@ export default function AppNavbar() {
     }
   };
 
+  const offersNavigationUnreadCount = isClientMode
+    ? offerUnreadCount + appointmentProposalUnreadCount
+    : appointmentProposalUnreadCount + rejectedOfferUnreadCount;
+
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-xl">
       <div className="mx-auto max-w-7xl px-4 py-3">
@@ -1670,17 +1736,11 @@ export default function AppNavbar() {
             >
               <BadgeEuro size={18} strokeWidth={2.25} />
 
-              {(isClientMode
-                ? offerUnreadCount + appointmentProposalUnreadCount
-                : appointmentProposalUnreadCount) > 0 && (
+              {offersNavigationUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
-                  {(isClientMode
-                    ? offerUnreadCount + appointmentProposalUnreadCount
-                    : appointmentProposalUnreadCount) > 9
+                  {offersNavigationUnreadCount > 9
                     ? "9+"
-                    : isClientMode
-                      ? offerUnreadCount + appointmentProposalUnreadCount
-                      : appointmentProposalUnreadCount}
+                    : offersNavigationUnreadCount}
                 </span>
               )}
             </button>

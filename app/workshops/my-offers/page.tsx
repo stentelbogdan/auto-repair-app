@@ -8,7 +8,10 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
-import { markNotificationsAsRead } from "@/lib/notifications";
+import {
+  markNotificationsAsRead,
+  WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+} from "@/lib/notifications";
 import {
   getDamageTypeLabel,
   getRequestTypeBadgeLabel,
@@ -107,6 +110,8 @@ export default function WorkshopMyOffersPage() {
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
+  const [focusedRejectedOffer, setFocusedRejectedOffer] =
+    useState<RepairOffer | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] =
     useState<RequestCategory>("all");
@@ -276,6 +281,159 @@ export default function WorkshopMyOffersPage() {
       setOffers(mapped);
     };
 
+    const loadFocusedRejectedOffer = async (workshopUserId: string) => {
+      const params = new URLSearchParams(window.location.search);
+      const focusOfferId = params.get("focusOffer");
+
+      if (!focusOfferId) {
+        return;
+      }
+
+      const clearFocusOffer = () => {
+        params.delete("focusOffer");
+        const query = params.toString();
+        router.replace(`/workshops/my-offers${query ? `?${query}` : ""}`, {
+          scroll: false,
+        });
+      };
+
+      const { data, error } = await supabase
+        .from("repair_offers")
+        .select(
+          `
+          id,
+          request_id,
+          workshop_user_id,
+          workshop_name,
+          price,
+          days,
+          message,
+          status,
+          created_at,
+          available_date,
+          available_time,
+          repair_requests (
+            id,
+            car_brand,
+            car_model,
+            car_year,
+            city,
+            license_plate,
+            damage_type,
+            service_type,
+            service_details,
+            pickup_lat,
+            pickup_lng,
+            destination_lat,
+            destination_lng,
+            route_distance_meters,
+            route_duration_seconds,
+            route_paths,
+            description,
+            status,
+            accepted_offer_id,
+            images
+          ),
+          repair_appointments (
+            id,
+            offer_id,
+            request_id,
+            appointment_date,
+            appointment_time,
+            proposed_date,
+            proposed_time,
+            handover_method,
+            pickup_address,
+            status
+          )
+        `,
+        )
+        .eq("id", focusOfferId)
+        .eq("workshop_user_id", workshopUserId)
+        .eq("status", "rejected")
+        .maybeSingle();
+
+      if (error || !data) {
+        if (error) {
+          console.error("Failed to load rejected offer:", error);
+        }
+        clearFocusOffer();
+        return;
+      }
+
+      const request = Array.isArray(data.repair_requests)
+        ? data.repair_requests[0]
+        : data.repair_requests;
+      const clientNamesByRequestId = await getWorkshopRequestClientNames([
+        String(data.request_id),
+      ]);
+
+      if (cancelled) {
+        return;
+      }
+
+      setFocusedRejectedOffer({
+        id: String(data.id),
+        request_id: String(data.request_id),
+        workshop_user_id: String(data.workshop_user_id),
+        workshop_name: data.workshop_name || "",
+        price: data.price ?? "",
+        days: data.days ?? "",
+        message: data.message || "",
+        status: data.status || "rejected",
+        created_at: String(data.created_at),
+        available_date: data.available_date ?? null,
+        available_time: data.available_time ?? null,
+        repair_requests: request
+          ? {
+              id: String(request.id),
+              car_brand: request.car_brand ?? null,
+              car_model: request.car_model ?? null,
+              car_year: request.car_year ?? null,
+              city: request.city ?? null,
+              license_plate: request.license_plate ?? null,
+              damage_type: request.damage_type ?? null,
+              service_type: request.service_type ?? null,
+              service_details: request.service_details ?? null,
+              pickup_lat: request.pickup_lat ?? null,
+              pickup_lng: request.pickup_lng ?? null,
+              destination_lat: request.destination_lat ?? null,
+              destination_lng: request.destination_lng ?? null,
+              route_distance_meters: request.route_distance_meters ?? null,
+              route_duration_seconds: request.route_duration_seconds ?? null,
+              route_paths: request.route_paths ?? null,
+              description: request.description ?? null,
+              status: request.status ?? null,
+              accepted_offer_id: request.accepted_offer_id ?? null,
+              images: Array.isArray(request.images) ? request.images : [],
+              clientName:
+                clientNamesByRequestId.get(String(request.id)) ?? null,
+            }
+          : null,
+        repair_appointments: Array.isArray(data.repair_appointments)
+          ? data.repair_appointments.map((appointment) => ({
+              id: String(appointment.id),
+              offer_id: String(appointment.offer_id),
+              request_id: String(appointment.request_id),
+              appointment_date: appointment.appointment_date ?? null,
+              appointment_time: appointment.appointment_time ?? null,
+              proposed_date: appointment.proposed_date ?? null,
+              proposed_time: appointment.proposed_time ?? null,
+              handover_method: appointment.handover_method ?? null,
+              pickup_address: appointment.pickup_address ?? null,
+              status: appointment.status ?? null,
+            }))
+          : [],
+      });
+
+      await markNotificationsAsRead({
+        recipientRole: "workshop",
+        types: [WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE],
+        offerId: String(data.id),
+      });
+      clearFocusOffer();
+    };
+
     const loadPage = async () => {
       try {
         const { data: authData, error: authError } =
@@ -320,6 +478,7 @@ export default function WorkshopMyOffersPage() {
         setAuthorized(true);
 
         await loadWorkshopOffers(workshopUserId);
+        await loadFocusedRejectedOffer(workshopUserId);
 
         if (cancelled) {
           return;
@@ -405,10 +564,14 @@ export default function WorkshopMyOffersPage() {
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers
       .filter((offer) => {
+        if ((offer.status || "pending") !== "pending") {
+          return false;
+        }
+
         const appointment = offer.repair_appointments?.[0];
 
         if (!appointment) {
-          return (offer.status || "pending") === "pending";
+          return true;
         }
 
         return appointment.status !== "confirmed";
@@ -456,6 +619,22 @@ export default function WorkshopMyOffersPage() {
         activeCategory,
     );
   }, [activeCategory, normalizedOffers]);
+
+  const displayedOffers = useMemo(() => {
+    if (!focusedRejectedOffer) {
+      return filteredOffers;
+    }
+
+    const focusedCategory = resolveRepairServiceType(
+      focusedRejectedOffer.repair_requests?.service_type,
+    );
+
+    if (activeCategory !== "all" && focusedCategory !== activeCategory) {
+      return filteredOffers;
+    }
+
+    return [focusedRejectedOffer, ...filteredOffers];
+  }, [activeCategory, filteredOffers, focusedRejectedOffer]);
 
   if (checkingAccess) {
     return (
@@ -571,7 +750,10 @@ export default function WorkshopMyOffersPage() {
           <RequestCategoryFilter
             activeCategory={activeCategory}
             counts={categoryCounts}
-            onChange={setActiveCategory}
+            onChange={(category) => {
+              setFocusedRejectedOffer(null);
+              setActiveCategory(category);
+            }}
           />
         </div>
 
@@ -579,7 +761,7 @@ export default function WorkshopMyOffersPage() {
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
             Se încarcă ofertele...
           </div>
-        ) : normalizedOffers.length === 0 ? (
+        ) : normalizedOffers.length === 0 && !focusedRejectedOffer ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center">
             <h2 className="text-2xl font-bold">Nu ai oferte în așteptare</h2>
             <p className="mt-3 text-white/60">
@@ -593,15 +775,16 @@ export default function WorkshopMyOffersPage() {
               Vezi daune disponibile
             </button>
           </div>
-        ) : filteredOffers.length === 0 ? (
+        ) : displayedOffers.length === 0 ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/70">
             Nu ai oferte pentru această categorie.
           </div>
         ) : (
           <div className="space-y-6">
-            {filteredOffers.map((offer) => {
+            {displayedOffers.map((offer) => {
               const request = offer.repair_requests;
               const appointment = offer.repair_appointments?.[0];
+              const isRejectedFocus = offer.status === "rejected";
               const affectedPartLabels = getAffectedPartLabels(
                 request?.service_details,
               );
@@ -652,8 +835,12 @@ export default function WorkshopMyOffersPage() {
                     ? [fallbackDamageTypeLabel]
                     : [];
 
-              const workshopBadge =
-                appointment?.status === "confirmed"
+              const workshopBadge = isRejectedFocus
+                ? {
+                    text: "OFERTĂ REFUZATĂ",
+                    color: "red" as const,
+                  }
+                : appointment?.status === "confirmed"
                   ? {
                       text: "Programare confirmată",
                       color: "green" as const,
@@ -727,6 +914,14 @@ export default function WorkshopMyOffersPage() {
 
                   <RequestClientName name={request?.clientName} />
 
+                  {isRejectedFocus && (
+                    <div className="mt-4 rounded-[24px] border border-red-200 bg-red-50 p-5">
+                      <p className="text-sm font-semibold leading-6 text-red-800">
+                        Clientul a ales un alt service pentru această lucrare.
+                      </p>
+                    </div>
+                  )}
+
                   {routeEstimate && (
                     <div className="mt-4 [&>section]:mb-0">
                       <TowingRouteEstimateCard
@@ -752,7 +947,9 @@ export default function WorkshopMyOffersPage() {
                         : "Clientul aduce mașina"
                     }
                     statusText={
-                      appointment?.status === "customer_proposed"
+                      isRejectedFocus
+                        ? "Ofertă refuzată"
+                        : appointment?.status === "customer_proposed"
                         ? "Clientul a propus altă dată"
                         : appointment?.status === "workshop_proposed"
                           ? "Așteaptă confirmarea clientului"
@@ -773,37 +970,39 @@ export default function WorkshopMyOffersPage() {
                     </div>
                   )}
 
-                  <AppointmentActions
-                    showConfirm={appointment?.status === "customer_proposed"}
-                    confirming={confirmingOfferId === offer.id}
-                    confirmDisabled={confirmingOfferId === offer.id}
-                    onConfirm={() => {
-                      if (!appointment) {
-                        alert("Programarea nu a fost găsită.");
-                        return;
-                      }
+                  {!isRejectedFocus && (
+                    <AppointmentActions
+                      showConfirm={appointment?.status === "customer_proposed"}
+                      confirming={confirmingOfferId === offer.id}
+                      confirmDisabled={confirmingOfferId === offer.id}
+                      onConfirm={() => {
+                        if (!appointment) {
+                          alert("Programarea nu a fost găsită.");
+                          return;
+                        }
 
-                      confirmAppointment(offer, appointment);
-                    }}
-                    onChat={() => {
-                      if (!request?.id) {
-                        alert("Lucrarea nu a fost găsită.");
-                        return;
-                      }
+                        confirmAppointment(offer, appointment);
+                      }}
+                      onChat={() => {
+                        if (!request?.id) {
+                          alert("Lucrarea nu a fost găsită.");
+                          return;
+                        }
 
-                      router.push(`/chat/${request.id}?offerId=${offer.id}`);
-                    }}
-                    onChangeDate={() => {
-                      if (!request?.id) {
-                        alert("Lucrarea nu a fost găsită.");
-                        return;
-                      }
+                        router.push(`/chat/${request.id}?offerId=${offer.id}`);
+                      }}
+                      onChangeDate={() => {
+                        if (!request?.id) {
+                          alert("Lucrarea nu a fost găsită.");
+                          return;
+                        }
 
-                      router.push(
-                        `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=workshop`,
-                      );
-                    }}
-                  />
+                        router.push(
+                          `/customer/schedule-damage/${request.id}?offerId=${offer.id}&from=workshop`,
+                        );
+                      }}
+                    />
+                  )}
                 </article>
               );
             })}
