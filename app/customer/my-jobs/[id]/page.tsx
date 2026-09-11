@@ -1,12 +1,23 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Home } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import ImageGallery from "@/app/components/ImageGallery";
-import { formatProgressStatus } from "@/lib/work-progress/workflows";
+import {
+  formatProgressStatus,
+  normalizeProgressStatus,
+} from "@/lib/work-progress/workflows";
+import { useTowingLiveLocation } from "@/lib/hooks/useTowingLiveLocation";
+import { isValidTowingCoordinate } from "@/lib/towing/towing-live-tracking";
+
+const TowingLiveTrackingMap = dynamic(
+  () => import("@/app/components/towing/TowingLiveTrackingMap"),
+  { ssr: false },
+);
 
 type WorkProgressUpdate = {
   id: string;
@@ -48,6 +59,14 @@ export default function CustomerJobDetailPage() {
     request?.status === "completed" ||
     latestStatus === "Ready" ||
     latestStatus === "Gata";
+  const normalizedLatestStatus = normalizeProgressStatus(latestStatus);
+  const liveTrackingEnabled =
+    request?.service_type === "towing" &&
+    normalizedLatestStatus === "Dispatch";
+  const liveTracking = useTowingLiveLocation({
+    requestId,
+    enabled: liveTrackingEnabled,
+  });
 
   const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
@@ -191,6 +210,16 @@ export default function CustomerJobDetailPage() {
 
   if (!request) return null;
 
+  const pickupCoordinateCandidate = {
+    lat: request.pickup_lat,
+    lng: request.pickup_lng,
+  };
+  const pickupCoordinate = isValidTowingCoordinate(
+    pickupCoordinateCandidate,
+  )
+    ? pickupCoordinateCandidate
+    : null;
+
   const submitReview = async () => {
     if (!request || !offer || rating === 0 || existingReview) return;
 
@@ -277,6 +306,102 @@ export default function CustomerJobDetailPage() {
             <InfoCard label="An fabricație" value={request.car_year} />
             <InfoCard label="Localitate" value={request.city} />
           </div>
+
+          {liveTrackingEnabled && (
+            <section className="mt-6 rounded-3xl bg-black p-5 text-white">
+              {liveTracking.loading && !liveTracking.row ? (
+                <>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">
+                    Tracking platformă
+                  </p>
+                  <p className="mt-2 text-sm text-white/55">
+                    Se verifică locația platformei...
+                  </p>
+                </>
+              ) : liveTracking.state === "live" ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
+                    <h2 className="text-lg font-black">
+                      Platforma este în drum
+                    </h2>
+                  </div>
+                  <p className="mt-1 text-sm text-white/55">
+                    Locația se actualizează în timp real
+                  </p>
+                </>
+              ) : liveTracking.state === "stale" ? (
+                <>
+                  <h2 className="text-lg font-black">
+                    Locația platformei este momentan indisponibilă
+                  </h2>
+                  <p className="mt-1 text-sm text-amber-300">
+                    {formatTrackingAge(
+                      liveTracking.row?.position_updated_at,
+                      liveTracking.now,
+                      true,
+                    )}
+                  </p>
+                </>
+              ) : liveTracking.state === "stopped" ? (
+                <>
+                  <h2 className="text-lg font-black">
+                    Trackingul locației este oprit
+                  </h2>
+                  <p className="mt-1 text-sm text-white/55">
+                    Service-ul nu transmite locația în acest moment.
+                  </p>
+                </>
+              ) : liveTracking.state === "error" ? (
+                <>
+                  <h2 className="text-lg font-black">
+                    Locația platformei nu este disponibilă
+                  </h2>
+                  <p className="mt-1 text-sm text-red-300" role="alert">
+                    {liveTracking.error}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-lg font-black">
+                    Trackingul nu a început încă
+                  </h2>
+                  <p className="mt-1 text-sm text-white/55">
+                    Locația va apărea după ce service-ul pornește trackingul.
+                  </p>
+                </>
+              )}
+
+              {pickupCoordinate &&
+                (liveTracking.state === "live" ||
+                  liveTracking.state === "stale") && (
+                  <TowingLiveTrackingMap
+                    pickup={pickupCoordinate}
+                    platform={
+                      liveTracking.state === "live"
+                        ? liveTracking.coordinate
+                        : null
+                    }
+                  />
+                )}
+
+              {liveTracking.state === "live" && (
+                <p className="mt-3 text-xs font-semibold text-white/50">
+                  {formatTrackingAge(
+                    liveTracking.row?.position_updated_at,
+                    liveTracking.now,
+                    false,
+                  )}
+                </p>
+              )}
+
+              {liveTracking.state === "stale" && (
+                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-white/40">
+                  Harta afișează doar locația de preluare
+                </p>
+              )}
+            </section>
+          )}
 
           <div className="mt-8">
             <div className="mb-4 flex items-center justify-between">
@@ -493,6 +618,34 @@ export default function CustomerJobDetailPage() {
       )}
     </main>
   );
+}
+
+function formatTrackingAge(
+  updatedAt: string | null | undefined,
+  now: number,
+  stale: boolean,
+) {
+  if (!updatedAt) {
+    return stale
+      ? "Ultima actualizare nu este disponibilă"
+      : "Actualizat acum";
+  }
+
+  const timestamp = Date.parse(updatedAt);
+  if (!Number.isFinite(timestamp)) {
+    return stale
+      ? "Ultima actualizare nu este disponibilă"
+      : "Actualizat acum";
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((now - timestamp) / 1_000));
+  const prefix = stale ? "Ultima actualizare acum" : "Actualizat acum";
+
+  if (elapsedSeconds < 5) return stale ? `${prefix} câteva secunde` : prefix;
+  if (elapsedSeconds < 60) return `${prefix} ${elapsedSeconds} secunde`;
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  return `${prefix} ${elapsedMinutes} ${elapsedMinutes === 1 ? "minut" : "minute"}`;
 }
 
 function InfoCard({

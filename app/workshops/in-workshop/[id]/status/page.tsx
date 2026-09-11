@@ -12,11 +12,13 @@ import {
   type ProgressStatus,
 } from "@/lib/work-progress/workflows";
 import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
+import { useTowingLiveTracking } from "@/lib/hooks/useTowingLiveTracking";
 
 type RequestSummary = {
   car_brand: string | null;
   car_model: string | null;
   service_type: string | null;
+  accepted_offer_id: string | null;
 };
 
 export default function WorkStatusPage() {
@@ -32,10 +34,17 @@ export default function WorkStatusPage() {
   const [activeStatus, setActiveStatus] = useState<ProgressStatus | null>(null);
   const [savingStatus, setSavingStatus] = useState<ProgressStatus | null>(null);
   const [workflowBlocked, setWorkflowBlocked] = useState(false);
+  const [appointmentId, setAppointmentId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
+
+  const tracking = useTowingLiveTracking({
+    requestId,
+    appointmentId,
+  });
+  const markTrackingDisconnected = tracking.markDisconnected;
 
   useEffect(() => {
     let active = true;
@@ -55,7 +64,9 @@ export default function WorkStatusPage() {
         const [requestResult, progressResult] = await Promise.all([
           supabase
             .from("repair_requests")
-            .select("car_brand, car_model, status, service_type")
+            .select(
+              "car_brand, car_model, status, service_type, accepted_offer_id",
+            )
             .eq("id", requestId)
             .maybeSingle(),
           supabase
@@ -80,6 +91,38 @@ export default function WorkStatusPage() {
         const resolvedServiceType = resolveRepairServiceType(
           requestResult.data.service_type,
         );
+
+        if (
+          resolvedServiceType === "towing" &&
+          requestResult.data.accepted_offer_id
+        ) {
+          const [appointmentResult, trackingResult] = await Promise.all([
+            supabase
+              .from("repair_appointments")
+              .select("id")
+              .eq("request_id", requestId)
+              .eq("offer_id", requestResult.data.accepted_offer_id)
+              .eq("workshop_id", authData.user.id)
+              .eq("status", "confirmed")
+              .order("updated_at", { ascending: false })
+              .limit(1)
+              .maybeSingle(),
+            supabase
+              .from("towing_live_locations")
+              .select("is_active")
+              .eq("request_id", requestId)
+              .maybeSingle(),
+          ]);
+
+          if (appointmentResult.error) throw appointmentResult.error;
+          if (trackingResult.error) throw trackingResult.error;
+          if (!active) return;
+
+          setAppointmentId(appointmentResult.data?.id ?? null);
+          if (trackingResult.data?.is_active === true) {
+            markTrackingDisconnected();
+          }
+        }
 
         setServiceType(
           resolvedServiceType ?? requestResult.data.service_type,
@@ -135,7 +178,7 @@ export default function WorkStatusPage() {
     return () => {
       active = false;
     };
-  }, [requestId, router]);
+  }, [markTrackingDisconnected, requestId, router]);
 
   const changeStatus = async (status: ProgressStatus) => {
     if (savingRef.current || workflowBlocked) return;
@@ -161,6 +204,18 @@ export default function WorkStatusPage() {
     setFeedback(null);
 
     try {
+      if (serviceType === "towing" && status === "Vehicle picked up") {
+        const stopped = await tracking.stop();
+        if (!stopped) {
+          setFeedback({
+            type: "error",
+            message:
+              "Trackingul local a fost oprit, dar oprirea pe server a eșuat. Etapa nu a fost schimbată.",
+          });
+          return;
+        }
+      }
+
       await saveWorkProgressUpdate({
         requestId,
         senderId: userId,
@@ -280,6 +335,59 @@ export default function WorkStatusPage() {
               );
             })}
           </div>
+
+          {serviceType === "towing" && activeStatus === "Dispatch" && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="font-semibold">Tracking locație</p>
+
+              {tracking.state === "disconnected" && (
+                <p className="mt-1 text-sm text-amber-300">
+                  Trackingul anterior nu mai este conectat. Repornește tracking.
+                </p>
+              )}
+
+              {tracking.state === "starting" && (
+                <p className="mt-1 text-sm text-white/55">
+                  Se solicită accesul la locație...
+                </p>
+              )}
+
+              {tracking.state === "active" && (
+                <p className="mt-1 text-sm text-emerald-300">
+                  Locația se transmite clientului
+                </p>
+              )}
+
+              {tracking.error && (
+                <p className="mt-1 text-sm text-red-300" role="alert">
+                  {tracking.error}
+                </p>
+              )}
+
+              <button
+                type="button"
+                disabled={tracking.state === "starting" || !appointmentId}
+                onClick={() => {
+                  if (tracking.state === "active") {
+                    void tracking.stop();
+                  } else {
+                    void tracking.start();
+                  }
+                }}
+                className="mt-3 rounded-full bg-orange-500 px-5 py-2 text-sm font-bold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {tracking.state === "active"
+                  ? "Oprește tracking"
+                  : "Pornește tracking"}
+              </button>
+
+              {!appointmentId && (
+                <p className="mt-2 text-xs text-red-300">
+                  Programarea confirmată nu a fost găsită.
+                </p>
+              )}
+            </div>
+          )}
 
           {feedback && (
             <div
