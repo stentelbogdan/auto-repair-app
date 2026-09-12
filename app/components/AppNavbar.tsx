@@ -62,6 +62,7 @@ export default function AppNavbar() {
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [roleParam, setRoleParam] = useState<Role | null>(null);
   const lastProgressCountRef = useRef(0);
+  const progressCountInitializedRef = useRef(false);
   const [showProgressToast, setShowProgressToast] = useState(false);
   const isAdmin = userRoles.includes("admin");
   const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
@@ -620,9 +621,9 @@ export default function AppNavbar() {
       const nextCount = Number(data || 0);
 
       if (
+        progressCountInitializedRef.current &&
         isClientMode &&
-        nextCount > lastProgressCountRef.current &&
-        lastProgressCountRef.current !== 0
+        nextCount > lastProgressCountRef.current
       ) {
         setShowProgressToast(true);
 
@@ -631,6 +632,7 @@ export default function AppNavbar() {
         }, 4000);
       }
 
+      progressCountInitializedRef.current = true;
       lastProgressCountRef.current = nextCount;
       setProgressUnreadCount(nextCount);
     };
