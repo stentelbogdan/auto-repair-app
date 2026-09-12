@@ -21,6 +21,7 @@ import {
   resolveRepairServiceType,
 } from "@/lib/repair-requests/service-types";
 import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
+import { useTowingLiveTrackingControl } from "@/lib/towing/TowingLiveTrackingProvider";
 
 type Role = "customer" | "workshop";
 
@@ -49,6 +50,7 @@ export default function AppNavbar() {
   const { navigate, runLocked, isNavigating } = useSafeNavigation({
     timeoutMs: 2500,
   });
+  const { stopActiveTracking } = useTowingLiveTrackingControl();
 
   const [, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -1174,6 +1176,12 @@ export default function AppNavbar() {
   const handleLogout = async () => {
     setLoggingOut(true);
 
+    const stopped = await stopActiveTracking();
+    if (!stopped) {
+      setLoggingOut(false);
+      return;
+    }
+
     localStorage.removeItem("activeRole");
     await supabase.auth.signOut();
 
@@ -1218,6 +1226,9 @@ export default function AppNavbar() {
       if (freshRoles === null) {
         return;
       }
+
+      const stopped = await stopActiveTracking();
+      if (!stopped) return;
 
       if (!freshRoles.includes("customer")) {
         navigate("/account?role=customer");

@@ -12,7 +12,7 @@ import {
   type ProgressStatus,
 } from "@/lib/work-progress/workflows";
 import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
-import { useTowingLiveTracking } from "@/lib/hooks/useTowingLiveTracking";
+import { useTowingLiveTrackingSession } from "@/lib/towing/TowingLiveTrackingProvider";
 
 type RequestSummary = {
   car_brand: string | null;
@@ -40,9 +40,10 @@ export default function WorkStatusPage() {
     message: string;
   } | null>(null);
 
-  const tracking = useTowingLiveTracking({
+  const tracking = useTowingLiveTrackingSession({
     requestId,
-    appointmentId,
+    appointmentId: appointmentId ?? "",
+    etaEnabled: serviceType === "towing" && activeStatus === "Dispatch",
   });
   const markTrackingDisconnected = tracking.markDisconnected;
 

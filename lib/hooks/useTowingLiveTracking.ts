@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  requestTowingLiveEta,
   stopTowingLiveTracking,
   upsertTowingLiveLocation,
 } from "@/lib/supabase/towing-live-tracking";
 
 const MIN_PUBLISH_INTERVAL_MS = 5_000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
+const ETA_REQUEST_INTERVAL_MS = 15_000;
 const MIN_MOVEMENT_METERS = 15;
 // Fixurile peste acest prag sunt prea imprecise pentru tracking-ul MVP.
 const MAX_ACCURACY_METERS = 120;
@@ -31,6 +33,7 @@ type ValidGpsPosition = {
 type UseTowingLiveTrackingInput = {
   requestId: string;
   appointmentId: string | null;
+  etaEnabled: boolean;
 };
 
 function distanceInMeters(
@@ -72,6 +75,7 @@ function getGeolocationErrorMessage(error: GeolocationPositionError) {
 export function useTowingLiveTracking({
   requestId,
   appointmentId,
+  etaEnabled,
 }: UseTowingLiveTrackingInput) {
   const [state, setState] = useState<TrackingState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +87,11 @@ export function useTowingLiveTracking({
   const lastPublishedRef = useRef<PublishedPosition | null>(null);
   const lastValidPositionRef = useRef<ValidGpsPosition | null>(null);
   const publishPromiseRef = useRef<Promise<void> | null>(null);
+  const etaEnabledRef = useRef(etaEnabled);
+  const etaRequestPromiseRef = useRef<Promise<void> | null>(null);
+  const etaAbortControllerRef = useRef<AbortController | null>(null);
+  const lastEtaAttemptAtRef = useRef(0);
+  const etaAuthUnavailableRef = useRef(false);
 
   const clearLocalPublisher = () => {
     generationRef.current += 1;
@@ -99,6 +108,10 @@ export function useTowingLiveTracking({
 
     lastPublishedRef.current = null;
     lastValidPositionRef.current = null;
+    etaAbortControllerRef.current?.abort();
+    etaAbortControllerRef.current = null;
+    lastEtaAttemptAtRef.current = 0;
+    etaAuthUnavailableRef.current = false;
   };
 
   const stop = async () => {
@@ -170,6 +183,54 @@ export function useTowingLiveTracking({
 
     if (generationRef.current !== generation || !mountedRef.current) return;
 
+    const requestLiveEta = (immediate: boolean) => {
+      if (
+        generationRef.current !== generation ||
+        !mountedRef.current ||
+        !etaEnabledRef.current ||
+        etaAuthUnavailableRef.current ||
+        etaRequestPromiseRef.current
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      if (
+        !immediate &&
+        now - lastEtaAttemptAtRef.current < ETA_REQUEST_INTERVAL_MS
+      ) {
+        return;
+      }
+
+      lastEtaAttemptAtRef.current = now;
+      const controller = new AbortController();
+      etaAbortControllerRef.current = controller;
+
+      const etaRequestPromise = requestTowingLiveEta(
+        requestId,
+        controller.signal,
+      ).then((result) => {
+        if (generationRef.current !== generation || !mountedRef.current) return;
+
+        if (
+          result.status === "missing_token" ||
+          result.status === "unauthorized"
+        ) {
+          etaAuthUnavailableRef.current = true;
+        }
+      });
+      etaRequestPromiseRef.current = etaRequestPromise;
+
+      void etaRequestPromise.finally(() => {
+        if (etaRequestPromiseRef.current === etaRequestPromise) {
+          etaRequestPromiseRef.current = null;
+        }
+        if (etaAbortControllerRef.current === controller) {
+          etaAbortControllerRef.current = null;
+        }
+      });
+    };
+
     const publishPosition = (
       position: ValidGpsPosition,
       heartbeatOnly: boolean,
@@ -213,6 +274,7 @@ export function useTowingLiveTracking({
             return;
           }
 
+          const isFirstPublish = lastPublishedRef.current === null;
           lastPublishedRef.current = {
             latitude: position.latitude,
             longitude: position.longitude,
@@ -220,6 +282,7 @@ export function useTowingLiveTracking({
           };
           setState("active");
           setError(null);
+          requestLiveEta(isFirstPublish);
         })
         .catch((publishError) => {
           if (generationRef.current !== generation || !mountedRef.current) {
@@ -312,6 +375,14 @@ export function useTowingLiveTracking({
       clearLocalPublisher();
     };
   }, []);
+
+  useEffect(() => {
+    etaEnabledRef.current = etaEnabled;
+    if (!etaEnabled) {
+      etaAbortControllerRef.current?.abort();
+      etaAbortControllerRef.current = null;
+    }
+  }, [etaEnabled]);
 
   const markDisconnected = useCallback(() => {
     setState("disconnected");

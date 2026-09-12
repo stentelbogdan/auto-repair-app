@@ -12,7 +12,10 @@ import {
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
 import { useTowingLiveLocation } from "@/lib/hooks/useTowingLiveLocation";
-import { isValidTowingCoordinate } from "@/lib/towing/towing-live-tracking";
+import {
+  formatTowingLiveEta,
+  isValidTowingCoordinate,
+} from "@/lib/towing/towing-live-tracking";
 
 const TowingLiveTrackingMap = dynamic(
   () => import("@/app/components/towing/TowingLiveTrackingMap"),
@@ -67,6 +70,10 @@ export default function CustomerJobDetailPage() {
     requestId,
     enabled: liveTrackingEnabled,
   });
+  const liveEta =
+    liveTracking.state === "live"
+      ? formatTowingLiveEta(liveTracking.row, liveTracking.now)
+      : null;
 
   const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
@@ -329,6 +336,11 @@ export default function CustomerJobDetailPage() {
                   <p className="mt-1 text-sm text-white/55">
                     Locația se actualizează în timp real
                   </p>
+                  {liveEta && (
+                    <p className="mt-2 text-base font-bold text-white/85">
+                      {liveEta}
+                    </p>
+                  )}
                 </>
               ) : liveTracking.state === "stale" ? (
                 <>

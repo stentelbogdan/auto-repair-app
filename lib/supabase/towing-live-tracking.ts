@@ -41,6 +41,53 @@ export async function stopTowingLiveTracking(requestId: string) {
   if (error) throw new Error(error.message);
 }
 
+export type TowingLiveEtaRequestResult =
+  | { status: "updated" | "skipped" }
+  | { status: "missing_token" | "unauthorized" | "eligibility_changed" }
+  | { status: "error" };
+
+export async function requestTowingLiveEta(
+  requestId: string,
+  signal: AbortSignal,
+): Promise<TowingLiveEtaRequestResult> {
+  const { data, error } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (error || !accessToken) return { status: "missing_token" };
+
+  try {
+    const response = await fetch("/api/routing/towing/live-eta", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ requestId }),
+      signal,
+    });
+
+    if (response.status === 401) return { status: "unauthorized" };
+    if (response.status === 409) return { status: "eligibility_changed" };
+    if (!response.ok) return { status: "error" };
+
+    const payload: unknown = await response.json();
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("status" in payload) ||
+      (payload.status !== "updated" && payload.status !== "skipped")
+    ) {
+      return { status: "error" };
+    }
+
+    return { status: payload.status };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return { status: "error" };
+    }
+    return { status: "error" };
+  }
+}
+
 export async function getTowingLiveLocation(requestId: string) {
   const { data, error } = await supabase
     .from("towing_live_locations")
