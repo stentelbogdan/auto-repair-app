@@ -63,7 +63,8 @@ export default function ScheduleDamagePage() {
   const [customerNote, setCustomerNote] = useState("");
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const preserveInitialTowingTimeRef = useRef(false);
+  const preserveInitialTimeRef = useRef(false);
+  const prefilledAppointmentContextRef = useRef<string | null>(null);
 
   const minDate = useMemo(() => {
     return toLocalDateValue(new Date());
@@ -164,7 +165,7 @@ export default function ScheduleDamagePage() {
           }
 
           if (initialTime) {
-            preserveInitialTowingTimeRef.current =
+            preserveInitialTimeRef.current =
               requestRow.service_type === "towing";
             setAppointmentTime(initialTime);
           }
@@ -193,6 +194,52 @@ export default function ScheduleDamagePage() {
           alert("Oferta nu a fost găsită pentru acest service.");
           router.push("/workshops/my-offers");
           return;
+        }
+
+        const prefillContext = `${requestId}:${offerRow.id}:workshop`;
+
+        if (prefilledAppointmentContextRef.current !== prefillContext) {
+          const { data: currentAppointment, error: appointmentError } =
+            await supabase
+              .from("repair_appointments")
+              .select(
+                "offer_id, request_id, proposed_date, proposed_time, appointment_date, appointment_time",
+              )
+              .eq("offer_id", offerRow.id)
+              .eq("request_id", requestId)
+              .eq("workshop_id", authData.user.id)
+              .maybeSingle();
+
+          if (appointmentError) throw appointmentError;
+
+          const initialDateTime =
+            currentAppointment?.proposed_date &&
+            currentAppointment.proposed_time
+              ? {
+                  date: currentAppointment.proposed_date,
+                  time: currentAppointment.proposed_time,
+                }
+              : currentAppointment?.appointment_date &&
+                  currentAppointment.appointment_time
+                ? {
+                    date: currentAppointment.appointment_date,
+                    time: currentAppointment.appointment_time,
+                  }
+                : offerRow.available_date && offerRow.available_time
+                  ? {
+                      date: offerRow.available_date,
+                      time: offerRow.available_time,
+                    }
+                  : null;
+
+          prefilledAppointmentContextRef.current = prefillContext;
+
+          if (initialDateTime) {
+            preserveInitialTimeRef.current = true;
+            setAppointmentDate(initialDateTime.date);
+            setDateInput(initialDateTime.date.split("-").reverse().join("."));
+            setAppointmentTime(initialDateTime.time);
+          }
         }
 
         setOffer(offerRow as RepairOffer);
@@ -225,6 +272,51 @@ export default function ScheduleDamagePage() {
         alert("Oferta nu a fost găsită.");
         router.push("/offers");
         return;
+      }
+
+      const prefillContext = `${foundRequest.id}:${foundOffer.id}`;
+
+      if (prefilledAppointmentContextRef.current !== prefillContext) {
+        const { data: currentAppointment, error: appointmentError } =
+          await supabase
+            .from("repair_appointments")
+            .select(
+              "offer_id, request_id, proposed_date, proposed_time, appointment_date, appointment_time",
+            )
+            .eq("offer_id", foundOffer.id)
+            .eq("request_id", foundRequest.id)
+            .maybeSingle();
+
+        if (appointmentError) throw appointmentError;
+
+        const initialDateTime =
+          currentAppointment?.proposed_date &&
+          currentAppointment.proposed_time
+            ? {
+                date: currentAppointment.proposed_date,
+                time: currentAppointment.proposed_time,
+              }
+            : currentAppointment?.appointment_date &&
+                currentAppointment.appointment_time
+              ? {
+                  date: currentAppointment.appointment_date,
+                  time: currentAppointment.appointment_time,
+                }
+              : foundOffer.available_date && foundOffer.available_time
+                ? {
+                    date: foundOffer.available_date,
+                    time: foundOffer.available_time,
+                  }
+                : null;
+
+        prefilledAppointmentContextRef.current = prefillContext;
+
+        if (initialDateTime) {
+          preserveInitialTimeRef.current = true;
+          setAppointmentDate(initialDateTime.date);
+          setDateInput(initialDateTime.date.split("-").reverse().join("."));
+          setAppointmentTime(initialDateTime.time);
+        }
       }
 
       setRequest(foundRequest);
@@ -308,8 +400,8 @@ export default function ScheduleDamagePage() {
         currentAppointmentId = currentAppointment?.id || null;
       }
 
-      if (preserveInitialTowingTimeRef.current) {
-        preserveInitialTowingTimeRef.current = false;
+      if (preserveInitialTimeRef.current) {
+        preserveInitialTimeRef.current = false;
       } else {
         setAppointmentTime("");
       }
