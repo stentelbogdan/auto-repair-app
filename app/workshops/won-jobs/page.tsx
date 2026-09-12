@@ -668,53 +668,32 @@ export default function WorkshopWonJobsPage() {
   }, [jobs]);
 
   const startJob = async (job: WonJob) => {
-    const staleJobMessage =
-      "Lucrarea nu poate fi pornită deoarece starea ei s-a schimbat. Reîncarcă pagina și încearcă din nou.";
-
-    if (
-      startingJobIdsRef.current.has(job.requestId) ||
-      job.offerStatus !== "accepted" ||
-      job.appointment?.status !== "confirmed" ||
-      job.request.status !== "matched"
-    ) {
-      alert(staleJobMessage);
-      return;
-    }
+    if (startingJobIdsRef.current.has(job.requestId)) return;
 
     startingJobIdsRef.current.add(job.requestId);
 
     try {
-      const { data, error } = await supabase
-        .from("repair_requests")
-        .update({ status: "in_progress" })
-        .eq("id", job.requestId)
-        .eq("status", "matched")
-        .select("id, status")
-        .maybeSingle();
+      const { error } = await supabase.rpc("start_workshop_job", {
+        p_request_id: job.requestId,
+      });
 
       if (error) throw error;
 
-      if (!data) {
-        alert(staleJobMessage);
-        return;
-      }
-
-      setJobs((prev) =>
-        prev.map((j) =>
-          j.requestId === job.requestId
-            ? {
-                ...j,
-                request: {
-                  ...j.request,
-                  status: "in_progress",
-                },
-              }
-            : j,
-        ),
-      );
+      router.push("/workshops/dashboard");
     } catch (err) {
       console.error("Failed to start job:", err);
-      alert("Nu am putut începe lucrarea.");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : typeof err === "object" &&
+              err !== null &&
+              "message" in err &&
+              typeof err.message === "string"
+            ? err.message
+            : "";
+      const message = errorMessage.trim() || "Eroare necunoscută.";
+
+      alert(`Nu am putut începe lucrarea: ${message}`);
     } finally {
       startingJobIdsRef.current.delete(job.requestId);
     }
