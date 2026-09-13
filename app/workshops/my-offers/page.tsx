@@ -24,6 +24,11 @@ import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
+import {
+  getWorkshopRequestMetrics,
+  type RepairRequestMetrics as RepairRequestMetricsValue,
+} from "@/lib/supabase/repair-request-metrics";
 import {
   isRepairServiceType,
   resolveRepairServiceType,
@@ -110,6 +115,9 @@ export default function WorkshopMyOffersPage() {
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
+  const [metricsByRequestId, setMetricsByRequestId] = useState<
+    Map<string, RepairRequestMetricsValue>
+  >(new Map());
   const [focusedRejectedOffer, setFocusedRejectedOffer] =
     useState<RepairOffer | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,16 +207,24 @@ export default function WorkshopMyOffersPage() {
         return;
       }
 
-      const requestIds = (data ?? []).flatMap((row) => {
-        const request = Array.isArray(row.repair_requests)
-          ? row.repair_requests[0]
-          : row.repair_requests;
+      const requestIds = [
+        ...new Set(
+          (data ?? []).flatMap((row) => {
+            const request = Array.isArray(row.repair_requests)
+              ? row.repair_requests[0]
+              : row.repair_requests;
 
-        return request?.id ? [String(request.id)] : [];
-      });
-      const clientNamesByRequestId = await getWorkshopRequestClientNames(
-        requestIds,
-      );
+            return request?.id ? [String(request.id)] : [];
+          }),
+        ),
+      ];
+      const [clientNamesByRequestId, requestMetrics] = await Promise.all([
+        getWorkshopRequestClientNames(requestIds),
+        getWorkshopRequestMetrics(requestIds).catch((error) => {
+          console.error("Failed to load workshop request metrics:", error);
+          return new Map<string, RepairRequestMetricsValue>();
+        }),
+      ]);
 
       if (cancelled) {
         return;
@@ -278,6 +294,7 @@ export default function WorkshopMyOffersPage() {
         };
       });
 
+      setMetricsByRequestId(requestMetrics);
       setOffers(mapped);
     };
 
@@ -783,6 +800,9 @@ export default function WorkshopMyOffersPage() {
           <div className="space-y-6">
             {displayedOffers.map((offer) => {
               const request = offer.repair_requests;
+              const requestMetrics = request?.id
+                ? metricsByRequestId.get(request.id)
+                : null;
               const appointment = offer.repair_appointments?.[0];
               const isRejectedFocus = offer.status === "rejected";
               const affectedPartLabels = getAffectedPartLabels(
@@ -910,6 +930,11 @@ export default function WorkshopMyOffersPage() {
                         color: "orange",
                       },
                     ]}
+                  />
+
+                  <RepairRequestMetrics
+                    viewCount={requestMetrics?.viewCount ?? 0}
+                    offerCount={requestMetrics?.offerCount ?? 0}
                   />
 
                   <RequestClientName name={request?.clientName} />

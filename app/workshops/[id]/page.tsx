@@ -17,6 +17,11 @@ import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-se
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
+import {
+  getWorkshopRequestMetrics,
+  type RepairRequestMetrics as RepairRequestMetricsValue,
+} from "@/lib/supabase/repair-request-metrics";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import {
   formatTowingRouteDuration,
@@ -84,6 +89,8 @@ export default function WorkshopRequestDetailsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasExistingOffer, setHasExistingOffer] = useState(false);
   const [clientName, setClientName] = useState<string | null>(null);
+  const [requestMetrics, setRequestMetrics] =
+    useState<RepairRequestMetricsValue>({ viewCount: 0, offerCount: 0 });
 
   const loadRequest = useEffectEvent(
     async ({ silent = false }: { silent?: boolean } = {}) => {
@@ -132,10 +139,17 @@ export default function WorkshopRequestDetailsPage() {
         setRequest(data);
         void recordWorkshopRequestView(data.id);
 
-        const clientNamesByRequestId = await getWorkshopRequestClientNames([
-          data.id,
+        const [clientNamesByRequestId, metricsByRequestId] = await Promise.all([
+          getWorkshopRequestClientNames([data.id]),
+          getWorkshopRequestMetrics([data.id]).catch((error) => {
+            console.error("Failed to load workshop request metrics:", error);
+            return new Map<string, RepairRequestMetricsValue>();
+          }),
         ]);
         setClientName(clientNamesByRequestId.get(data.id) ?? null);
+        setRequestMetrics(
+          metricsByRequestId.get(data.id) ?? { viewCount: 0, offerCount: 0 },
+        );
 
         const { data: existingOffer, error: existingOfferError } =
           await supabase
@@ -454,6 +468,11 @@ export default function WorkshopRequestDetailsPage() {
                 color: "orange",
               },
             ]}
+          />
+
+          <RepairRequestMetrics
+            viewCount={requestMetrics.viewCount}
+            offerCount={requestMetrics.offerCount}
           />
 
           <RequestClientName name={clientName} variant="detail" />
