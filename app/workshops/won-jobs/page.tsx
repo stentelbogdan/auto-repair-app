@@ -42,6 +42,19 @@ import RequestCategoryFilter, {
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
+const JOB_PAGE_TITLES: Record<JobFilter, string> = {
+  appointments: "PROGRAMĂRI",
+  workshop: "ÎN ATELIER",
+  completed: "FINALIZATE",
+};
+
+const JOB_CATEGORY_TITLES: Record<Exclude<RequestCategory, "all">, string> = {
+  bodywork: "DAUNE ESTETICE",
+  mechanical: "DAUNE MECANICE",
+  wheels: "ROȚI ȘI ANVELOPE",
+  towing: "TRACTĂRI AUTO",
+};
+
 const INITIAL_CATEGORY_BY_TAB: Record<JobFilter, RequestCategory> = {
   appointments: "all",
   workshop: "all",
@@ -876,6 +889,14 @@ export default function WorkshopWonJobsPage() {
   return (
     <main className="min-h-screen bg-black px-6 pb-32 pt-4 text-white">
       <div className="mx-auto max-w-7xl">
+        <section className="mb-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
+            {activeCategory === "all"
+              ? JOB_PAGE_TITLES[activeTab]
+              : JOB_CATEGORY_TITLES[activeCategory]}
+          </p>
+        </section>
+
         <div className="mb-8 w-full lg:ml-auto lg:w-96">
           <input
             value={search}
@@ -885,7 +906,7 @@ export default function WorkshopWonJobsPage() {
           />
         </div>
 
-        <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
+        <div className="mb-6 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => changeTab("appointments")}
