@@ -23,6 +23,14 @@ const INITIAL_CATEGORY_BY_TAB: Record<MyRequestsTab, RequestCategory> = {
   archive: "all",
 };
 
+const MY_REQUESTS_PAGE_TITLES: Record<RequestCategory, string> = {
+  all: "CERERILE MELE",
+  bodywork: "DAUNE ESTETICE",
+  mechanical: "DAUNE MECANICE",
+  wheels: "ROȚI ȘI ANVELOPE",
+  towing: "TRACTĂRI AUTO",
+};
+
 export default function MyRequestsPage() {
   /*
    * Acest router rămâne numai pentru redirectul automat
@@ -394,18 +402,13 @@ export default function MyRequestsPage() {
   };
 
   return (
-    <main className="min-h-[calc(100svh-236px)] bg-[#111111] px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-5 text-white">
+    <main className="min-h-[calc(100svh-236px)] bg-[#111111] px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-4 text-white">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-3 flex justify-end">
-          <button
-            type="button"
-            onClick={goToPostChoice}
-            disabled={isNavigating}
-            className="-translate-y-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            + Postează
-          </button>
-        </div>
+        <section className="mb-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
+            {MY_REQUESTS_PAGE_TITLES[activeCategory]}
+          </p>
+        </section>
 
         <div className="mb-5 flex gap-2 overflow-x-auto">
           <button
