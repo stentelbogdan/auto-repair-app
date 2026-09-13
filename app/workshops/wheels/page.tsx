@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import CarHeader from "@/app/components/CarHeader";
 import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 import RequestClientName from "@/app/components/RequestClientName";
+import WorkshopRequestsHeader from "@/app/components/WorkshopRequestsHeader";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
@@ -401,24 +402,13 @@ export default function WorkshopWheelsPage() {
   if (!authorized) return null;
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
+    <main className="min-h-screen bg-black px-6 pb-10 pt-6 text-white md:py-10">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Service auto
-            </p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Roți și anvelope disponibile
-            </h1>
-            <p className="mt-3 max-w-2xl text-white/70">
-              Verifică serviciile solicitate și trimite oferta ta clientului.
-            </p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-            {requests.length} lucrări
-          </div>
-        </div>
+        <WorkshopRequestsHeader
+          title="Roți și anvelope"
+          description="Verifică serviciile solicitate și trimite oferta ta clientului."
+          count={requests.length}
+        />
 
         {loadingRequests ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">

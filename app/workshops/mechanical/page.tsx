@@ -16,6 +16,7 @@ import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
+import WorkshopRequestsHeader from "@/app/components/WorkshopRequestsHeader";
 import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
@@ -464,25 +465,13 @@ export default function WorkshopsPage() {
         );
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
+    <main className="min-h-screen bg-black px-6 pb-10 pt-6 text-white md:py-10">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.2em] text-white/40">
-              Service auto
-            </p>
-            <h1 className="mt-2 text-3xl font-bold md:text-4xl">
-              Daune mecanice disponibile
-            </h1>
-            <p className="mt-3 max-w-2xl text-white/70">
-              Alege o problemă mecanică și trimite oferta ta clientului.
-            </p>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-            {filteredRequests.length} lucrări
-          </div>
-        </div>
+        <WorkshopRequestsHeader
+          title="Daune mecanice"
+          description="Alege o problemă mecanică și trimite oferta ta clientului."
+          count={filteredRequests.length}
+        />
 
         <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
           {filters.map((filter) => (
