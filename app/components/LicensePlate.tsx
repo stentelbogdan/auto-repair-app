@@ -21,7 +21,7 @@ export default function LicensePlate({
         priority={priority}
       />
 
-      <span className="absolute left-[26px] top-1/2 -translate-y-1/2 whitespace-nowrap text-[20px] font-black uppercase tracking-[0.0em] text-black">
+      <span className="absolute left-[24px] right-[7px] top-1/2 -translate-y-1/2 whitespace-nowrap text-center text-[20px] font-black uppercase tracking-[0.0em] text-black">
         {plate || "FĂRĂ NR."}
       </span>
     </div>
