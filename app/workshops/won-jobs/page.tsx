@@ -42,12 +42,6 @@ import RequestCategoryFilter, {
 
 type JobFilter = "appointments" | "workshop" | "completed";
 
-const JOB_PAGE_TITLES: Record<JobFilter, string> = {
-  appointments: "PROGRAMĂRI",
-  workshop: "ÎN ATELIER",
-  completed: "FINALIZATE",
-};
-
 const JOB_CATEGORY_TITLES: Record<Exclude<RequestCategory, "all">, string> = {
   bodywork: "DAUNE ESTETICE",
   mechanical: "DAUNE MECANICE",
@@ -892,7 +886,7 @@ export default function WorkshopWonJobsPage() {
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
             {activeCategory === "all"
-              ? JOB_PAGE_TITLES[activeTab]
+              ? "PROGRAMĂRI"
               : JOB_CATEGORY_TITLES[activeCategory]}
           </p>
         </section>
