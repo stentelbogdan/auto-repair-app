@@ -46,6 +46,14 @@ type ProfileRow = {
   role: string[] | null;
 };
 
+const OFFER_PAGE_TITLES: Record<RequestCategory, string> = {
+  all: "OFERTELE TALE",
+  bodywork: "DAUNE ESTETICE",
+  mechanical: "DAUNE MECANICE",
+  wheels: "ROȚI ȘI ANVELOPE",
+  towing: "TRACTĂRI AUTO",
+};
+
 type RepairImage = {
   name?: string;
   url?: string;
@@ -761,8 +769,14 @@ export default function WorkshopMyOffersPage() {
   };
 
   return (
-    <main className="min-h-screen bg-black px-6 py-10 text-white">
+    <main className="min-h-screen bg-black px-6 pb-10 pt-6 text-white md:py-10">
       <div className="mx-auto max-w-6xl">
+        <section className="mb-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
+            {OFFER_PAGE_TITLES[activeCategory]}
+          </p>
+        </section>
+
         <div className="mb-5">
           <RequestCategoryFilter
             activeCategory={activeCategory}
