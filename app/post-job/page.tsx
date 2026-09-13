@@ -357,18 +357,17 @@ function PostJobContent() {
   const licensePlateErrorMessage = getLicensePlateError(licensePlate);
 
   return (
-    <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
+    <main className="min-h-screen bg-[#101010] px-4 pb-5 pt-6 text-white md:py-10">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-5">
-          <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
-            Daună nouă
-          </p>
-          <h1 className="mt-2 text-2xl font-bold">Postează dauna</h1>
-          <p className="mt-2 text-sm text-white/55">
-            Încarcă poze, descrie lucrarea și primești oferte de la service-uri
+        <header className="mb-6 text-center">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-white md:text-[30px]">
+            Daună estetică
+          </h1>
+          <p className="mx-auto mt-2.5 max-w-2xl text-sm leading-5 text-white/60">
+            Încarcă poze, descrie lucrarea și primește oferte de la service-uri
             specializate.
           </p>
-        </div>
+        </header>
 
         <form
           onSubmit={handleSubmit}
