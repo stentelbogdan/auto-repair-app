@@ -231,17 +231,19 @@ function PostWheelsContent() {
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <main className="min-h-screen bg-black px-4 pb-5 pt-6 text-white md:py-10">
       <div className="mx-auto max-w-3xl">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-400">
-          Cerere nouă
-        </p>
-        <h1 className="mt-2 text-3xl font-black">Roți și anvelope</h1>
-        <p className="mt-2 text-sm leading-6 text-white/60">
-          Selectează roțile, serviciile necesare și completează datele mașinii.
-        </p>
+        <header className="mb-6 text-center">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-white md:text-[30px]">
+            Roți și anvelope
+          </h1>
+          <p className="mx-auto mt-2.5 max-w-2xl text-sm leading-5 text-white/60">
+            Selectează serviciile pentru roți și anvelope și primește oferte de
+            la service-uri specializate.
+          </p>
+        </header>
 
-        <section className="mt-6 rounded-3xl bg-white p-5 text-black shadow-2xl shadow-black/20 md:p-6">
+        <section className="rounded-3xl bg-white p-5 text-black shadow-2xl shadow-black/20 md:p-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-medium text-black/70">
