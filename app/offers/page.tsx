@@ -43,6 +43,14 @@ type OfferGroup = {
   items: CustomerOfferItem[];
 };
 
+const OFFER_PAGE_TITLES: Record<RequestCategory, string> = {
+  all: "OFERTE PRIMITE",
+  bodywork: "DAUNE ESTETICE",
+  mechanical: "DAUNE MECANICE",
+  wheels: "ROȚI ȘI ANVELOPE",
+  towing: "TRACTĂRI AUTO",
+};
+
 export default function OffersPage() {
   /*
    * Routerul rămâne doar pentru redirecturile automate:
@@ -368,13 +376,20 @@ export default function OffersPage() {
   if (!authorized) return null;
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 md:py-10">
-      <div className="mx-auto max-w-5xl space-y-4">
-        <RequestCategoryFilter
-          activeCategory={activeCategory}
-          counts={categoryCounts}
-          onChange={setActiveCategory}
-        />
+    <main className="min-h-screen bg-black px-4 pb-6 pt-4 text-white md:px-6 md:py-10">
+      <div className="mx-auto max-w-5xl">
+        <section className="mb-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
+            {OFFER_PAGE_TITLES[activeCategory]}
+          </p>
+        </section>
+
+        <div className="space-y-4">
+          <RequestCategoryFilter
+            activeCategory={activeCategory}
+            counts={categoryCounts}
+            onChange={setActiveCategory}
+          />
 
         {loadingOffers ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
@@ -684,6 +699,7 @@ export default function OffersPage() {
             })}
           </div>
         )}
+        </div>
       </div>
     </main>
   );
