@@ -1008,18 +1008,20 @@ function PostTowingContent() {
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-8 text-white">
+    <main className="min-h-screen bg-black px-4 pb-5 pt-6 text-white md:py-10">
       <div className="mx-auto max-w-3xl">
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-orange-400">
-          Cerere nouă
-        </p>
-        <h1 className="mt-2 text-3xl font-black">Tractări auto</h1>
-        <p className="mt-2 text-sm leading-6 text-white/60">
-          Completează locul de preluare, destinația și starea vehiculului.
-        </p>
+        <header className="mb-6 text-center">
+          <h1 className="text-[28px] font-bold leading-tight tracking-tight text-white md:text-[30px]">
+            Tractări auto
+          </h1>
+          <p className="mx-auto mt-2.5 max-w-2xl text-sm leading-5 text-white/60">
+            Setează preluarea și destinația și primește oferte pentru transportul
+            mașinii tale.
+          </p>
+        </header>
 
         <form onSubmit={handleSubmit} noValidate>
-          <section className="mt-6 rounded-3xl bg-white p-5 text-black shadow-2xl shadow-black/20 md:p-6">
+          <section className="rounded-3xl bg-white p-5 text-black shadow-2xl shadow-black/20 md:p-6">
             <h2 className="text-lg font-black">Vehicul</h2>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <FieldLabel label="Marca mașinii">
