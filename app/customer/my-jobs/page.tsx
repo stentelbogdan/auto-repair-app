@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -109,11 +109,23 @@ export default function MyJobsPage() {
   const [activeCategoryByTab, setActiveCategoryByTab] = useState<
     Record<JobsTab, RequestCategory>
   >(INITIAL_CATEGORY_BY_TAB);
+  const [focusRequestId, setFocusRequestId] = useState<string | null>(null);
+  const [highlightedRequestId, setHighlightedRequestId] = useState<
+    string | null
+  >(null);
+  const focusedRequestCardRef = useRef<HTMLDivElement | null>(null);
+  const consumedFocusRequestRef = useRef<string | null>(null);
+  const highlightTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
     const category = params.get("category");
+    const focusRequest = params.get("focusRequest");
+
+    if (isUuid(focusRequest)) {
+      setFocusRequestId(focusRequest);
+    }
 
     if (isValidTab(tab)) {
       setActiveTab(tab);
@@ -492,6 +504,62 @@ export default function MyJobsPage() {
             resolveRepairServiceType(request.service_type) === activeCategory,
         );
 
+  useEffect(() => {
+    if (
+      loading ||
+      !focusRequestId ||
+      consumedFocusRequestRef.current === focusRequestId
+    ) {
+      return;
+    }
+
+    const targetExists = filteredVisibleJobs.some(
+      ({ request }) => request.id === focusRequestId,
+    );
+
+    if (!targetExists || !focusedRequestCardRef.current) {
+      return;
+    }
+
+    consumedFocusRequestRef.current = focusRequestId;
+    focusedRequestCardRef.current.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+    setHighlightedRequestId(focusRequestId);
+
+    if (highlightTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedRequestId((current) =>
+        current === focusRequestId ? null : current,
+      );
+      highlightTimeoutRef.current = null;
+    }, 2000);
+
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("focusRequest") === focusRequestId) {
+      params.delete("focusRequest");
+      const query = params.toString();
+
+      router.replace(
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+        { scroll: false },
+      );
+    }
+  }, [filteredVisibleJobs, focusRequestId, loading, router]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current !== null) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const acceptAppointmentProposal = async (appointmentId: string) => {
     try {
       const { error } = await supabase
@@ -646,8 +714,17 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
+                  ref={
+                    request.id === focusRequestId
+                      ? focusedRequestCardRef
+                      : undefined
+                  }
                   onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
-                  className="cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition"
+                  className={`cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition ${
+                    highlightedRequestId === request.id
+                      ? "ring-2 ring-orange-500 ring-offset-2 ring-offset-[#111111]"
+                      : ""
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
@@ -959,6 +1036,15 @@ function getValidTimestamp(value?: string | null): number | null {
 
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function isUuid(value: string | null): value is string {
+  return Boolean(
+    value &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
+  );
 }
 
 function isNonNegativeFinite(

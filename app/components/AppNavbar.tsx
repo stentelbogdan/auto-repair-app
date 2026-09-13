@@ -43,6 +43,27 @@ function getConversationKey(requestId: string, offerId: string | null) {
   return `${requestId}::${offerId ?? "direct"}`;
 }
 
+function getCustomerJobsTargetUrl(targetUrl: string | null) {
+  if (!targetUrl?.startsWith("/customer/my-jobs")) {
+    return null;
+  }
+
+  try {
+    const parsedTarget = new URL(targetUrl, window.location.origin);
+
+    if (
+      parsedTarget.origin !== window.location.origin ||
+      parsedTarget.pathname !== "/customer/my-jobs"
+    ) {
+      return null;
+    }
+
+    return `${parsedTarget.pathname}${parsedTarget.search}${parsedTarget.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -1465,6 +1486,7 @@ export default function AppNavbar() {
       let customerStartedJobCategory: ReturnType<
         typeof resolveRepairServiceType
       > = null;
+      let customerJobsNotificationTarget: string | null = null;
 
       if (
         isWorkshopMode &&
@@ -1510,6 +1532,37 @@ export default function AppNavbar() {
             "Failed to resolve workshop appointment category:",
             error,
           );
+        }
+      }
+
+      if (
+        !isWorkshopMode &&
+        userId &&
+        (appointmentConfirmedUnreadCount > 0 || hasUnreadJobStarted)
+      ) {
+        try {
+          const { data: notification, error: notificationError } =
+            await supabase
+              .from("notifications")
+              .select("target_url")
+              .eq("recipient_id", userId)
+              .eq("recipient_role", "customer")
+              .is("read_at", null)
+              .in("type", [
+                "workshop_confirmed_appointment",
+                WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+              ])
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle<{ target_url: string | null }>();
+
+          if (notificationError) throw notificationError;
+
+          customerJobsNotificationTarget = getCustomerJobsTargetUrl(
+            notification?.target_url ?? null,
+          );
+        } catch (error) {
+          console.error("Failed to resolve customer jobs target:", error);
         }
       }
 
@@ -1654,6 +1707,10 @@ export default function AppNavbar() {
         } catch (error) {
           console.error("Failed to resolve customer jobs tab:", error);
         }
+      }
+
+      if (customerJobsNotificationTarget) {
+        customerJobsUrl = customerJobsNotificationTarget;
       }
 
       navigate(customerJobsUrl);
