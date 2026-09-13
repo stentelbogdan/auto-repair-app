@@ -77,6 +77,13 @@ const INITIAL_CATEGORY_BY_TAB: Record<JobsTab, RequestCategory> = {
   completed: "all",
 };
 
+const JOB_CATEGORY_TITLES: Record<Exclude<RequestCategory, "all">, string> = {
+  bodywork: "DAUNE ESTETICE",
+  mechanical: "DAUNE MECANICE",
+  wheels: "ROȚI ȘI ANVELOPE",
+  towing: "TRACTĂRI AUTO",
+};
+
 export default function MyJobsPage() {
   const router = useRouter();
 
@@ -587,8 +594,16 @@ export default function MyJobsPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#111111] px-4 py-5 text-white">
+    <main className="min-h-screen bg-[#111111] px-4 pb-5 pt-4 text-white">
       <div className="mx-auto max-w-5xl">
+        <section className="mb-5 text-center">
+          <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
+            {activeCategory === "all"
+              ? "PROGRAMĂRI"
+              : JOB_CATEGORY_TITLES[activeCategory]}
+          </p>
+        </section>
+
         <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
           <TabButton
             label="Programate"
