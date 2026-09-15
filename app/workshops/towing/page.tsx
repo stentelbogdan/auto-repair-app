@@ -353,6 +353,19 @@ export default function WorkshopTowingPage() {
       .on(
         "postgres_changes",
         {
+          event: "DELETE",
+          schema: "public",
+          table: "repair_requests",
+        },
+        (payload) => {
+          setRequests((current) =>
+            current.filter((request) => request.id !== payload.old.id),
+          );
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
           event: "INSERT",
           schema: "public",
           table: "repair_offers",

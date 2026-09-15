@@ -8,6 +8,9 @@ export const WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE =
 export const WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE =
   "workshop_offer_rejected";
 
+export const WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE =
+  "workshop_request_closed";
+
 type MarkNotificationsAsReadInput = {
   types: string[];
   recipientRole: NotificationRecipientRole;

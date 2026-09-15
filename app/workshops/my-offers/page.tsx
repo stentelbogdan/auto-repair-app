@@ -11,6 +11,7 @@ import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimate
 import {
   markNotificationsAsRead,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+  WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
 } from "@/lib/notifications";
 import {
   getDamageTypeLabel,
@@ -453,7 +454,10 @@ export default function WorkshopMyOffersPage() {
 
       await markNotificationsAsRead({
         recipientRole: "workshop",
-        types: [WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE],
+        types: [
+          WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+          WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
+        ],
         offerId: String(data.id),
       });
       clearFocusOffer();
@@ -819,6 +823,8 @@ export default function WorkshopMyOffersPage() {
                 : null;
               const appointment = offer.repair_appointments?.[0];
               const isRejectedFocus = offer.status === "rejected";
+              const isClosedRequestFocus =
+                isRejectedFocus && request?.status === "closed";
               const affectedPartLabels = getAffectedPartLabels(
                 request?.service_details,
               );
@@ -871,7 +877,9 @@ export default function WorkshopMyOffersPage() {
 
               const workshopBadge = isRejectedFocus
                 ? {
-                    text: "OFERTĂ REFUZATĂ",
+                    text: isClosedRequestFocus
+                      ? "CERERE ÎNCHISĂ"
+                      : "OFERTĂ REFUZATĂ",
                     color: "red" as const,
                   }
                 : appointment?.status === "confirmed"
@@ -956,7 +964,9 @@ export default function WorkshopMyOffersPage() {
                   {isRejectedFocus && (
                     <div className="mt-4 rounded-[24px] border border-red-200 bg-red-50 p-5">
                       <p className="text-sm font-semibold leading-6 text-red-800">
-                        Clientul a ales un alt service pentru această lucrare.
+                        {isClosedRequestFocus
+                          ? "Clientul a închis cererea."
+                          : "Clientul a ales un alt service pentru această lucrare."}
                       </p>
                     </div>
                   )}
@@ -987,7 +997,9 @@ export default function WorkshopMyOffersPage() {
                     }
                     statusText={
                       isRejectedFocus
-                        ? "Ofertă refuzată"
+                        ? isClosedRequestFocus
+                          ? "Cerere închisă"
+                          : "Ofertă refuzată"
                         : appointment?.status === "customer_proposed"
                         ? "Clientul a propus altă dată"
                         : appointment?.status === "workshop_proposed"

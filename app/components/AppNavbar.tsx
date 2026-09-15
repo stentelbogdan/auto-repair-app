@@ -14,6 +14,7 @@ import {
 import { BadgeEuro } from "lucide-react";
 import {
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+  WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
   WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
 } from "@/lib/notifications";
 import {
@@ -734,7 +735,10 @@ export default function AppNavbar() {
           .eq("recipient_id", userId)
           .eq("recipient_role", "workshop")
           .is("read_at", null)
-          .eq("type", WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE),
+          .in("type", [
+            WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+            WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
+          ]),
       ]);
 
       if (
@@ -1419,7 +1423,10 @@ export default function AppNavbar() {
               .eq("recipient_id", userId)
               .eq("recipient_role", "workshop")
               .is("read_at", null)
-              .eq("type", WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE)
+              .in("type", [
+                WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+                WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
+              ])
               .order("created_at", { ascending: false })
               .limit(1)
               .maybeSingle<{ target_url: string | null }>();

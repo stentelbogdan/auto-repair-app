@@ -192,14 +192,9 @@ export async function deleteEditableRepairRequest(input: {
   hasOffers: boolean;
 }): Promise<"closed" | "deleted"> {
   if (input.hasOffers) {
-    const { error } = await supabase
-      .from("repair_requests")
-      .update({
-        status: "closed",
-      })
-      .eq("id", input.requestId)
-      .eq("user_id", input.userId)
-      .eq("status", "open");
+    const { error } = await supabase.rpc("close_repair_request", {
+      p_request_id: input.requestId,
+    });
 
     if (error) {
       throw error;

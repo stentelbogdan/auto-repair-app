@@ -359,6 +359,19 @@ export default function WorkshopsPage() {
           refreshRequestsFromRealtime();
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "repair_requests",
+        },
+        (payload) => {
+          setRequests((current) =>
+            current.filter((request) => request.id !== payload.old.id),
+          );
+        },
+      )
       .subscribe((status, error) => {
         if (process.env.NODE_ENV === "development" && error) {
           console.error("Bodywork requests Realtime error:", status, error);

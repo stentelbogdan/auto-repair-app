@@ -497,6 +497,14 @@ export default function MyRequestsPage() {
               <RepairRequestCard
                 key={request.id}
                 request={request}
+                actionLabel={
+                  activeTab === "with_offer" ? "Șterge cererea" : undefined
+                }
+                onAction={
+                  activeTab === "with_offer"
+                    ? () => goToRequest(request.id)
+                    : undefined
+                }
                 onEdit={() => goToRequest(request.id)}
                 onView={() => handleViewRequest(request.id)}
               />
