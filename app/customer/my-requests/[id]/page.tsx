@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import LicensePlate from "@/app/components/LicensePlate";
@@ -17,6 +17,7 @@ import {
   type EditableRepairImage,
   type EditableRepairRequest,
 } from "@/lib/supabase/edit-repair-request";
+import { removeRepairImageUploadsBestEffort } from "@/lib/supabase/repair-request-images";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import { Check } from "lucide-react";
 import { isStructuredServiceDetails } from "@/lib/car-damage";
@@ -44,6 +45,10 @@ const Car3DViewer = dynamic(
     ),
   },
 );
+
+function getFileSelectionKey(file: File) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
 
 export default function EditMyRequestPage() {
   /*
@@ -74,6 +79,11 @@ export default function EditMyRequestPage() {
     useState<MechanicalCategoryId | null>(null);
   const [images, setImages] = useState<EditableRepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
+  const newFilesRef = useRef<File[]>([]);
+  const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
+  const newImagePreviewsRef = useRef<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveInProgressRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -307,19 +317,69 @@ export default function EditMyRequestPage() {
     };
   }, [request]);
 
+  useEffect(() => {
+    newImagePreviewsRef.current.forEach((previewUrl) => {
+      URL.revokeObjectURL(previewUrl);
+    });
+    newImagePreviewsRef.current = [];
+    newFilesRef.current = [];
+    setNewImagePreviews([]);
+    setNewFiles([]);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, [requestId]);
+
+  useEffect(() => {
+    return () => {
+      newImagePreviewsRef.current.forEach((previewUrl) => {
+        URL.revokeObjectURL(previewUrl);
+      });
+    };
+  }, []);
+
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    setNewFiles(Array.from(e.target.files));
+
+    const existingFileKeys = new Set(
+      newFilesRef.current.map(getFileSelectionKey),
+    );
+    const selectedFiles = Array.from(e.target.files).filter((file) => {
+      if (file.type && !file.type.startsWith("image/")) return false;
+
+      const fileKey = getFileSelectionKey(file);
+      if (existingFileKeys.has(fileKey)) return false;
+
+      existingFileKeys.add(fileKey);
+      return true;
+    });
+    const previewUrls = selectedFiles.map((file) => URL.createObjectURL(file));
+    const nextFiles = [...newFilesRef.current, ...selectedFiles];
+    const nextPreviews = [
+      ...newImagePreviewsRef.current,
+      ...previewUrls,
+    ];
+
+    newFilesRef.current = nextFiles;
+    newImagePreviewsRef.current = nextPreviews;
+    setNewFiles(nextFiles);
+    setNewImagePreviews(nextPreviews);
+
+    e.target.value = "";
   };
 
   const handleSave = async () => {
-    if (!request || !canEdit) return;
+    if (saveInProgressRef.current || !request || !canEdit) return;
 
     const resolvedServiceType = resolveRepairServiceType(request.service_type);
+    const isDetailsOnlyRequest =
+      resolvedServiceType === "wheels" || resolvedServiceType === "towing";
 
     if (
       resolvedServiceType !== "bodywork" &&
-      resolvedServiceType !== "mechanical"
+      resolvedServiceType !== "mechanical" &&
+      !isDetailsOnlyRequest
     ) {
       alert("Editarea acestui tip de cerere nu este disponibilă încă.");
       return;
@@ -342,18 +402,44 @@ export default function EditMyRequestPage() {
       return;
     }
 
+    saveInProgressRef.current = true;
+    let uploadedImages: EditableRepairImage[] = [];
+    let requestUpdateSucceeded = false;
+
     try {
       setSaving(true);
 
-      const uploadedImages = await uploadEditableRepairImages(
+      uploadedImages = await uploadEditableRepairImages(
         newFiles,
         request.user_id,
+        images,
       );
       const nextImages = [...images, ...uploadedImages];
       let savedServiceDetails = request.service_details;
       let savedDamageType = request.damage_type;
 
-      if (isMechanicalRequest) {
+      if (isDetailsOnlyRequest) {
+        const { data: updatedRequest, error: updateError } = await supabase
+          .from("repair_requests")
+          .update({
+            description,
+            images: nextImages,
+          })
+          .eq("id", request.id)
+          .eq("user_id", request.user_id)
+          .eq("status", "open")
+          .select("id")
+          .maybeSingle<{ id: string }>();
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        if (!updatedRequest?.id) {
+          throw new Error("Cererea nu mai poate fi actualizată.");
+        }
+        requestUpdateSucceeded = true;
+      } else if (isMechanicalRequest) {
         if (!nextMechanicalServiceDetails || !nextMechanicalDamageType) {
           throw new Error("Datele mecanice nu sunt valide.");
         }
@@ -368,6 +454,7 @@ export default function EditMyRequestPage() {
           description,
           images: nextImages,
         });
+        requestUpdateSucceeded = true;
 
         savedServiceDetails = nextMechanicalServiceDetails;
         savedDamageType = nextMechanicalDamageType;
@@ -406,12 +493,19 @@ export default function EditMyRequestPage() {
           description,
           images: nextImages,
         });
+        requestUpdateSucceeded = true;
 
         savedServiceDetails = nextBodyworkServiceDetails;
       }
 
       setImages(nextImages);
+      newFilesRef.current = [];
       setNewFiles([]);
+      newImagePreviewsRef.current.forEach((previewUrl) => {
+        URL.revokeObjectURL(previewUrl);
+      });
+      newImagePreviewsRef.current = [];
+      setNewImagePreviews([]);
 
       setRequest((currentRequest) =>
         currentRequest
@@ -426,9 +520,15 @@ export default function EditMyRequestPage() {
       );
       alert("Modificările au fost salvate.");
     } catch (error) {
+      if (!requestUpdateSucceeded) {
+        await removeRepairImageUploadsBestEffort(
+          uploadedImages.flatMap((image) => (image.path ? [image.path] : [])),
+        );
+      }
       console.error(error);
       alert("Nu am putut salva modificările.");
     } finally {
+      saveInProgressRef.current = false;
       setSaving(false);
     }
   };
@@ -484,6 +584,26 @@ export default function EditMyRequestPage() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const removeNewImage = (index: number) => {
+    if (!canEdit) return;
+
+    const previewUrl = newImagePreviewsRef.current[index];
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    const nextFiles = newFilesRef.current.filter(
+      (_, fileIndex) => fileIndex !== index,
+    );
+    const nextPreviews = newImagePreviewsRef.current.filter(
+      (_, previewIndex) => previewIndex !== index,
+    );
+    newFilesRef.current = nextFiles;
+    newImagePreviewsRef.current = nextPreviews;
+    setNewFiles(nextFiles);
+    setNewImagePreviews(nextPreviews);
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -496,8 +616,9 @@ export default function EditMyRequestPage() {
 
   const resolvedServiceType = resolveRepairServiceType(request.service_type);
   const isMechanicalRequest = resolvedServiceType === "mechanical";
-  const isUnsupportedRequest =
-    resolvedServiceType !== "bodywork" && resolvedServiceType !== "mechanical";
+  const isDetailsOnlyRequest =
+    resolvedServiceType === "wheels" || resolvedServiceType === "towing";
+  const isUnsupportedRequest = resolvedServiceType === null;
 
   return (
     <main className="min-h-screen bg-black px-4 pb-40 pt-6 text-white">
@@ -514,7 +635,7 @@ export default function EditMyRequestPage() {
         <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
           {isMechanicalRequest
             ? "Editare problemă mecanică"
-            : isUnsupportedRequest
+            : isDetailsOnlyRequest || isUnsupportedRequest
               ? "Detalii cerere"
               : "Editare daună"}
         </p>
@@ -530,7 +651,13 @@ export default function EditMyRequestPage() {
         </p>
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
-          {isUnsupportedRequest ? (
+          {isDetailsOnlyRequest ? (
+            <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4">
+              <p className="text-sm font-semibold text-black/70">
+                Poți modifica descrierea și pozele cererii.
+              </p>
+            </div>
+          ) : isUnsupportedRequest ? (
             <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4">
               <p className="text-sm font-semibold text-black/70">
                 Editarea acestui tip de cerere nu este disponibilă încă.
@@ -704,7 +831,7 @@ export default function EditMyRequestPage() {
               Poze existente
             </p>
 
-            {images.length === 0 ? (
+            {images.length === 0 && newImagePreviews.length === 0 ? (
               <div className="mt-3 rounded-2xl bg-black/5 p-6 text-center text-sm text-black/45">
                 Nu ai poze încă.
               </div>
@@ -742,6 +869,28 @@ export default function EditMyRequestPage() {
                     </div>
                   );
                 })}
+
+                {newImagePreviews.map((previewUrl, index) => (
+                  <div
+                    key={previewUrl}
+                    className="relative overflow-hidden rounded-2xl bg-black/10"
+                  >
+                    <img
+                      src={previewUrl}
+                      alt={`Imagine nouă ${index + 1}`}
+                      className="h-24 w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => removeNewImage(index)}
+                      className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white"
+                      aria-label={`Șterge imaginea nouă ${index + 1}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="mt-3">
@@ -765,6 +914,7 @@ export default function EditMyRequestPage() {
                 </span>
 
                 <input
+                  ref={fileInputRef}
                   type="file"
                   multiple
                   accept="image/*"

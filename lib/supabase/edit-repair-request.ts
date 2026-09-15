@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import type {
+  RepairRequestImage,
   RepairServiceDetails,
   StructuredServiceDetails,
 } from "@/lib/supabase/repair-requests";
@@ -13,12 +14,10 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
+import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
 
-export type EditableRepairImage = {
+export type EditableRepairImage = Omit<RepairRequestImage, "name"> & {
   name?: string;
-  url?: string;
-  thumbUrl?: string;
-  dataUrl?: string;
 };
 
 export type EditableRepairRequest = {
@@ -115,6 +114,7 @@ export async function getEditableRepairRequest(
 export async function uploadEditableRepairImages(
   files: File[],
   userId: string,
+  existingImages: EditableRepairImage[] = [],
 ): Promise<EditableRepairImage[]> {
   const preparedImages: Array<{
     originalName: string;
@@ -134,34 +134,7 @@ export async function uploadEditableRepairImages(
     });
   }
 
-  const uploadedImages: EditableRepairImage[] = [];
-
-  for (const { originalName, preparedImage } of preparedImages) {
-    const fileName = `${userId}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${preparedImage.extension}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("repair-images")
-      .upload(fileName, preparedImage.file, {
-        contentType: preparedImage.contentType,
-      });
-
-    if (uploadError) {
-      throw uploadError;
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("repair-images")
-      .getPublicUrl(fileName);
-
-    uploadedImages.push({
-      name: originalName,
-      url: publicUrlData.publicUrl,
-    });
-  }
-
-  return uploadedImages;
+  return uploadPreparedRepairImages(preparedImages, userId, existingImages);
 }
 
 export async function updateEditableRepairRequest(

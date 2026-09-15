@@ -31,6 +31,10 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
+import {
+  removeRepairImageUploadsBestEffort,
+  uploadPreparedRepairImages,
+} from "@/lib/supabase/repair-request-images";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -57,41 +61,6 @@ type DamageType =
   | "wheel_refurbishment"
   | "smart_repair"
   | "pdr";
-
-type StoredImage = {
-  name: string;
-  url?: string;
-  dataUrl?: string;
-};
-
-async function uploadRepairImage(
-  preparedImage: PreparedImage,
-  originalName: string,
-  userId: string,
-): Promise<StoredImage> {
-  const fileName = `${userId}/${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2)}.${preparedImage.extension}`;
-
-  const { error } = await supabase.storage
-    .from("repair-images")
-    .upload(fileName, preparedImage.file, {
-      contentType: preparedImage.contentType,
-    });
-
-  if (error) {
-    throw error;
-  }
-
-  const { data } = supabase.storage
-    .from("repair-images")
-    .getPublicUrl(fileName);
-
-  return {
-    name: originalName,
-    url: data.publicUrl,
-  };
-}
 
 function logPreparedImage(preparedImage: PreparedImage) {
   if (process.env.NODE_ENV !== "development") return;
@@ -230,6 +199,8 @@ function PostJobContent() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    let uploadedImagePaths: string[] = [];
+    let requestCreated = false;
 
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -289,14 +260,12 @@ function PostJobContent() {
         });
       }
 
-      const storedImages: StoredImage[] = await Promise.all(
-        preparedImages.map(({ originalName, preparedImage }) =>
-          uploadRepairImage(
-            preparedImage,
-            originalName,
-            authData.user.id,
-          ),
-        ),
+      const storedImages = await uploadPreparedRepairImages(
+        preparedImages,
+        authData.user.id,
+      );
+      uploadedImagePaths = storedImages.flatMap((image) =>
+        image.path ? [image.path] : [],
       );
 
       const selectedDamageTypes = serviceDetails
@@ -335,11 +304,15 @@ function PostJobContent() {
         requestType: targetWorkshopId ? "direct_request" : "repair",
         targetWorkshopId: targetWorkshopId || null,
       });
+      requestCreated = true;
 
       sessionStorage.setItem("job-posted-success", "true");
 
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
+      if (!requestCreated) {
+        await removeRepairImageUploadsBestEffort(uploadedImagePaths);
+      }
       console.error("Submit failed:", error);
       alert(
         error instanceof Error

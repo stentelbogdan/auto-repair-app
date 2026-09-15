@@ -24,6 +24,10 @@ import {
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
 import {
+  removeRepairImageUploadsBestEffort,
+  uploadPreparedRepairImages,
+} from "@/lib/supabase/repair-request-images";
+import {
   createRepairRequest,
   type TowingScheduleType,
 } from "@/lib/supabase/repair-requests";
@@ -56,12 +60,6 @@ const TowingRouteMap = dynamic(
   () => import("@/app/components/towing/TowingRouteMap"),
   { ssr: false },
 );
-
-type StoredImage = {
-  name: string;
-  url?: string;
-  dataUrl?: string;
-};
 
 type TowingDraft = {
   carBrand: string;
@@ -168,30 +166,6 @@ const wheelOptions: Array<{ value: TowingWheelState; label: string }> = [
   { value: "blocked", label: "Blocate" },
   { value: "unknown", label: "Nu știu" },
 ];
-
-async function uploadRepairImage(
-  preparedImage: PreparedImage,
-  originalName: string,
-  userId: string,
-): Promise<StoredImage> {
-  const fileName = `${userId}/${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2)}.${preparedImage.extension}`;
-
-  const { error } = await supabase.storage
-    .from("repair-images")
-    .upload(fileName, preparedImage.file, {
-      contentType: preparedImage.contentType,
-    });
-
-  if (error) throw error;
-
-  const { data } = supabase.storage
-    .from("repair-images")
-    .getPublicUrl(fileName);
-
-  return { name: originalName, url: data.publicUrl };
-}
 
 function logPreparedImage(preparedImage: PreparedImage) {
   if (process.env.NODE_ENV !== "development") return;
@@ -916,6 +890,8 @@ function PostTowingContent() {
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
+    let uploadedImagePaths: string[] = [];
+    let requestCreated = false;
 
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -944,14 +920,12 @@ function PostTowingContent() {
         });
       }
 
-      const storedImages = await Promise.all(
-        preparedImages.map(({ originalName, preparedImage }) =>
-          uploadRepairImage(
-            preparedImage,
-            originalName,
-            authData.user.id,
-          ),
-        ),
+      const storedImages = await uploadPreparedRepairImages(
+        preparedImages,
+        authData.user.id,
+      );
+      uploadedImagePaths = storedImages.flatMap((image) =>
+        image.path ? [image.path] : [],
       );
 
       const routeSnapshot =
@@ -991,10 +965,14 @@ function PostTowingContent() {
         requestType: targetWorkshopId ? "direct_request" : "repair",
         targetWorkshopId: targetWorkshopId || null,
       });
+      requestCreated = true;
 
       sessionStorage.setItem("job-posted-success", "true");
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
+      if (!requestCreated) {
+        await removeRepairImageUploadsBestEffort(uploadedImagePaths);
+      }
       console.error("Submit failed:", error);
       alert(
         error instanceof Error

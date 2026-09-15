@@ -30,6 +30,16 @@ export type RepairServiceDetails =
 
 export type TowingScheduleType = "asap" | "scheduled";
 
+export type RepairRequestImage = {
+  name: string;
+  url?: string;
+  thumbUrl?: string;
+  dataUrl?: string;
+  path?: string;
+  fingerprint?: string;
+  fingerprintVersion?: string;
+};
+
 export type RepairRequestRow = {
   id: string;
   user_id: string;
@@ -58,12 +68,7 @@ export type RepairRequestRow = {
 
   description: string | null;
 
-  images: {
-    name: string;
-    url?: string;
-    thumbUrl?: string;
-    dataUrl?: string;
-  }[];
+  images: RepairRequestImage[];
 
   status: string;
   accepted_offer_id: string | null;
@@ -100,12 +105,7 @@ export async function createRepairRequest(input: {
   serviceType?: RepairServiceType;
   requestType?: "repair" | "direct_request" | "direct_message";
   targetWorkshopId?: string | null;
-  images: {
-    name: string;
-    url?: string;
-    thumbUrl?: string;
-    dataUrl?: string;
-  }[];
+  images: RepairRequestImage[];
 }) {
   const { data, error } = await supabase
     .from("repair_requests")
