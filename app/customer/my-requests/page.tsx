@@ -14,6 +14,7 @@ import RequestCategoryFilter, {
   type RequestCategoryFilter as RequestCategory,
 } from "@/app/components/RequestCategoryFilter";
 import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
+import { deleteEditableRepairRequest } from "@/lib/supabase/edit-repair-request";
 
 type MyRequestsTab = "waiting" | "with_offer" | "archive";
 
@@ -62,6 +63,7 @@ export default function MyRequestsPage() {
    */
   const refreshInProgressRef = useRef(false);
   const refreshQueuedRef = useRef(false);
+  const closingRequestIdsRef = useRef(new Set<string>());
 
   /*
    * Restaurăm tabul ales anterior de utilizator.
@@ -401,6 +403,37 @@ export default function MyRequestsPage() {
     navigate(`/customer/my-requests/${requestId}`);
   };
 
+  const handleCloseRequest = async (request: RepairRequestRow) => {
+    if (closingRequestIdsRef.current.has(request.id)) return;
+
+    const confirmed = confirm(
+      "Această cerere are deja oferte. Vrei să o închizi? Service-urile nu o vor mai vedea.",
+    );
+
+    if (!confirmed) return;
+
+    closingRequestIdsRef.current.add(request.id);
+
+    try {
+      await deleteEditableRepairRequest({
+        requestId: request.id,
+        userId: request.user_id,
+        hasOffers: true,
+      });
+
+      setRequests((currentRequests) =>
+        currentRequests.filter(
+          (currentRequest) => currentRequest.id !== request.id,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to close repair request:", error);
+      window.alert("Nu am putut închide cererea.");
+    } finally {
+      closingRequestIdsRef.current.delete(request.id);
+    }
+  };
+
   return (
     <main className="min-h-[calc(100svh-236px)] bg-[#111111] px-4 pb-[calc(24px+env(safe-area-inset-bottom))] pt-4 text-white">
       <div className="mx-auto max-w-5xl">
@@ -502,7 +535,7 @@ export default function MyRequestsPage() {
                 }
                 onAction={
                   activeTab === "with_offer"
-                    ? () => goToRequest(request.id)
+                    ? () => void handleCloseRequest(request)
                     : undefined
                 }
                 onEdit={() => goToRequest(request.id)}
