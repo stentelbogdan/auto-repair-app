@@ -9,6 +9,7 @@ import type {
 } from "@/lib/mechanical/mechanical-service-details";
 import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
+import type { WheelsServiceDetailsV2 } from "@/lib/wheels/wheels-service-details";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import {
   prepareImageForUpload,
@@ -70,7 +71,15 @@ export type UpdateEditableRepairRequestInput =
       serviceType: "mechanical";
       serviceDetails: MechanicalServiceDetails;
       damageType: MechanicalCategoryId;
-    });
+    })
+  | {
+      serviceType: "wheels";
+      requestId: string;
+      userId: string;
+      serviceDetails: WheelsServiceDetailsV2;
+      description: string;
+      images: EditableRepairImage[];
+    };
 
 export async function getEditableRepairRequest(
   requestId: string,
@@ -140,6 +149,31 @@ export async function uploadEditableRepairImages(
 export async function updateEditableRepairRequest(
   input: UpdateEditableRepairRequestInput,
 ): Promise<void> {
+  if (input.serviceType === "wheels") {
+    const { data, error } = await supabase
+      .from("repair_requests")
+      .update({
+        service_details: input.serviceDetails,
+        description: input.description,
+        images: input.images,
+      })
+      .eq("id", input.requestId)
+      .eq("user_id", input.userId)
+      .eq("status", "open")
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data?.id) {
+      throw new Error("Cererea nu mai poate fi actualizată.");
+    }
+
+    return;
+  }
+
   const { error } = await supabase
     .from("repair_requests")
     .update({

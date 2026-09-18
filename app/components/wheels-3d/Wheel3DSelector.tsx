@@ -283,21 +283,12 @@ export default function Wheel3DSelector({
         return;
       }
 
-      onComponentChange([...selectedComponents, selection]);
-      onChange(
-        ALL_WHEEL_POSITION_IDS.filter(
-          (wheelId) =>
-            wheelId === selection.wheel || selectedWheels.includes(wheelId),
-        ),
-      );
       setActiveComponent(selection);
     },
     [
-      onChange,
       onComponentChange,
       removeComponentSelection,
       selectedComponents,
-      selectedWheels,
     ],
   );
 
@@ -331,15 +322,45 @@ export default function Wheel3DSelector({
         (item) => getServiceSelectionKey(item) === selectionKey,
       );
 
-      onServiceChange(
-        isSelected
-          ? selectedServices.filter(
-              (item) => getServiceSelectionKey(item) !== selectionKey,
-            )
-          : [...selectedServices, selection],
+      const nextServices = isSelected
+        ? selectedServices.filter(
+            (item) => getServiceSelectionKey(item) !== selectionKey,
+          )
+        : [...selectedServices, selection];
+      const activeComponentKey = getComponentSelectionKey(activeComponent);
+      const hasServicesForActiveComponent = nextServices.some(
+        (item) => getComponentSelectionKey(item) === activeComponentKey,
+      );
+
+      onServiceChange(nextServices);
+
+      if (!onComponentChange) return;
+
+      const nextComponents = hasServicesForActiveComponent
+        ? selectedComponents.some(
+            (item) => getComponentSelectionKey(item) === activeComponentKey,
+          )
+          ? selectedComponents
+          : [...selectedComponents, activeComponent]
+        : selectedComponents.filter(
+            (item) => getComponentSelectionKey(item) !== activeComponentKey,
+          );
+
+      onComponentChange(nextComponents);
+      onChange(
+        ALL_WHEEL_POSITION_IDS.filter((wheelId) =>
+          nextComponents.some((item) => item.wheel === wheelId),
+        ),
       );
     },
-    [activeComponent, onServiceChange, selectedServices],
+    [
+      activeComponent,
+      onChange,
+      onComponentChange,
+      onServiceChange,
+      selectedComponents,
+      selectedServices,
+    ],
   );
 
   const activeComponentAnchor = activeComponent

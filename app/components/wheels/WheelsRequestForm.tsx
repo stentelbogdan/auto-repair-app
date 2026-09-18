@@ -14,9 +14,9 @@ import type {
   WheelPositionId,
 } from "@/lib/wheels/wheels-service-details";
 
-type SupplyAnswer = "yes" | "no" | null;
+export type SupplyAnswer = "yes" | "no" | null;
 
-export type WheelsRequestFormValues = {
+export type WheelsRequestDetailsValues = {
   selectedServices: WheelComponentServiceSelection[];
   tireWidth: string;
   tireProfile: string;
@@ -24,34 +24,63 @@ export type WheelsRequestFormValues = {
   unknownWheelSize: boolean;
   tireSupply: SupplyAnswer;
   rimSupply: SupplyAnswer;
+};
+
+export type WheelsRequestFormValues = WheelsRequestDetailsValues & {
   files: File[];
   description: string;
+};
+
+export type WheelsRequestFormInitialValues = WheelsRequestDetailsValues & {
+  selectedWheels: WheelPositionId[];
+  selectedComponents: WheelComponentSelection[];
 };
 
 type WheelsRequestFormProps = {
   validateVehicle?: () => string | null;
   isSubmitting?: boolean;
   onSubmit?: (values: WheelsRequestFormValues) => Promise<void>;
+  initialValues?: WheelsRequestFormInitialValues;
+  onDetailsChange?: (values: WheelsRequestDetailsValues) => void;
+  showRequestDetails?: boolean;
 };
 
 export default function WheelsRequestForm({
   validateVehicle,
   isSubmitting = false,
   onSubmit,
+  initialValues,
+  onDetailsChange,
+  showRequestDetails = true,
 }: WheelsRequestFormProps) {
-  const [selectedWheels, setSelectedWheels] = useState<WheelPositionId[]>([]);
+  // Initial values are consumed only on mount; edit callers remount per request.
+  const [selectedWheels, setSelectedWheels] = useState<WheelPositionId[]>(
+    () => initialValues?.selectedWheels ?? [],
+  );
   const [selectedComponents, setSelectedComponents] = useState<
     WheelComponentSelection[]
-  >([]);
+  >(() => initialValues?.selectedComponents ?? []);
   const [selectedServices, setSelectedServices] = useState<
     WheelComponentServiceSelection[]
-  >([]);
-  const [tireWidth, setTireWidth] = useState("");
-  const [tireProfile, setTireProfile] = useState("");
-  const [rimDiameter, setRimDiameter] = useState("");
-  const [unknownWheelSize, setUnknownWheelSize] = useState(false);
-  const [tireSupply, setTireSupply] = useState<SupplyAnswer>(null);
-  const [rimSupply, setRimSupply] = useState<SupplyAnswer>(null);
+  >(() => initialValues?.selectedServices ?? []);
+  const [tireWidth, setTireWidth] = useState(
+    () => initialValues?.tireWidth ?? "",
+  );
+  const [tireProfile, setTireProfile] = useState(
+    () => initialValues?.tireProfile ?? "",
+  );
+  const [rimDiameter, setRimDiameter] = useState(
+    () => initialValues?.rimDiameter ?? "",
+  );
+  const [unknownWheelSize, setUnknownWheelSize] = useState(
+    () => initialValues?.unknownWheelSize ?? false,
+  );
+  const [tireSupply, setTireSupply] = useState<SupplyAnswer>(
+    () => initialValues?.tireSupply ?? null,
+  );
+  const [rimSupply, setRimSupply] = useState<SupplyAnswer>(
+    () => initialValues?.rimSupply ?? null,
+  );
   const [files, setFiles] = useState<File[]>([]);
   const [description, setDescription] = useState("");
   const hasReplaceTire = selectedServices.some(
@@ -70,6 +99,27 @@ export default function WheelsRequestForm({
       previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [previewUrls]);
+
+  useEffect(() => {
+    onDetailsChange?.({
+      selectedServices,
+      tireWidth,
+      tireProfile,
+      rimDiameter,
+      unknownWheelSize,
+      tireSupply,
+      rimSupply,
+    });
+  }, [
+    onDetailsChange,
+    rimDiameter,
+    rimSupply,
+    selectedServices,
+    tireProfile,
+    tireSupply,
+    tireWidth,
+    unknownWheelSize,
+  ]);
 
   function setNumericValue(
     value: string,
@@ -247,7 +297,8 @@ export default function WheelsRequestForm({
         </section>
       )}
 
-      <section className="mt-4 rounded-3xl border border-white/10 bg-neutral-900 p-4">
+      {showRequestDetails && (
+        <section className="mt-4 rounded-3xl border border-white/10 bg-neutral-900 p-4">
         <label className="mb-2 block text-sm font-medium text-white/70">
           Poze (opțional)
         </label>
@@ -326,9 +377,11 @@ export default function WheelsRequestForm({
             </div>
           </div>
         )}
-      </section>
+        </section>
+      )}
 
-      <section className="mt-4 rounded-3xl border border-white/10 bg-neutral-900 p-4">
+      {showRequestDetails && (
+        <section className="mt-4 rounded-3xl border border-white/10 bg-neutral-900 p-4">
         <label className="mb-2 block text-sm font-medium text-white/70">
           Descriere scurtă
         </label>
@@ -339,7 +392,8 @@ export default function WheelsRequestForm({
           rows={4}
           className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition placeholder:text-white/30 focus:border-orange-400"
         />
-      </section>
+        </section>
+      )}
 
       {validateVehicle && onSubmit && (
         <button

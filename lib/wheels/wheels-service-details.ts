@@ -113,6 +113,18 @@ export type NormalizeWheelsServiceDetailsV2Input = {
   rimSupply: WheelPartsSupply;
 };
 
+export type WheelsServiceDetailsV2Draft = {
+  selectedWheels: WheelPositionId[];
+  selectedComponents: WheelComponentSelection[];
+  selectedServices: WheelComponentServiceSelection[];
+  tireWidth: string;
+  tireProfile: string;
+  rimDiameter: string;
+  unknownWheelSize: boolean;
+  tireSupply: WheelPartsSupply;
+  rimSupply: WheelPartsSupply;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -220,6 +232,8 @@ export function normalizeWheelsServiceDetailsV2(
     }
   }
 
+  if (selections.length === 0) return null;
+
   let wheelSize: WheelsServiceDetailsV2["wheelSize"];
 
   if (input.unknownWheelSize) {
@@ -256,6 +270,9 @@ export function normalizeWheelsServiceDetailsV2(
     ),
   );
 
+  if (hasReplaceTire && input.tireSupply === null) return null;
+  if (hasReplaceRim && input.rimSupply === null) return null;
+
   return {
     version: 2,
     kind: "wheels",
@@ -271,6 +288,43 @@ export function normalizeWheelsServiceDetailsV2(
           ? input.rimSupply
           : null,
     },
+  };
+}
+
+export function getWheelsServiceDetailsV2Draft(
+  value: unknown,
+): WheelsServiceDetailsV2Draft | null {
+  if (!isWheelsServiceDetailsV2(value)) return null;
+
+  const selectedWheels = value.selections.map((selection) => selection.wheel);
+  const selectedComponents = value.selections.flatMap((selection) =>
+    selection.components.map((component) => ({
+      wheel: selection.wheel,
+      component: component.component,
+    })),
+  );
+  const selectedServices = value.selections.flatMap((selection) =>
+    selection.components.flatMap((component) =>
+      component.services.map((service) => ({
+        wheel: selection.wheel,
+        component: component.component,
+        service,
+      })),
+    ),
+  );
+
+  return {
+    selectedWheels,
+    selectedComponents,
+    selectedServices,
+    tireWidth: value.wheelSize.known ? String(value.wheelSize.width) : "",
+    tireProfile: value.wheelSize.known ? String(value.wheelSize.profile) : "",
+    rimDiameter: value.wheelSize.known
+      ? String(value.wheelSize.rimDiameter)
+      : "",
+    unknownWheelSize: !value.wheelSize.known,
+    tireSupply: value.partsSupply.tire,
+    rimSupply: value.partsSupply.rim,
   };
 }
 

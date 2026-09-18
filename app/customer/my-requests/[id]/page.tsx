@@ -33,6 +33,16 @@ import {
   type MechanicalSymptomIdsByCategory,
 } from "@/lib/mechanical/mechanical-service-details";
 import { resolveRepairServiceType } from "@/lib/repair-requests/service-types";
+import WheelsRequestForm, {
+  type SupplyAnswer,
+  type WheelsRequestDetailsValues,
+  type WheelsRequestFormInitialValues,
+} from "@/app/components/wheels/WheelsRequestForm";
+import {
+  getWheelsServiceDetailsV2Draft,
+  normalizeWheelsServiceDetailsV2,
+  type WheelPartsSupply,
+} from "@/lib/wheels/wheels-service-details";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -48,6 +58,32 @@ const Car3DViewer = dynamic(
 
 function getFileSelectionKey(file: File) {
   return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function toSupplyAnswer(value: WheelPartsSupply): SupplyAnswer {
+  if (value === "customer") return "yes";
+  if (value === "workshop") return "no";
+  return null;
+}
+
+function toPartsSupply(value: SupplyAnswer): WheelPartsSupply {
+  if (value === "yes") return "customer";
+  if (value === "no") return "workshop";
+  return null;
+}
+
+function getWheelsFormInitialValues(
+  serviceDetails: unknown,
+): WheelsRequestFormInitialValues | null {
+  const draft = getWheelsServiceDetailsV2Draft(serviceDetails);
+
+  if (!draft) return null;
+
+  return {
+    ...draft,
+    tireSupply: toSupplyAnswer(draft.tireSupply),
+    rimSupply: toSupplyAnswer(draft.rimSupply),
+  };
 }
 
 export default function EditMyRequestPage() {
@@ -77,6 +113,10 @@ export default function EditMyRequestPage() {
     useState<MechanicalCategoryId | null>(null);
   const [expandedMechanicalCategory, setExpandedMechanicalCategory] =
     useState<MechanicalCategoryId | null>(null);
+  const [wheelsInitialValues, setWheelsInitialValues] =
+    useState<WheelsRequestFormInitialValues | null>(null);
+  const [wheelsDetails, setWheelsDetails] =
+    useState<WheelsRequestDetailsValues | null>(null);
   const [images, setImages] = useState<EditableRepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const newFilesRef = useRef<File[]>([]);
@@ -234,6 +274,20 @@ export default function EditMyRequestPage() {
           loadedRequest.service_type,
         );
 
+        setWheelsInitialValues(null);
+        setWheelsDetails(null);
+
+        if (resolvedServiceType === "wheels") {
+          const initialValues = getWheelsFormInitialValues(
+            loadedRequest.service_details,
+          );
+
+          setWheelsInitialValues(initialValues);
+          setWheelsDetails(initialValues);
+          setServiceDetails([]);
+          return;
+        }
+
         if (resolvedServiceType === "mechanical") {
           const normalizedDetails = normalizeMechanicalServiceDetails(
             loadedRequest.service_details,
@@ -373,12 +427,16 @@ export default function EditMyRequestPage() {
     if (saveInProgressRef.current || !request || !canEdit) return;
 
     const resolvedServiceType = resolveRepairServiceType(request.service_type);
+    const hasFullWheelsEditor =
+      resolvedServiceType === "wheels" && wheelsDetails !== null;
     const isDetailsOnlyRequest =
-      resolvedServiceType === "wheels" || resolvedServiceType === "towing";
+      resolvedServiceType === "towing" ||
+      (resolvedServiceType === "wheels" && !hasFullWheelsEditor);
 
     if (
       resolvedServiceType !== "bodywork" &&
       resolvedServiceType !== "mechanical" &&
+      !hasFullWheelsEditor &&
       !isDetailsOnlyRequest
     ) {
       alert("Editarea acestui tip de cerere nu este disponibilă încă.");
@@ -396,9 +454,25 @@ export default function EditMyRequestPage() {
           ? request.damage_type
           : null))
       : null;
+    const nextWheelsServiceDetails = hasFullWheelsEditor
+      ? normalizeWheelsServiceDetailsV2({
+          selectedServices: wheelsDetails.selectedServices,
+          tireWidth: wheelsDetails.tireWidth,
+          tireProfile: wheelsDetails.tireProfile,
+          rimDiameter: wheelsDetails.rimDiameter,
+          unknownWheelSize: wheelsDetails.unknownWheelSize,
+          tireSupply: toPartsSupply(wheelsDetails.tireSupply),
+          rimSupply: toPartsSupply(wheelsDetails.rimSupply),
+        })
+      : null;
 
     if (isMechanicalRequest && !nextMechanicalDamageType) {
       alert("Selectează o categorie mecanică înainte de salvare.");
+      return;
+    }
+
+    if (hasFullWheelsEditor && !nextWheelsServiceDetails) {
+      alert("Detaliile pentru roți nu sunt valide.");
       return;
     }
 
@@ -418,7 +492,19 @@ export default function EditMyRequestPage() {
       let savedServiceDetails = request.service_details;
       let savedDamageType = request.damage_type;
 
-      if (isDetailsOnlyRequest) {
+      if (hasFullWheelsEditor && nextWheelsServiceDetails) {
+        await updateEditableRepairRequest({
+          serviceType: "wheels",
+          requestId: request.id,
+          userId: request.user_id,
+          serviceDetails: nextWheelsServiceDetails,
+          description,
+          images: nextImages,
+        });
+        requestUpdateSucceeded = true;
+
+        savedServiceDetails = nextWheelsServiceDetails;
+      } else if (isDetailsOnlyRequest) {
         const { data: updatedRequest, error: updateError } = await supabase
           .from("repair_requests")
           .update({
@@ -616,8 +702,13 @@ export default function EditMyRequestPage() {
 
   const resolvedServiceType = resolveRepairServiceType(request.service_type);
   const isMechanicalRequest = resolvedServiceType === "mechanical";
+  const hasFullWheelsEditor =
+    resolvedServiceType === "wheels" &&
+    wheelsInitialValues !== null &&
+    wheelsDetails !== null;
   const isDetailsOnlyRequest =
-    resolvedServiceType === "wheels" || resolvedServiceType === "towing";
+    resolvedServiceType === "towing" ||
+    (resolvedServiceType === "wheels" && !hasFullWheelsEditor);
   const isUnsupportedRequest = resolvedServiceType === null;
 
   return (
@@ -635,6 +726,8 @@ export default function EditMyRequestPage() {
         <p className="text-xs uppercase tracking-[0.25em] text-orange-400">
           {isMechanicalRequest
             ? "Editare problemă mecanică"
+            : hasFullWheelsEditor
+              ? "Editare roți și anvelope"
             : isDetailsOnlyRequest || isUnsupportedRequest
               ? "Detalii cerere"
               : "Editare daună"}
@@ -651,7 +744,14 @@ export default function EditMyRequestPage() {
         </p>
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
-          {isDetailsOnlyRequest ? (
+          {hasFullWheelsEditor ? (
+            <WheelsRequestForm
+              key={request.id}
+              initialValues={wheelsInitialValues}
+              onDetailsChange={setWheelsDetails}
+              showRequestDetails={false}
+            />
+          ) : isDetailsOnlyRequest ? (
             <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4">
               <p className="text-sm font-semibold text-black/70">
                 Poți modifica descrierea și pozele cererii.
