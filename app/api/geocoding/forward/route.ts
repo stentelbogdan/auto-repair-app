@@ -1,3 +1,9 @@
+import {
+  getGeoapifyString,
+  isGeoapifyRecord,
+  normalizeGeoapifySuggestion,
+} from "@/lib/geo/geoapify";
+
 type GeoapifyResult = Record<string, unknown>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -5,8 +11,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getString(record: GeoapifyResult, key: string) {
-  const value = record[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
+  return getGeoapifyString(record, key);
 }
 
 function normalizeLocation(value: string) {
@@ -120,17 +125,30 @@ export async function POST(request: Request) {
     const payload: unknown = await response.json();
     const results =
       isRecord(payload) && Array.isArray(payload.results)
-        ? payload.results.filter(isRecord)
+        ? payload.results.filter(isGeoapifyRecord)
         : [];
     const result = results.find((candidate) => matchesCity(candidate, city));
     const resultLat = result ? getCoordinate(result, "lat") : null;
     const resultLng = result ? getCoordinate(result, "lon") : null;
+    const location = result
+      ? normalizeGeoapifySuggestion(result)?.location ?? null
+      : null;
 
     if (resultLat === null || resultLng === null) {
-      return Response.json({ lat: null, lng: null, matched: false });
+      return Response.json({
+        lat: null,
+        lng: null,
+        matched: false,
+        location: null,
+      });
     }
 
-    return Response.json({ lat: resultLat, lng: resultLng, matched: true });
+    return Response.json({
+      lat: resultLat,
+      lng: resultLng,
+      matched: true,
+      location,
+    });
   } catch {
     return Response.json(
       { error: "Forward geocoding failed." },

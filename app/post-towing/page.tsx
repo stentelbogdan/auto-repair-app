@@ -115,12 +115,75 @@ function PostTowingContent() {
       <form onSubmit={handleSubmit} noValidate>
         <TowingRequestForm onValuesChange={setTowingValues} />
         <section className={sectionClassName}>
-          <h2 className="text-base font-black">Fotografii (opțional)</h2>
-          <label className="mt-3 flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-orange-300/50 bg-orange-500/5 px-4 py-6 text-center">
-            <span className="text-3xl">📸</span><span className="mt-2 font-bold">Adaugă fotografii</span>
+          <label className="mb-2 block text-sm font-medium text-white/70">
+            Poze (opțional)
+          </label>
+          <label className="flex cursor-pointer flex-col items-center justify-center rounded-[22px] border-2 border-dashed border-orange-300 bg-orange-50 px-4 py-8 text-center text-black transition active:scale-[0.99]">
+            <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
+              📸
+            </div>
+            <p className="text-base font-bold">Adaugă poze</p>
+            <p className="mt-1 text-sm text-black/55">
+              Fă poze sau alege din galerie
+            </p>
             <input type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden" />
           </label>
-          {previewUrls.length > 0 && <div className="mt-4 grid grid-cols-3 gap-3">{previewUrls.map((url, index) => <div key={url} className="relative overflow-hidden rounded-2xl"><ImageGallery images={previewUrls.map((dataUrl) => ({ dataUrl }))} initialIndex={index} hideCountBadge alt={`Poză ${index + 1}`} className="h-28 w-full object-cover" wrapperClassName="block h-28 w-full overflow-hidden rounded-2xl" /><button type="button" onClick={() => setFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="absolute right-2 top-2 z-20 h-8 w-8 rounded-full bg-black/75 text-white">✕</button></div>)}</div>}
+
+          {files.length > 0 && (
+            <div className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700">
+              {files.length} poză{files.length > 1 ? "e" : ""} adăugată
+              {files.length > 1 ? "e" : ""}
+            </div>
+          )}
+
+          {files.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-3 text-sm font-medium text-white/60">
+                Previzualizare poze
+              </p>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {previewUrls.map((url, index) => {
+                  const galleryImages = previewUrls.map(
+                    (previewUrl, previewIndex) => ({
+                      name:
+                        files[previewIndex]?.name || `Poză ${previewIndex + 1}`,
+                      url: previewUrl,
+                    }),
+                  );
+
+                  return (
+                    <div
+                      key={`${files[index]?.name || "image"}-${index}`}
+                      className="relative overflow-hidden rounded-2xl bg-black/10"
+                    >
+                      <ImageGallery
+                        images={galleryImages}
+                        initialIndex={index}
+                        hideCountBadge
+                        alt={`Poză ${index + 1}`}
+                        className="h-28 w-full object-cover"
+                        wrapperClassName="block h-28 w-full cursor-pointer overflow-hidden rounded-2xl"
+                      />
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setFiles((current) =>
+                            current.filter((_, itemIndex) => itemIndex !== index),
+                          );
+                        }}
+                        className="absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/75 text-sm font-bold text-white shadow-lg backdrop-blur transition active:scale-90 hover:bg-red-600"
+                        aria-label={`Șterge poza ${index + 1}`}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </section>
         <section className={sectionClassName}>
           <label className="mb-2 block text-sm font-medium text-white/70">Observații (opțional)</label>

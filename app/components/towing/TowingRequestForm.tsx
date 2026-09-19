@@ -683,6 +683,7 @@ export default function TowingRequestForm({
               <input
                 value={values.licensePlate}
                 onChange={(event) => update({ licensePlate: formatLicensePlateInput(event.target.value) })}
+                placeholder="Ex: NT 51 FLY"
                 className={`w-full rounded-2xl border bg-black/[0.03] px-4 py-3 pr-14 outline-none ${plateHasError ? "border-red-500" : values.licensePlate ? "border-emerald-500" : "border-black/10"}`}
                 maxLength={11}
               />

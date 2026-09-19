@@ -1,31 +1,22 @@
+import {
+  getGeoapifyAddress,
+  getGeoapifyLocality,
+  isGeoapifyRecord,
+  normalizeGeoapifySuggestion,
+} from "@/lib/geo/geoapify";
+
 type GeoapifyResult = Record<string, unknown>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function getString(record: GeoapifyResult, key: string) {
-  const value = record[key];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
 function getAddress(result: GeoapifyResult) {
-  const street = getString(result, "street");
-  const houseNumber = getString(result, "housenumber");
-
-  if (street) return houseNumber ? `${street} ${houseNumber}` : street;
-
-  return getString(result, "address_line1") ?? getString(result, "name");
+  return getGeoapifyAddress(result);
 }
 
 function getCity(result: GeoapifyResult) {
-  return (
-    getString(result, "city") ??
-    getString(result, "town") ??
-    getString(result, "village") ??
-    getString(result, "municipality") ??
-    getString(result, "county")
-  );
+  return getGeoapifyLocality(result);
 }
 
 export async function POST(request: Request) {
@@ -82,13 +73,15 @@ export async function POST(request: Request) {
     const payload: unknown = await response.json();
     const results =
       isRecord(payload) && Array.isArray(payload.results)
-        ? payload.results.filter(isRecord)
+        ? payload.results.filter(isGeoapifyRecord)
         : [];
     const result = results[0];
+    const location = result ? normalizeGeoapifySuggestion(result)?.location ?? null : null;
 
     return Response.json({
       address: result ? getAddress(result) : null,
       city: result ? getCity(result) : null,
+      location,
     });
   } catch {
     return Response.json(

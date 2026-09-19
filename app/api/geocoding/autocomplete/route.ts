@@ -1,3 +1,8 @@
+import {
+  isGeoapifyRecord,
+  normalizeGeoapifySuggestion,
+} from "@/lib/geo/geoapify";
+
 type GeoapifyResult = Record<string, unknown>;
 
 type AutocompleteSuggestion = {
@@ -7,8 +12,16 @@ type AutocompleteSuggestion = {
   region: string | null;
   country: string | null;
   countryCode: string | null;
+  postalCode: string | null;
   lat: number | null;
   lng: number | null;
+  location: {
+    locality: string;
+    postalCode: string | null;
+    countryCode: string;
+    lat: number;
+    lng: number;
+  };
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -18,19 +31,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function getString(record: GeoapifyResult, key: string) {
   const value = record[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function getCoordinate(result: GeoapifyResult, key: "lat" | "lon") {
-  const value = result[key];
-  const minimum = key === "lat" ? -90 : -180;
-  const maximum = key === "lat" ? 90 : 180;
-
-  return typeof value === "number" &&
-    Number.isFinite(value) &&
-    value >= minimum &&
-    value <= maximum
-    ? value
-    : null;
 }
 
 function getInputCoordinate(
@@ -47,38 +47,6 @@ function getInputCoordinate(
     value <= maximum
     ? value
     : null;
-}
-
-function normalizeSuggestion(
-  result: GeoapifyResult,
-  index: number,
-): AutocompleteSuggestion | null {
-  const city =
-    getString(result, "city") ??
-    getString(result, "town") ??
-    getString(result, "village") ??
-    getString(result, "municipality");
-  if (!city) return null;
-
-  const region = getString(result, "state") ?? getString(result, "county");
-  const country = getString(result, "country");
-  const countryCode = getString(result, "country_code");
-  const label = [city, region, country].filter(Boolean).join(", ");
-  const lat = getCoordinate(result, "lat");
-  const lng = getCoordinate(result, "lon");
-
-  return {
-    id:
-      getString(result, "place_id") ??
-      [city, region, countryCode, lat, lng, index].join("|"),
-    city,
-    label,
-    region,
-    country,
-    countryCode,
-    lat,
-    lng,
-  };
 }
 
 export async function POST(request: Request) {
@@ -141,10 +109,22 @@ export async function POST(request: Request) {
     const payload: unknown = await response.json();
     const results =
       isRecord(payload) && Array.isArray(payload.results)
-        ? payload.results.filter(isRecord)
+        ? payload.results.filter(isGeoapifyRecord)
         : [];
     const suggestions = results
-      .map(normalizeSuggestion)
+      .map((result): AutocompleteSuggestion | null => {
+        const suggestion = normalizeGeoapifySuggestion(result);
+        if (!suggestion) return null;
+
+        return {
+          ...suggestion,
+          city: suggestion.location.locality,
+          countryCode: suggestion.location.countryCode,
+          postalCode: suggestion.location.postalCode,
+          lat: suggestion.location.lat,
+          lng: suggestion.location.lng,
+        };
+      })
       .filter((suggestion): suggestion is AutocompleteSuggestion =>
         Boolean(suggestion),
       );

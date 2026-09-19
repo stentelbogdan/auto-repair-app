@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import ImageGallery from "@/app/components/ImageGallery";
+import GeoLocationCombobox from "@/app/components/GeoLocationCombobox";
+import type { GeoLocation } from "@/lib/geo/geo-location";
 import {
   prepareImageForUpload,
   type PreparedImage,
@@ -26,6 +28,11 @@ import {
   hasWorkshopSlug,
 } from "@/lib/workshops/workshop-slug";
 import { useAuth } from "@/lib/auth-provider";
+import {
+  getOwnWorkshopServiceArea,
+  saveOwnWorkshopServiceArea,
+  type WorkshopServiceArea,
+} from "@/lib/supabase/workshop-service-areas";
 
 type ProfileRow = {
   email: string | null;
@@ -45,6 +52,7 @@ type ProfileRow = {
 };
 
 type EditableProfile = "customer" | "workshop";
+type ServiceAreaRadiusOption = "25" | "50" | "100" | "200" | "custom" | "nationwide";
 
 function logPreparedImage(preparedImage: PreparedImage) {
   if (process.env.NODE_ENV !== "development") return;
@@ -102,6 +110,18 @@ export default function AccountPage() {
   const [sundayOpen, setSundayOpen] = useState(false);
   const [sunOpen, setSunOpen] = useState("09:00");
   const [sunClose, setSunClose] = useState("13:00");
+  const [serviceArea, setServiceArea] =
+    useState<WorkshopServiceArea | null>(null);
+  const [serviceAreaLocality, setServiceAreaLocality] = useState("");
+  const [selectedServiceAreaLocation, setSelectedServiceAreaLocation] =
+    useState<GeoLocation | null>(null);
+  const [serviceAreaRadiusOption, setServiceAreaRadiusOption] =
+    useState<ServiceAreaRadiusOption>("50");
+  const [customServiceAreaRadius, setCustomServiceAreaRadius] = useState("50");
+  const [savingServiceArea, setSavingServiceArea] = useState(false);
+  const [geocodingWorkshopAddress, setGeocodingWorkshopAddress] =
+    useState(false);
+  const [serviceAreaError, setServiceAreaError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) {
@@ -209,6 +229,34 @@ export default function AccountPage() {
             ? profile.workshop_gallery_urls
             : [],
         );
+
+        if (profileRoles.includes("workshop")) {
+          try {
+            const area = await getOwnWorkshopServiceArea();
+            setServiceArea(area);
+            setServiceAreaLocality(
+              area?.locality || profile?.workshop_city || profile?.city || "",
+            );
+            setSelectedServiceAreaLocation(null);
+
+            if (area?.radiusKm === null && area) {
+              setServiceAreaRadiusOption("nationwide");
+            } else if (
+              area?.radiusKm === 25 ||
+              area?.radiusKm === 50 ||
+              area?.radiusKm === 100 ||
+              area?.radiusKm === 200
+            ) {
+              setServiceAreaRadiusOption(String(area.radiusKm) as ServiceAreaRadiusOption);
+            } else if (area?.radiusKm) {
+              setServiceAreaRadiusOption("custom");
+              setCustomServiceAreaRadius(String(area.radiusKm));
+            }
+          } catch (serviceAreaLoadError) {
+            console.error("Failed to load workshop service area:", serviceAreaLoadError);
+            setServiceAreaError("Zona de lucru nu a putut fi încărcată.");
+          }
+        }
       } catch (error) {
         console.error("Failed to load account:", error);
         router.push("/");
@@ -448,6 +496,103 @@ export default function AccountPage() {
       alert("Something went wrong while saving.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveServiceArea = async () => {
+    if (!isWorkshopMode || savingServiceArea) return;
+
+    setServiceAreaError(null);
+    const unchangedLocality =
+      serviceArea !== null &&
+      serviceAreaLocality.trim() === serviceArea.locality;
+
+    if (!selectedServiceAreaLocation && !unchangedLocality) {
+      setServiceAreaError("Selectează o localitate validă din rezultate.");
+      return;
+    }
+
+    let radiusKm: number | null;
+    if (serviceAreaRadiusOption === "nationwide") {
+      radiusKm = null;
+    } else if (serviceAreaRadiusOption === "custom") {
+      radiusKm = Number(customServiceAreaRadius);
+    } else {
+      radiusKm = Number(serviceAreaRadiusOption);
+    }
+
+    if (
+      radiusKm !== null &&
+      (!Number.isInteger(radiusKm) || radiusKm < 1 || radiusKm > 1000)
+    ) {
+      setServiceAreaError("Raza personalizată trebuie să fie între 1 și 1000 km.");
+      return;
+    }
+
+    setSavingServiceArea(true);
+    try {
+      const savedArea = await saveOwnWorkshopServiceArea({
+        location: selectedServiceAreaLocation,
+        radiusKm,
+        existingArea: serviceArea,
+      });
+      setServiceArea(savedArea);
+      setServiceAreaLocality(savedArea.locality);
+      setSelectedServiceAreaLocation(null);
+    } catch (error) {
+      console.error("Failed to save workshop service area:", error);
+      setServiceAreaError(
+        error instanceof Error
+          ? error.message
+          : "Zona de lucru nu a putut fi salvată.",
+      );
+    } finally {
+      setSavingServiceArea(false);
+    }
+  };
+
+  const handleGeocodeWorkshopAddress = async () => {
+    const address = workshopAddress.trim();
+    const city = workshopCity.trim();
+
+    if (!address || !city) {
+      setServiceAreaError(
+        "Completează adresa și orașul service-ului înainte de geocodare.",
+      );
+      return;
+    }
+
+    setGeocodingWorkshopAddress(true);
+    setServiceAreaError(null);
+    try {
+      const response = await fetch("/api/geocoding/forward", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, city }),
+      });
+      if (!response.ok) throw new Error("Geocodarea adresei a eșuat.");
+
+      const result = (await response.json()) as {
+        matched?: boolean;
+        location?: GeoLocation | null;
+      };
+      if (!result.matched || !result.location) {
+        throw new Error(
+          "Adresa nu a putut fi localizată exact. Selectează localitatea din listă.",
+        );
+      }
+
+      setSelectedServiceAreaLocation(result.location);
+      setServiceAreaLocality(result.location.locality);
+    } catch (error) {
+      setSelectedServiceAreaLocation(null);
+      setServiceAreaError(
+        error instanceof Error
+          ? error.message
+          : "Adresa nu a putut fi geocodată.",
+      );
+    } finally {
+      setGeocodingWorkshopAddress(false);
     }
   };
 
@@ -734,6 +879,125 @@ export default function AccountPage() {
                     Logo uploaded successfully
                   </p>
                 )}
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-[1.5rem] border border-orange-400/20 bg-orange-500/[0.06] p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-300">
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <p className="font-semibold text-white">Zona de lucru</p>
+                  <p className="mt-1 text-sm text-white/50">
+                    Alege punctul de bază și raza în care vrei să descoperi cereri noi.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Localitate validată
+                  </label>
+                  <GeoLocationCombobox
+                    value={serviceAreaLocality}
+                    onChange={(value) => {
+                      setServiceAreaLocality(value);
+                      setSelectedServiceAreaLocation(null);
+                      setServiceAreaError(null);
+                    }}
+                    onSelect={(suggestion) => {
+                      if (!suggestion.location) return;
+                      setSelectedServiceAreaLocation(suggestion.location);
+                      setServiceAreaError(null);
+                    }}
+                    getSelectionValue={(suggestion) => suggestion.label}
+                    placeholder="Caută localitatea"
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-orange-400/60"
+                    ariaLabel="Localitatea zonei de lucru"
+                  />
+                  <p className="mt-2 text-xs text-white/40">
+                    Selectează un rezultat Geoapify; textul introdus manual nu este suficient.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleGeocodeWorkshopAddress}
+                    disabled={geocodingWorkshopAddress}
+                    className="mt-3 min-h-11 w-full rounded-2xl border border-white/15 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-white/75 transition hover:border-orange-400/50 hover:text-orange-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {geocodingWorkshopAddress
+                      ? "Se localizează adresa..."
+                      : "Folosește adresa service-ului"}
+                  </button>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-white/70">
+                    Raza implicită
+                  </label>
+                  <select
+                    value={serviceAreaRadiusOption}
+                    onChange={(event) => {
+                      setServiceAreaRadiusOption(
+                        event.target.value as ServiceAreaRadiusOption,
+                      );
+                      setServiceAreaError(null);
+                    }}
+                    className="w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none transition focus:border-orange-400/60"
+                  >
+                    <option value="25">25 km</option>
+                    <option value="50">50 km</option>
+                    <option value="100">100 km</option>
+                    <option value="200">200 km</option>
+                    <option value="custom">Rază personalizată</option>
+                    <option value="nationwide">Toată țara</option>
+                  </select>
+
+                  {serviceAreaRadiusOption === "custom" && (
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      step={1}
+                      inputMode="numeric"
+                      value={customServiceAreaRadius}
+                      onChange={(event) => {
+                        setCustomServiceAreaRadius(event.target.value);
+                        setServiceAreaError(null);
+                      }}
+                      aria-label="Raza personalizată în kilometri"
+                      className="mt-3 w-full rounded-2xl border border-white/10 bg-black/35 px-4 py-3 text-white outline-none transition placeholder:text-white/25 focus:border-orange-400/60"
+                      placeholder="1–1000 km"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  {serviceArea ? (
+                    <p className="text-sm text-emerald-300">
+                      Zona salvată: {serviceArea.locality} · {serviceArea.radiusKm === null ? "Toată țara" : `${serviceArea.radiusKm} km`}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-amber-300">
+                      Zona de lucru nu este configurată.
+                    </p>
+                  )}
+                  {serviceAreaError && (
+                    <p className="mt-1 text-sm text-red-300">{serviceAreaError}</p>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveServiceArea}
+                  disabled={savingServiceArea}
+                  className="min-h-11 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingServiceArea ? "Se salvează..." : "Salvează zona"}
+                </button>
               </div>
             </div>
 
