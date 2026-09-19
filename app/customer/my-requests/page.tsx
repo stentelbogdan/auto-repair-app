@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
+  CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE,
+  getCustomerRequestViewCount,
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
@@ -185,6 +187,46 @@ export default function MyRequestsPage() {
               };
 
               console.log("MyRequests notification received:", notification);
+
+              if (
+                notification.type ===
+                CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE
+              ) {
+                if (
+                  (notification.recipient_role &&
+                    notification.recipient_role !== "customer") ||
+                  !notification.request_id
+                ) {
+                  return;
+                }
+
+                void getCustomerRequestViewCount(notification.request_id)
+                  .then((viewCount) => {
+                    if (viewCount === null) return;
+
+                    setRequests((currentRequests) =>
+                      currentRequests.map((request) =>
+                        request.id === notification.request_id
+                          ? {
+                              ...request,
+                              view_count: Math.max(
+                                request.view_count ?? 0,
+                                viewCount,
+                              ),
+                            }
+                          : request,
+                      ),
+                    );
+                  })
+                  .catch((error) => {
+                    console.error(
+                      "Failed to refresh customer request view count:",
+                      error,
+                    );
+                  });
+
+                return;
+              }
 
               /*
                * Nu presupunem momentan o singură denumire exactă,

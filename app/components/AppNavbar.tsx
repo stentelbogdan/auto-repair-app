@@ -21,6 +21,7 @@ import {
   isRepairServiceType,
   resolveRepairServiceType,
 } from "@/lib/repair-requests/service-types";
+import { CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE } from "@/lib/supabase/repair-requests";
 import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
 import { useTowingLiveTrackingControl } from "@/lib/towing/TowingLiveTrackingProvider";
 
@@ -961,10 +962,18 @@ export default function AppNavbar() {
         async (payload) => {
           const notification = payload.new as {
             actor_id?: string | null;
+            type?: string | null;
             title?: string | null;
             message?: string | null;
             target_url?: string | null;
           };
+
+          if (
+            notification.type ===
+            CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE
+          ) {
+            return;
+          }
 
           /*
       Protecție suplimentară:

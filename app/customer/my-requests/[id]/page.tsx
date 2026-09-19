@@ -44,6 +44,14 @@ import {
   normalizeWheelsServiceDetailsV2,
   type WheelPartsSupply,
 } from "@/lib/wheels/wheels-service-details";
+import TowingRequestForm, {
+  validateTowingRequestFormValues,
+  type TowingRequestFormInitialValues,
+  type TowingRequestFormValues,
+} from "@/app/components/towing/TowingRequestForm";
+import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
+import { getTowingRequestedDateTime } from "@/lib/towing/towing-schedule-display";
+import { isValidTowingRoutePaths } from "@/lib/towing/towing-route";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -87,6 +95,80 @@ function getWheelsFormInitialValues(
   };
 }
 
+function getTowingFormInitialValues(
+  request: EditableRepairRequest,
+): TowingRequestFormInitialValues | null {
+  if (!isTowingServiceDetailsV1(request.service_details)) return null;
+
+  const scheduleType = request.towing_schedule_type;
+  const requestedDateTime = getTowingRequestedDateTime(
+    scheduleType,
+    request.towing_requested_at,
+    request.towing_requested_timezone,
+  );
+  if (
+    scheduleType !== "asap" &&
+    (scheduleType !== "scheduled" || !requestedDateTime)
+  ) {
+    return null;
+  }
+
+  const getCoordinates = (
+    lat: number | null,
+    lng: number | null,
+  ) =>
+    typeof lat === "number" &&
+    Number.isFinite(lat) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    typeof lng === "number" &&
+    Number.isFinite(lng) &&
+    lng >= -180 &&
+    lng <= 180
+      ? { lat, lng }
+      : null;
+  const hasValidRoute =
+    typeof request.route_distance_meters === "number" &&
+    Number.isFinite(request.route_distance_meters) &&
+    request.route_distance_meters >= 0 &&
+    typeof request.route_duration_seconds === "number" &&
+    Number.isFinite(request.route_duration_seconds) &&
+    request.route_duration_seconds >= 0 &&
+    isValidTowingRoutePaths(request.route_paths);
+  const details = request.service_details;
+
+  return {
+    carBrand: request.car_brand,
+    carModel: request.car_model,
+    carYear: request.car_year,
+    licensePlate: request.license_plate ?? "",
+    pickupAddress: details.pickup.address,
+    pickupCity: details.pickup.city,
+    destinationAddress: details.destination.address,
+    destinationCity: details.destination.city,
+    pickupCoordinates: getCoordinates(request.pickup_lat, request.pickup_lng),
+    destinationCoordinates: getCoordinates(
+      request.destination_lat,
+      request.destination_lng,
+    ),
+    route: hasValidRoute && request.route_paths
+      ? {
+          distanceMeters: request.route_distance_meters as number,
+          durationSeconds: request.route_duration_seconds as number,
+          paths: request.route_paths,
+        }
+      : null,
+    scheduleType,
+    requestedDate: requestedDateTime?.date ?? "",
+    requestedTime: requestedDateTime?.time ?? "",
+    requestedTimezone: request.towing_requested_timezone,
+    reason: details.reason,
+    starts: details.vehicleCondition.starts,
+    canBePushed: details.vehicleCondition.canBePushed,
+    wheels: details.vehicleCondition.wheels,
+  };
+}
+
 export default function EditMyRequestPage() {
   /*
    * Routerul rămâne numai pentru redirecturile automate:
@@ -118,6 +200,10 @@ export default function EditMyRequestPage() {
     useState<WheelsRequestFormInitialValues | null>(null);
   const [wheelsDetails, setWheelsDetails] =
     useState<WheelsRequestDetailsValues | null>(null);
+  const [towingInitialValues, setTowingInitialValues] =
+    useState<TowingRequestFormInitialValues | null>(null);
+  const [towingDetails, setTowingDetails] =
+    useState<TowingRequestFormValues | null>(null);
   const [images, setImages] = useState<EditableRepairImage[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const newFilesRef = useRef<File[]>([]);
@@ -290,6 +376,16 @@ export default function EditMyRequestPage() {
 
         setWheelsInitialValues(null);
         setWheelsDetails(null);
+        setTowingInitialValues(null);
+        setTowingDetails(null);
+
+        if (resolvedServiceType === "towing") {
+          const initialValues = getTowingFormInitialValues(loadedRequest);
+          setTowingInitialValues(initialValues);
+          setTowingDetails(initialValues);
+          setServiceDetails([]);
+          return;
+        }
 
         if (resolvedServiceType === "wheels") {
           const initialValues = getWheelsFormInitialValues(
@@ -443,14 +539,17 @@ export default function EditMyRequestPage() {
     const resolvedServiceType = resolveRepairServiceType(request.service_type);
     const hasFullWheelsEditor =
       resolvedServiceType === "wheels" && wheelsDetails !== null;
+    const hasFullTowingEditor =
+      resolvedServiceType === "towing" && towingDetails !== null;
     const isDetailsOnlyRequest =
-      resolvedServiceType === "towing" ||
+      (resolvedServiceType === "towing" && !hasFullTowingEditor) ||
       (resolvedServiceType === "wheels" && !hasFullWheelsEditor);
 
     if (
       resolvedServiceType !== "bodywork" &&
       resolvedServiceType !== "mechanical" &&
       !hasFullWheelsEditor &&
+      !hasFullTowingEditor &&
       !isDetailsOnlyRequest
     ) {
       alert("Editarea acestui tip de cerere nu este disponibilă încă.");
@@ -479,6 +578,9 @@ export default function EditMyRequestPage() {
           rimSupply: toPartsSupply(wheelsDetails.rimSupply),
         })
       : null;
+    const nextTowingValues = hasFullTowingEditor
+      ? validateTowingRequestFormValues(towingDetails)
+      : null;
 
     if (isMechanicalRequest && !nextMechanicalDamageType) {
       alert("Selectează o categorie mecanică înainte de salvare.");
@@ -487,6 +589,10 @@ export default function EditMyRequestPage() {
 
     if (hasFullWheelsEditor && !nextWheelsServiceDetails) {
       alert("Detaliile pentru roți nu sunt valide.");
+      return;
+    }
+    if (nextTowingValues && !nextTowingValues.valid) {
+      alert(nextTowingValues.message);
       return;
     }
 
@@ -506,7 +612,34 @@ export default function EditMyRequestPage() {
       let savedServiceDetails = request.service_details;
       let savedDamageType = request.damage_type;
 
-      if (hasFullWheelsEditor && nextWheelsServiceDetails) {
+      if (hasFullTowingEditor && nextTowingValues?.valid) {
+        const towing = nextTowingValues.values;
+        await updateEditableRepairRequest({
+          serviceType: "towing",
+          requestId: request.id,
+          userId: request.user_id,
+          carBrand: towing.carBrand,
+          carModel: towing.carModel,
+          carYear: towing.carYear,
+          licensePlate: towing.licensePlate,
+          city: towing.city,
+          serviceDetails: towing.serviceDetails,
+          pickupLat: towing.pickupCoordinates?.lat ?? null,
+          pickupLng: towing.pickupCoordinates?.lng ?? null,
+          destinationLat: towing.destinationCoordinates?.lat ?? null,
+          destinationLng: towing.destinationCoordinates?.lng ?? null,
+          routeDistanceMeters: towing.route?.distanceMeters ?? null,
+          routeDurationSeconds: towing.route?.durationSeconds ?? null,
+          routePaths: towing.route?.paths ?? null,
+          towingScheduleType: towing.scheduleType,
+          towingRequestedAt: towing.requestedAt,
+          towingRequestedTimezone: towing.requestedTimezone,
+          description,
+          images: nextImages,
+        });
+        requestUpdateSucceeded = true;
+        savedServiceDetails = towing.serviceDetails;
+      } else if (hasFullWheelsEditor && nextWheelsServiceDetails) {
         await updateEditableRepairRequest({
           serviceType: "wheels",
           requestId: request.id,
@@ -612,6 +745,36 @@ export default function EditMyRequestPage() {
         currentRequest
           ? {
               ...currentRequest,
+              ...(nextTowingValues?.valid
+                ? {
+                    car_brand: nextTowingValues.values.carBrand,
+                    car_model: nextTowingValues.values.carModel,
+                    car_year: nextTowingValues.values.carYear,
+                    license_plate: nextTowingValues.values.licensePlate,
+                    city: nextTowingValues.values.city,
+                    pickup_lat:
+                      nextTowingValues.values.pickupCoordinates?.lat ?? null,
+                    pickup_lng:
+                      nextTowingValues.values.pickupCoordinates?.lng ?? null,
+                    destination_lat:
+                      nextTowingValues.values.destinationCoordinates?.lat ??
+                      null,
+                    destination_lng:
+                      nextTowingValues.values.destinationCoordinates?.lng ??
+                      null,
+                    route_distance_meters:
+                      nextTowingValues.values.route?.distanceMeters ?? null,
+                    route_duration_seconds:
+                      nextTowingValues.values.route?.durationSeconds ?? null,
+                    route_paths: nextTowingValues.values.route?.paths ?? null,
+                    towing_schedule_type:
+                      nextTowingValues.values.scheduleType,
+                    towing_requested_at:
+                      nextTowingValues.values.requestedAt,
+                    towing_requested_timezone:
+                      nextTowingValues.values.requestedTimezone,
+                  }
+                : {}),
               service_details: savedServiceDetails,
               damage_type: savedDamageType,
               description,
@@ -619,6 +782,9 @@ export default function EditMyRequestPage() {
             }
           : currentRequest,
       );
+      if (nextTowingValues?.valid) {
+        setLicensePlate(nextTowingValues.values.licensePlate);
+      }
       alert("Modificările au fost salvate.");
     } catch (error) {
       if (!requestUpdateSucceeded) {
@@ -731,8 +897,12 @@ export default function EditMyRequestPage() {
     resolvedServiceType === "wheels" &&
     wheelsInitialValues !== null &&
     wheelsDetails !== null;
+  const hasFullTowingEditor =
+    resolvedServiceType === "towing" &&
+    towingInitialValues !== null &&
+    towingDetails !== null;
   const isDetailsOnlyRequest =
-    resolvedServiceType === "towing" ||
+    (resolvedServiceType === "towing" && !hasFullTowingEditor) ||
     (resolvedServiceType === "wheels" && !hasFullWheelsEditor);
   const isUnsupportedRequest = resolvedServiceType === null;
 
@@ -753,6 +923,8 @@ export default function EditMyRequestPage() {
             ? "Editare problemă mecanică"
             : hasFullWheelsEditor
               ? "Editare roți și anvelope"
+              : hasFullTowingEditor
+                ? "Editare tractare"
             : isDetailsOnlyRequest || isUnsupportedRequest
               ? "Detalii cerere"
               : "Editare daună"}
@@ -775,6 +947,12 @@ export default function EditMyRequestPage() {
               initialValues={wheelsInitialValues}
               onDetailsChange={setWheelsDetails}
               showRequestDetails={false}
+            />
+          ) : hasFullTowingEditor ? (
+            <TowingRequestForm
+              key={request.id}
+              initialValues={towingInitialValues}
+              onValuesChange={setTowingDetails}
             />
           ) : isDetailsOnlyRequest ? (
             <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4">

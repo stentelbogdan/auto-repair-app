@@ -10,6 +10,9 @@ import type {
 import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import type { WheelsServiceDetailsV2 } from "@/lib/wheels/wheels-service-details";
+import type { TowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
+import type { TowingRoutePaths } from "@/lib/towing/towing-route";
+import type { TowingScheduleType } from "@/lib/supabase/repair-requests";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import {
   prepareImageForUpload,
@@ -47,6 +50,16 @@ export type EditableRepairRequest = {
   images: EditableRepairImage[] | null;
   status: string;
   accepted_offer_id: string | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  destination_lat: number | null;
+  destination_lng: number | null;
+  route_distance_meters: number | null;
+  route_duration_seconds: number | null;
+  route_paths: TowingRoutePaths | null;
+  towing_schedule_type: TowingScheduleType | null;
+  towing_requested_at: string | null;
+  towing_requested_timezone: string | null;
 };
 
 export type LoadedEditableRepairRequest = {
@@ -90,6 +103,29 @@ export type UpdateEditableRepairRequestInput =
       serviceDetails: WheelsServiceDetailsV2;
       description: string;
       images: EditableRepairImage[];
+    }
+  | {
+      serviceType: "towing";
+      requestId: string;
+      userId: string;
+      carBrand: string;
+      carModel: string;
+      carYear: string;
+      licensePlate: string;
+      city: string;
+      serviceDetails: TowingServiceDetailsV1;
+      pickupLat: number | null;
+      pickupLng: number | null;
+      destinationLat: number | null;
+      destinationLng: number | null;
+      routeDistanceMeters: number | null;
+      routeDurationSeconds: number | null;
+      routePaths: TowingRoutePaths | null;
+      towingScheduleType: TowingScheduleType;
+      towingRequestedAt: string | null;
+      towingRequestedTimezone: string | null;
+      description: string;
+      images: EditableRepairImage[];
     };
 
 export async function getEditableRepairRequest(
@@ -99,7 +135,7 @@ export async function getEditableRepairRequest(
   const { data: request, error: requestError } = await supabase
     .from("repair_requests")
     .select(
-      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, description, images, status, accepted_offer_id",
+      "id, user_id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, description, images, status, accepted_offer_id, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, towing_schedule_type, towing_requested_at, towing_requested_timezone",
     )
     .eq("id", requestId)
     .eq("user_id", userId)
@@ -160,6 +196,41 @@ export async function uploadEditableRepairImages(
 export async function updateEditableRepairRequest(
   input: UpdateEditableRepairRequestInput,
 ): Promise<void> {
+  if (input.serviceType === "towing") {
+    const { data, error } = await supabase
+      .from("repair_requests")
+      .update({
+        car_brand: input.carBrand,
+        car_model: input.carModel,
+        car_year: input.carYear,
+        license_plate: formatLicensePlateForDb(input.licensePlate),
+        city: input.city,
+        service_details: input.serviceDetails,
+        pickup_lat: input.pickupLat,
+        pickup_lng: input.pickupLng,
+        destination_lat: input.destinationLat,
+        destination_lng: input.destinationLng,
+        route_distance_meters: input.routeDistanceMeters,
+        route_duration_seconds: input.routeDurationSeconds,
+        route_paths: input.routePaths,
+        towing_schedule_type: input.towingScheduleType,
+        towing_requested_at: input.towingRequestedAt,
+        towing_requested_timezone: input.towingRequestedTimezone,
+        description: input.description,
+        images: input.images,
+      })
+      .eq("id", input.requestId)
+      .eq("user_id", input.userId)
+      .eq("status", "open")
+      .is("accepted_offer_id", null)
+      .select("id")
+      .maybeSingle<{ id: string }>();
+
+    if (error) throw error;
+    if (!data?.id) throw new Error("Cererea nu mai poate fi actualizată.");
+    return;
+  }
+
   if (input.serviceType === "wheels") {
     const { data, error } = await supabase
       .from("repair_requests")

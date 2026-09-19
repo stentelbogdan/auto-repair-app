@@ -82,6 +82,33 @@ type CustomerRequestViewCountRow = {
   view_count: number | string | null;
 };
 
+export const CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE =
+  "customer_request_view_count_changed";
+
+function toCustomerRequestViewCount(value: number | string | null) {
+  const count = Number(value ?? 0);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
+export async function getCustomerRequestViewCount(
+  requestId: string,
+): Promise<number | null> {
+  const { data, error } = await supabase.rpc(
+    "get_customer_request_view_counts",
+    { p_request_ids: [requestId] },
+  );
+
+  if (error) {
+    throw error;
+  }
+
+  const row = ((data ?? []) as CustomerRequestViewCountRow[]).find(
+    (item) => item.request_id === requestId,
+  );
+
+  return row ? toCustomerRequestViewCount(row.view_count) : null;
+}
+
 export async function createRepairRequest(input: {
   userId: string;
   carBrand: string;
@@ -210,10 +237,9 @@ export async function getOwnRepairRequests(userId: string) {
 
   ((viewCountsResult.data ?? []) as CustomerRequestViewCountRow[]).forEach(
     (row) => {
-      const count = Number(row.view_count ?? 0);
       viewCountByRequest.set(
         row.request_id,
-        Number.isFinite(count) && count > 0 ? Math.floor(count) : 0,
+        toCustomerRequestViewCount(row.view_count),
       );
     },
   );
