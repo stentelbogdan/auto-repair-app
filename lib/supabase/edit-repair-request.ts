@@ -17,6 +17,17 @@ import {
 } from "@/lib/images/prepare-image-for-upload";
 import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
 
+export const REPAIR_REQUEST_EDIT_BLOCKED_ERROR_CODE = "PT409";
+
+export function isRepairRequestEditBlockedError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === REPAIR_REQUEST_EDIT_BLOCKED_ERROR_CODE
+  );
+}
+
 export type EditableRepairImage = Omit<RepairRequestImage, "name"> & {
   name?: string;
 };
@@ -160,6 +171,7 @@ export async function updateEditableRepairRequest(
       .eq("id", input.requestId)
       .eq("user_id", input.userId)
       .eq("status", "open")
+      .is("accepted_offer_id", null)
       .select("id")
       .maybeSingle<{ id: string }>();
 
@@ -174,7 +186,7 @@ export async function updateEditableRepairRequest(
     return;
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("repair_requests")
     .update({
       license_plate: formatLicensePlateForDb(input.licensePlate),
@@ -186,10 +198,18 @@ export async function updateEditableRepairRequest(
         : {}),
     })
     .eq("id", input.requestId)
-    .eq("user_id", input.userId);
+    .eq("user_id", input.userId)
+    .eq("status", "open")
+    .is("accepted_offer_id", null)
+    .select("id")
+    .maybeSingle<{ id: string }>();
 
   if (error) {
     throw error;
+  }
+
+  if (!data?.id) {
+    throw new Error("Cererea nu mai poate fi actualizată.");
   }
 }
 

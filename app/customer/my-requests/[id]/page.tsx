@@ -12,6 +12,7 @@ import type { StructuredServiceDetails } from "@/lib/supabase/repair-requests";
 import {
   deleteEditableRepairRequest,
   getEditableRepairRequest,
+  isRepairRequestEditBlockedError,
   updateEditableRepairRequest,
   uploadEditableRepairImages,
   type EditableRepairImage,
@@ -259,6 +260,19 @@ export default function EditMyRequestPage() {
         }
 
         const loadedRequest = result.request;
+
+        if (
+          loadedRequest.status === "open" &&
+          !loadedRequest.accepted_offer_id &&
+          result.offersCount > 0
+        ) {
+          sessionStorage.setItem("my-requests-active-tab", "with_offer");
+          window.alert(
+            "Cererea nu mai poate fi modificată deoarece a primit deja o ofertă.",
+          );
+          router.replace("/customer/my-requests");
+          return;
+        }
 
         setRequest(loadedRequest);
         setOffersCount(result.offersCount);
@@ -514,6 +528,7 @@ export default function EditMyRequestPage() {
           .eq("id", request.id)
           .eq("user_id", request.user_id)
           .eq("status", "open")
+          .is("accepted_offer_id", null)
           .select("id")
           .maybeSingle<{ id: string }>();
 
@@ -611,6 +626,16 @@ export default function EditMyRequestPage() {
           uploadedImages.flatMap((image) => (image.path ? [image.path] : [])),
         );
       }
+
+      if (isRepairRequestEditBlockedError(error)) {
+        sessionStorage.setItem("my-requests-active-tab", "with_offer");
+        window.alert(
+          "Cererea nu mai poate fi modificată deoarece a primit deja o ofertă.",
+        );
+        router.replace("/customer/my-requests");
+        return;
+      }
+
       console.error(error);
       alert("Nu am putut salva modificările.");
     } finally {
