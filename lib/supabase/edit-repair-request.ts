@@ -9,7 +9,6 @@ import type {
 } from "@/lib/mechanical/mechanical-service-details";
 import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
 import type { RepairServiceType } from "@/lib/repair-requests/service-types";
-import type { WheelsServiceDetailsV2 } from "@/lib/wheels/wheels-service-details";
 import type { TowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import type { TowingScheduleType } from "@/lib/supabase/repair-requests";
@@ -19,6 +18,10 @@ import {
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
 import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
+import type {
+  GeoLocation,
+  RepairRequestDiscoveryLocation,
+} from "@/lib/geo/geo-location";
 
 export const REPAIR_REQUEST_EDIT_BLOCKED_ERROR_CODE = "PT409";
 
@@ -84,6 +87,7 @@ type UpdateEditableRepairRequestBase = {
   licensePlate: string;
   description: string;
   images: EditableRepairImage[];
+  locationChange?: GeoLocation;
 };
 
 export type UpdateEditableRepairRequestInput =
@@ -100,9 +104,10 @@ export type UpdateEditableRepairRequestInput =
       serviceType: "wheels";
       requestId: string;
       userId: string;
-      serviceDetails: WheelsServiceDetailsV2;
+      serviceDetails: RepairServiceDetails | null;
       description: string;
       images: EditableRepairImage[];
+      locationChange?: GeoLocation;
     }
   | {
       serviceType: "towing";
@@ -116,6 +121,7 @@ export type UpdateEditableRepairRequestInput =
       serviceDetails: TowingServiceDetailsV1;
       pickupLat: number | null;
       pickupLng: number | null;
+      discoveryLocation: RepairRequestDiscoveryLocation | null;
       destinationLat: number | null;
       destinationLng: number | null;
       routeDistanceMeters: number | null;
@@ -197,9 +203,11 @@ export async function updateEditableRepairRequest(
   input: UpdateEditableRepairRequestInput,
 ): Promise<void> {
   if (input.serviceType === "towing") {
-    const { data, error } = await supabase
-      .from("repair_requests")
-      .update({
+    const { data, error } = await supabase.rpc(
+      "update_towing_repair_request_with_discovery_location",
+      {
+        p_request_id: input.requestId,
+        p_update: {
         car_brand: input.carBrand,
         car_model: input.carModel,
         car_year: input.carYear,
@@ -218,16 +226,62 @@ export async function updateEditableRepairRequest(
         towing_requested_timezone: input.towingRequestedTimezone,
         description: input.description,
         images: input.images,
-      })
-      .eq("id", input.requestId)
-      .eq("user_id", input.userId)
-      .eq("status", "open")
-      .is("accepted_offer_id", null)
-      .select("id")
-      .maybeSingle<{ id: string }>();
+        },
+        p_discovery: input.discoveryLocation
+          ? {
+              locality: input.discoveryLocation.locality,
+              postal_code: input.discoveryLocation.postalCode,
+              country_code: input.discoveryLocation.countryCode,
+              lat: input.discoveryLocation.lat,
+              lng: input.discoveryLocation.lng,
+              source: input.discoveryLocation.source,
+            }
+          : null,
+      },
+    );
 
     if (error) throw error;
-    if (!data?.id) throw new Error("Cererea nu mai poate fi actualizată.");
+    if (!data) throw new Error("Cererea nu mai poate fi actualizată.");
+    return;
+  }
+
+  if (input.locationChange) {
+    const location = input.locationChange;
+    const pUpdate = {
+      service_type: input.serviceType,
+      city: location.locality,
+      ...(input.serviceDetails === null
+        ? {}
+        : { service_details: input.serviceDetails }),
+      description: input.description,
+      images: input.images,
+      ...(input.serviceType === "wheels"
+        ? {}
+        : {
+            license_plate: formatLicensePlateForDb(input.licensePlate),
+            ...(input.serviceType === "mechanical"
+              ? { damage_type: input.damageType }
+              : {}),
+          }),
+    };
+    const { data, error } = await supabase.rpc(
+      "update_repair_request_with_discovery_location",
+      {
+        p_request_id: input.requestId,
+        p_update: pUpdate,
+        p_discovery: {
+          locality: location.locality,
+          postal_code: location.postalCode,
+          country_code: location.countryCode,
+          lat: location.lat,
+          lng: location.lng,
+          source: "locality",
+        },
+      },
+    );
+
+    if (error) throw error;
+    if (!data) throw new Error("Cererea nu mai poate fi actualizată.");
     return;
   }
 

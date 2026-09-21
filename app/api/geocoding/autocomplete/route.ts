@@ -1,4 +1,5 @@
 import {
+  deduplicateGeoapifySuggestions,
   isGeoapifyRecord,
   normalizeGeoapifySuggestion,
 } from "@/lib/geo/geoapify";
@@ -111,23 +112,20 @@ export async function POST(request: Request) {
       isRecord(payload) && Array.isArray(payload.results)
         ? payload.results.filter(isGeoapifyRecord)
         : [];
-    const suggestions = results
-      .map((result): AutocompleteSuggestion | null => {
-        const suggestion = normalizeGeoapifySuggestion(result);
-        if (!suggestion) return null;
-
-        return {
-          ...suggestion,
-          city: suggestion.location.locality,
-          countryCode: suggestion.location.countryCode,
-          postalCode: suggestion.location.postalCode,
-          lat: suggestion.location.lat,
-          lng: suggestion.location.lng,
-        };
-      })
-      .filter((suggestion): suggestion is AutocompleteSuggestion =>
+    const normalizedSuggestions = results
+      .map(normalizeGeoapifySuggestion)
+      .filter((suggestion): suggestion is NonNullable<typeof suggestion> =>
         Boolean(suggestion),
       );
+    const suggestions = deduplicateGeoapifySuggestions(normalizedSuggestions)
+      .map((suggestion): AutocompleteSuggestion => ({
+        ...suggestion,
+        city: suggestion.location.locality,
+        countryCode: suggestion.location.countryCode,
+        postalCode: suggestion.location.postalCode,
+        lat: suggestion.location.lat,
+        lng: suggestion.location.lng,
+      }));
 
     return Response.json({ suggestions });
   } catch {

@@ -6,6 +6,10 @@ export type GeoLocation = {
   lng: number;
 };
 
+export type RepairRequestDiscoveryLocation = GeoLocation & {
+  source: "locality" | "towing_pickup";
+};
+
 export type GeoLocationSuggestion = {
   id: string;
   label: string;

@@ -67,6 +67,9 @@ function PostTowingContent() {
       const storedImages = await uploadPreparedRepairImages(prepared, data.user.id);
       uploadedPaths = storedImages.flatMap((image) => image.path ? [image.path] : []);
       const values = validation.values;
+      if (!values.pickupDiscoveryLocation) {
+        throw new Error("Locația de preluare nu a putut fi validată.");
+      }
 
       await createRepairRequest({
         userId: data.user.id,
@@ -92,6 +95,10 @@ function PostTowingContent() {
         images: storedImages,
         requestType: targetWorkshopId ? "direct_request" : "repair",
         targetWorkshopId: targetWorkshopId || null,
+        discoveryLocation: {
+          ...values.pickupDiscoveryLocation,
+          source: "towing_pickup",
+        },
       });
       requestCreated = true;
       sessionStorage.setItem("job-posted-success", "true");

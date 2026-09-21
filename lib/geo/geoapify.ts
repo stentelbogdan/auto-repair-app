@@ -65,6 +65,36 @@ export function normalizeGeoapifySuggestion(
   };
 }
 
+function normalizeSemanticLocationPart(value: string | null | undefined) {
+  return (
+    value
+      ?.normalize("NFKC")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase("und") ?? ""
+  );
+}
+
+export function deduplicateGeoapifySuggestions(
+  suggestions: GeoLocationSuggestion[],
+): GeoLocationSuggestion[] {
+  const seen = new Set<string>();
+
+  return suggestions.filter((suggestion) => {
+    const semanticKey = [
+      normalizeSemanticLocationPart(suggestion.location.locality),
+      normalizeSemanticLocationPart(suggestion.location.postalCode),
+      normalizeSemanticLocationPart(suggestion.region),
+      normalizeSemanticLocationPart(suggestion.location.countryCode),
+    ].join("|");
+
+    if (seen.has(semanticKey)) return false;
+
+    seen.add(semanticKey);
+    return true;
+  });
+}
+
 export function getGeoapifyAddress(result: GeoapifyResult) {
   const street = getGeoapifyString(result, "street");
   const houseNumber = getGeoapifyString(result, "housenumber");

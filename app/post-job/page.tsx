@@ -16,7 +16,8 @@ import {
   type StructuredServiceDetails,
 } from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
-import { romaniaCities } from "@/lib/data/romania-cities";
+import GeoLocationCombobox from "@/app/components/GeoLocationCombobox";
+import type { GeoLocation } from "@/lib/geo/geo-location";
 import {
   formatLicensePlateInput,
   isValidLicensePlate,
@@ -97,6 +98,7 @@ function PostJobContent() {
   const [carModel, setCarModel] = useState("");
   const [carYear, setCarYear] = useState("");
   const [city, setCity] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState<GeoLocation | null>(null);
   const [licensePlate, setLicensePlate] = useState("");
 
   const [expandedServices, setExpandedServices] = useState<DamageType[]>([]);
@@ -290,6 +292,10 @@ function PostJobContent() {
         options: otherServiceOptions,
       };
 
+      if (!selectedLocation) {
+        throw new Error("Selectează o localitate validă din lista de sugestii.");
+      }
+
       await createRepairRequest({
         userId: authData.user.id,
         carBrand,
@@ -301,6 +307,7 @@ function PostJobContent() {
         serviceDetails: completeServiceDetails,
         description,
         images: storedImages,
+        discoveryLocation: { ...selectedLocation, source: "locality" },
         requestType: targetWorkshopId ? "direct_request" : "repair",
         targetWorkshopId: targetWorkshopId || null,
       });
@@ -422,20 +429,19 @@ function PostJobContent() {
                 Localitate
               </label>
 
-              <select
+              <GeoLocationCombobox
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(value) => {
+                  setCity(value);
+                  setSelectedLocation(null);
+                }}
+                onSelect={(suggestion) =>
+                  setSelectedLocation(suggestion.location)
+                }
+                placeholder="Scrie localitatea"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-              >
-                <option value="">Alege localitatea</option>
-
-                {romaniaCities.map((cityName) => (
-                  <option key={cityName} value={cityName}>
-                    {cityName}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>

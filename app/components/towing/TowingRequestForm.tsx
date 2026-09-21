@@ -11,8 +11,14 @@ import {
 import AppointmentDateTimePicker, {
   toLocalDateValue,
 } from "@/app/components/AppointmentDateTimePicker";
-import TowingLocationCombobox from "@/app/components/towing/TowingLocationCombobox";
+import TowingLocationCombobox, {
+  type TowingLocationSuggestion,
+} from "@/app/components/towing/TowingLocationCombobox";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
+import {
+  normalizeGeoLocation,
+  type GeoLocation,
+} from "@/lib/geo/geo-location";
 import type { TowingScheduleType } from "@/lib/supabase/repair-requests";
 import {
   formatTowingRouteDistance,
@@ -62,6 +68,7 @@ export type TowingRequestFormValues = {
   destinationAddress: string;
   destinationCity: string;
   pickupCoordinates: TowingCoordinates | null;
+  pickupDiscoveryLocation: GeoLocation | null;
   destinationCoordinates: TowingCoordinates | null;
   route: TowingRouteSnapshot | null;
   scheduleType: TowingScheduleType;
@@ -84,6 +91,7 @@ export type ValidatedTowingRequestValues = {
   city: string;
   serviceDetails: TowingServiceDetailsV1;
   pickupCoordinates: TowingCoordinates | null;
+  pickupDiscoveryLocation: GeoLocation | null;
   destinationCoordinates: TowingCoordinates | null;
   route: TowingRouteSnapshot | null;
   scheduleType: TowingScheduleType;
@@ -111,6 +119,7 @@ const emptyValues: TowingRequestFormValues = {
   destinationAddress: "",
   destinationCity: "",
   pickupCoordinates: null,
+  pickupDiscoveryLocation: null,
   destinationCoordinates: null,
   route: null,
   scheduleType: "asap",
@@ -282,6 +291,7 @@ export function validateTowingRequestFormValues(
         },
       },
       pickupCoordinates: values.pickupCoordinates,
+      pickupDiscoveryLocation: values.pickupDiscoveryLocation,
       destinationCoordinates: values.destinationCoordinates,
       route: values.route,
       scheduleType: values.scheduleType,
@@ -478,14 +488,28 @@ export default function TowingRequestForm({
       const result = (await response.json()) as {
         address: string | null;
         city: string | null;
+        location: GeoLocation | null;
       };
       if (ref.current !== controller) return;
       const address = result.address?.trim() || "";
       const city = result.city?.trim() || "";
       if (!address || !city) throw new Error("Incomplete location.");
+      const normalizedLocation = normalizeGeoLocation({
+        locality: result.location?.locality,
+        postalCode: result.location?.postalCode,
+        countryCode: result.location?.countryCode,
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+      });
+      if (!normalizedLocation) throw new Error("Incomplete location metadata.");
       update(
         kind === "pickup"
-          ? { pickupAddress: address, pickupCity: city, pickupCoordinates: coordinates }
+          ? {
+              pickupAddress: address,
+              pickupCity: city,
+              pickupCoordinates: coordinates,
+              pickupDiscoveryLocation: normalizedLocation,
+            }
           : {
               destinationAddress: address,
               destinationCity: city,
@@ -501,7 +525,11 @@ export default function TowingRequestForm({
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       if (ref.current !== controller) return;
-      update(kind === "pickup" ? { pickupCoordinates: null } : { destinationCoordinates: null });
+      update(
+        kind === "pickup"
+          ? { pickupCoordinates: null, pickupDiscoveryLocation: null }
+          : { destinationCoordinates: null },
+      );
       const feedback = {
         type: "error" as const,
         message: "Locația nu a putut fi completată automat. Introdu adresa manual.",
@@ -540,6 +568,7 @@ export default function TowingRequestForm({
         lat: number | null;
         lng: number | null;
         matched: boolean;
+        location: GeoLocation | null;
       };
       if (ref.current !== controller) return;
       if (
@@ -552,7 +581,23 @@ export default function TowingRequestForm({
         throw new Error("Address not matched.");
       }
       const coordinates = { lat: result.lat, lng: result.lng };
-      update(kind === "pickup" ? { pickupCoordinates: coordinates } : { destinationCoordinates: coordinates });
+      const normalizedLocation = normalizeGeoLocation({
+        locality: result.location?.locality,
+        postalCode: result.location?.postalCode,
+        countryCode: result.location?.countryCode,
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+      });
+      if (!normalizedLocation) throw new Error("Location metadata missing.");
+      update(
+        kind === "pickup"
+          ? {
+              pickupCoordinates: coordinates,
+              pickupDiscoveryLocation: normalizedLocation,
+              pickupCity: normalizedLocation.locality,
+            }
+          : { destinationCoordinates: coordinates },
+      );
       const feedback = { type: "success" as const, message: "Pin actualizat după adresă" };
       if (kind === "pickup") setPickupFeedback(feedback);
       else setDestinationFeedback(feedback);
@@ -598,6 +643,7 @@ export default function TowingRequestForm({
         ? {
             [field === "address" ? "pickupAddress" : "pickupCity"]: value,
             pickupCoordinates: null,
+            pickupDiscoveryLocation: null,
             route: null,
           }
         : {
@@ -617,6 +663,39 @@ export default function TowingRequestForm({
         previousCoordinates,
       );
     }, 900);
+  }
+
+  function selectLocationSuggestion(
+    kind: "pickup" | "destination",
+    suggestion: TowingLocationSuggestion,
+  ) {
+    if (!suggestion.location) return;
+
+    const controller = kind === "pickup" ? pickupController : destinationController;
+    const timer = kind === "pickup" ? pickupTimer : destinationTimer;
+    controller.current?.abort();
+    controller.current = null;
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+
+    const location = suggestion.location;
+    const coordinates = { lat: location.lat, lng: location.lng };
+    update(
+      kind === "pickup"
+        ? {
+            pickupCity: location.locality,
+            pickupCoordinates: coordinates,
+            pickupDiscoveryLocation: location,
+            route: null,
+          }
+        : {
+            destinationCity: location.locality,
+            destinationCoordinates: coordinates,
+            route: null,
+          },
+    );
   }
 
   function detectPickupLocation() {
@@ -701,6 +780,7 @@ export default function TowingRequestForm({
         addressPlaceholder="Stradă, număr, reper"
         onAddressChange={(value) => changeLocationText("pickup", "address", value)}
         onCityChange={(value) => changeLocationText("pickup", "city", value)}
+        onCitySelect={(suggestion) => selectLocationSuggestion("pickup", suggestion)}
         coordinates={values.pickupCoordinates}
         onPositionChange={(lat, lng) => void reverseGeocode("pickup", { lat, lng }, "drag")}
         showAttribution
@@ -720,6 +800,7 @@ export default function TowingRequestForm({
         addressPlaceholder="Adresa unde va fi transportată mașina"
         onAddressChange={(value) => changeLocationText("destination", "address", value)}
         onCityChange={(value) => changeLocationText("destination", "city", value)}
+        onCitySelect={(suggestion) => selectLocationSuggestion("destination", suggestion)}
         coordinates={values.destinationCoordinates}
         onPositionChange={(lat, lng) => void reverseGeocode("destination", { lat, lng }, "drag")}
         action={<LocationFeedbackView feedback={destinationFeedback} />}
@@ -810,13 +891,14 @@ function LocationFeedbackView({ feedback }: { feedback: LocationFeedback | null 
   return feedback ? <p className={`mt-2 text-sm font-medium ${feedback.type === "success" ? "text-emerald-400" : "text-red-400"}`}>{feedback.message}</p> : null;
 }
 
-function LocationSection({ title, address, city, addressPlaceholder, onAddressChange, onCityChange, coordinates, onPositionChange, action, showAttribution = false }: {
+function LocationSection({ title, address, city, addressPlaceholder, onAddressChange, onCityChange, onCitySelect, coordinates, onPositionChange, action, showAttribution = false }: {
   title: string;
   address: string;
   city: string;
   addressPlaceholder: string;
   onAddressChange: (value: string) => void;
   onCityChange: (value: string) => void;
+  onCitySelect: (suggestion: TowingLocationSuggestion) => void;
   coordinates: TowingCoordinates | null;
   onPositionChange: (lat: number, lng: number) => void;
   action: ReactNode;
@@ -826,7 +908,7 @@ function LocationSection({ title, address, city, addressPlaceholder, onAddressCh
     <h2 className="text-base font-black">{title}</h2>{action}
     <div className="mt-3 grid gap-3 md:grid-cols-2">
       <label><span className="mb-2 block text-sm font-medium text-white/70">Adresă</span><input value={address} onChange={(event) => onAddressChange(event.target.value)} placeholder={addressPlaceholder} className={darkInputClassName} /></label>
-      <div><span className="mb-2 block text-sm font-medium text-white/70">Oraș</span><TowingLocationCombobox value={city} onChange={onCityChange} biasLat={coordinates?.lat} biasLng={coordinates?.lng} placeholder="Scrie localitatea" className={darkInputClassName} required /></div>
+      <div><span className="mb-2 block text-sm font-medium text-white/70">Oraș</span><TowingLocationCombobox value={city} onChange={onCityChange} onSelect={onCitySelect} biasLat={coordinates?.lat} biasLng={coordinates?.lng} placeholder="Scrie localitatea" className={darkInputClassName} required /></div>
     </div>
     {showAttribution ? (
       <p className="mt-2 text-xs text-white/45">

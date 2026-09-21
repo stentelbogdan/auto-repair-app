@@ -7,7 +7,8 @@ import WheelsRequestForm, {
   type WheelsRequestFormValues,
 } from "@/app/components/wheels/WheelsRequestForm";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
-import { romaniaCities } from "@/lib/data/romania-cities";
+import GeoLocationCombobox from "@/app/components/GeoLocationCombobox";
+import type { GeoLocation } from "@/lib/geo/geo-location";
 import {
   prepareImageForUpload,
   type PreparedImage,
@@ -88,6 +89,7 @@ function PostWheelsContent() {
     targetWorkshopId,
   }));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<GeoLocation | null>(null);
   const isSubmittingRef = useRef(false);
   const { carBrand, carModel, carYear, city, licensePlate } = draft;
   const availableModels = carModelsByBrand[carBrand] || [];
@@ -173,6 +175,10 @@ function PostWheelsContent() {
         image.path ? [image.path] : [],
       );
 
+      if (!selectedLocation) {
+        throw new Error("Selectează o localitate validă din lista de sugestii.");
+      }
+
       await createRepairRequest({
         userId: authData.user.id,
         carBrand,
@@ -187,6 +193,7 @@ function PostWheelsContent() {
         images: storedImages,
         requestType: draft.targetWorkshopId ? "direct_request" : "repair",
         targetWorkshopId: draft.targetWorkshopId || null,
+        discoveryLocation: { ...selectedLocation, source: "locality" },
       });
       requestCreated = true;
 
@@ -297,19 +304,19 @@ function PostWheelsContent() {
               <label className="mb-2 block text-sm font-medium text-black/70">
                 Localitate
               </label>
-              <select
+              <GeoLocationCombobox
                 value={city}
-                onChange={(event) => updateDraft({ city: event.target.value })}
+                onChange={(value) => {
+                  updateDraft({ city: value });
+                  setSelectedLocation(null);
+                }}
+                onSelect={(suggestion) =>
+                  setSelectedLocation(suggestion.location)
+                }
+                placeholder="Scrie localitatea"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
                 required
-              >
-                <option value="">Alege localitatea</option>
-                {romaniaCities.map((cityName) => (
-                  <option key={cityName} value={cityName}>
-                    {cityName}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>

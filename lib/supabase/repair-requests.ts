@@ -7,6 +7,7 @@ import type { TowingServiceDetailsV1 } from "@/lib/towing/towing-service-details
 import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import type { WheelsServiceDetails } from "@/lib/wheels/wheels-service-details";
+import type { RepairRequestDiscoveryLocation } from "@/lib/geo/geo-location";
 
 export type StructuredServiceDetails = {
   version: 1;
@@ -133,11 +134,12 @@ export async function createRepairRequest(input: {
   requestType?: "repair" | "direct_request" | "direct_message";
   targetWorkshopId?: string | null;
   images: RepairRequestImage[];
+  discoveryLocation: RepairRequestDiscoveryLocation;
 }) {
-  const { data, error } = await supabase
-    .from("repair_requests")
-    .insert({
-      user_id: input.userId,
+  const { data, error } = await supabase.rpc(
+    "create_repair_request_with_discovery_location",
+    {
+      p_request: {
       car_brand: input.carBrand,
       car_model: input.carModel,
       car_year: input.carYear,
@@ -148,7 +150,7 @@ export async function createRepairRequest(input: {
       destination_lng: input.destinationLng,
       route_distance_meters: input.routeDistanceMeters,
       route_duration_seconds: input.routeDurationSeconds,
-      route_paths: input.routePaths ?? null,
+      ...(input.routePaths == null ? {} : { route_paths: input.routePaths }),
       towing_schedule_type: input.towingScheduleType ?? null,
       towing_requested_at: input.towingRequestedAt ?? null,
       towing_requested_timezone: input.towingRequestedTimezone ?? null,
@@ -161,15 +163,23 @@ export async function createRepairRequest(input: {
       target_workshop_id: input.targetWorkshopId ?? null,
       images: input.images,
       status: "open",
-    })
-    .select()
-    .single();
+      },
+      p_discovery: {
+        locality: input.discoveryLocation.locality,
+        postal_code: input.discoveryLocation.postalCode,
+        country_code: input.discoveryLocation.countryCode,
+        lat: input.discoveryLocation.lat,
+        lng: input.discoveryLocation.lng,
+        source: input.discoveryLocation.source,
+      },
+    },
+  );
 
   if (error) {
     throw error;
   }
 
-  return data as RepairRequestRow;
+  return data as string;
 }
 
 export async function getWorkshopRepairRequests() {

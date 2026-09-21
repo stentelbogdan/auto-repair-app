@@ -52,6 +52,8 @@ import TowingRequestForm, {
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import { getTowingRequestedDateTime } from "@/lib/towing/towing-schedule-display";
 import { isValidTowingRoutePaths } from "@/lib/towing/towing-route";
+import GeoLocationCombobox from "@/app/components/GeoLocationCombobox";
+import type { GeoLocation } from "@/lib/geo/geo-location";
 
 const Car3DViewer = dynamic(
   () => import("@/app/components/car-3d/Car3DViewer"),
@@ -147,6 +149,7 @@ function getTowingFormInitialValues(
     destinationAddress: details.destination.address,
     destinationCity: details.destination.city,
     pickupCoordinates: getCoordinates(request.pickup_lat, request.pickup_lng),
+    pickupDiscoveryLocation: null,
     destinationCoordinates: getCoordinates(
       request.destination_lat,
       request.destination_lng,
@@ -189,6 +192,10 @@ export default function EditMyRequestPage() {
   const [request, setRequest] = useState<EditableRepairRequest | null>(null);
   const [description, setDescription] = useState("");
   const [licensePlate, setLicensePlate] = useState("");
+  const [locationText, setLocationText] = useState("");
+  const [selectedLocation, setSelectedLocation] =
+    useState<GeoLocation | null>(null);
+  const [locationDirty, setLocationDirty] = useState(false);
   const [serviceDetails, setServiceDetails] = useState<string[]>([]);
   const [mechanicalSymptomsByCategory, setMechanicalSymptomsByCategory] =
     useState<MechanicalSymptomIdsByCategory>({});
@@ -365,6 +372,9 @@ export default function EditMyRequestPage() {
 
         setDescription(loadedRequest.description || "");
         setLicensePlate(loadedRequest.license_plate || "");
+        setLocationText(loadedRequest.city);
+        setSelectedLocation(null);
+        setLocationDirty(false);
 
         setImages(
           Array.isArray(loadedRequest.images) ? loadedRequest.images : [],
@@ -557,6 +567,14 @@ export default function EditMyRequestPage() {
     }
 
     const isMechanicalRequest = resolvedServiceType === "mechanical";
+    const supportsLocationEditing =
+      resolvedServiceType === "bodywork" ||
+      resolvedServiceType === "mechanical" ||
+      resolvedServiceType === "wheels";
+    const locationChange =
+      supportsLocationEditing && locationDirty
+        ? (selectedLocation ?? undefined)
+        : undefined;
     const nextMechanicalServiceDetails = isMechanicalRequest
       ? buildMechanicalServiceDetails(mechanicalSymptomsByCategory)
       : null;
@@ -595,6 +613,10 @@ export default function EditMyRequestPage() {
       alert(nextTowingValues.message);
       return;
     }
+    if (supportsLocationEditing && locationDirty && !locationChange) {
+      alert("Selectează o localitate validă din lista de sugestii.");
+      return;
+    }
 
     saveInProgressRef.current = true;
     let uploadedImages: EditableRepairImage[] = [];
@@ -626,6 +648,9 @@ export default function EditMyRequestPage() {
           serviceDetails: towing.serviceDetails,
           pickupLat: towing.pickupCoordinates?.lat ?? null,
           pickupLng: towing.pickupCoordinates?.lng ?? null,
+          discoveryLocation: towing.pickupDiscoveryLocation
+            ? { ...towing.pickupDiscoveryLocation, source: "towing_pickup" }
+            : null,
           destinationLat: towing.destinationCoordinates?.lat ?? null,
           destinationLng: towing.destinationCoordinates?.lng ?? null,
           routeDistanceMeters: towing.route?.distanceMeters ?? null,
@@ -647,30 +672,43 @@ export default function EditMyRequestPage() {
           serviceDetails: nextWheelsServiceDetails,
           description,
           images: nextImages,
+          locationChange,
         });
         requestUpdateSucceeded = true;
 
         savedServiceDetails = nextWheelsServiceDetails;
       } else if (isDetailsOnlyRequest) {
-        const { data: updatedRequest, error: updateError } = await supabase
-          .from("repair_requests")
-          .update({
+        if (resolvedServiceType === "wheels" && locationChange) {
+          await updateEditableRepairRequest({
+            serviceType: "wheels",
+            requestId: request.id,
+            userId: request.user_id,
+            serviceDetails: request.service_details,
             description,
             images: nextImages,
-          })
-          .eq("id", request.id)
-          .eq("user_id", request.user_id)
-          .eq("status", "open")
-          .is("accepted_offer_id", null)
-          .select("id")
-          .maybeSingle<{ id: string }>();
+            locationChange,
+          });
+        } else {
+          const { data: updatedRequest, error: updateError } = await supabase
+            .from("repair_requests")
+            .update({
+              description,
+              images: nextImages,
+            })
+            .eq("id", request.id)
+            .eq("user_id", request.user_id)
+            .eq("status", "open")
+            .is("accepted_offer_id", null)
+            .select("id")
+            .maybeSingle<{ id: string }>();
 
-        if (updateError) {
-          throw updateError;
-        }
+          if (updateError) {
+            throw updateError;
+          }
 
-        if (!updatedRequest?.id) {
-          throw new Error("Cererea nu mai poate fi actualizată.");
+          if (!updatedRequest?.id) {
+            throw new Error("Cererea nu mai poate fi actualizată.");
+          }
         }
         requestUpdateSucceeded = true;
       } else if (isMechanicalRequest) {
@@ -687,6 +725,7 @@ export default function EditMyRequestPage() {
           damageType: nextMechanicalDamageType,
           description,
           images: nextImages,
+          locationChange,
         });
         requestUpdateSucceeded = true;
 
@@ -726,6 +765,7 @@ export default function EditMyRequestPage() {
           serviceDetails: nextBodyworkServiceDetails,
           description,
           images: nextImages,
+          locationChange,
         });
         requestUpdateSucceeded = true;
 
@@ -777,6 +817,7 @@ export default function EditMyRequestPage() {
                 : {}),
               service_details: savedServiceDetails,
               damage_type: savedDamageType,
+              ...(locationChange ? { city: locationChange.locality } : {}),
               description,
               images: nextImages,
             }
@@ -784,6 +825,11 @@ export default function EditMyRequestPage() {
       );
       if (nextTowingValues?.valid) {
         setLicensePlate(nextTowingValues.values.licensePlate);
+      }
+      if (locationChange) {
+        setLocationText(locationChange.locality);
+        setSelectedLocation(null);
+        setLocationDirty(false);
       }
       alert("Modificările au fost salvate.");
     } catch (error) {
@@ -941,6 +987,34 @@ export default function EditMyRequestPage() {
         </p>
 
         <section className="mt-6 rounded-[28px] bg-white p-5 text-black">
+          {canEdit &&
+            (resolvedServiceType === "bodywork" ||
+              resolvedServiceType === "mechanical" ||
+              resolvedServiceType === "wheels") && (
+            <div className="mb-6">
+              <label className="mb-2 block text-sm font-semibold text-black/60">
+                Localitate
+              </label>
+              <GeoLocationCombobox
+                value={locationText}
+                onChange={(value) => {
+                  setLocationText(value);
+                  setSelectedLocation(null);
+                  setLocationDirty(true);
+                }}
+                onSelect={(suggestion) => {
+                  if (!suggestion.location) return;
+                  setLocationText(suggestion.location.locality);
+                  setSelectedLocation(suggestion.location);
+                  setLocationDirty(true);
+                }}
+                placeholder="Scrie localitatea"
+                className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"
+                required
+              />
+            </div>
+          )}
+
           {hasFullWheelsEditor ? (
             <WheelsRequestForm
               key={request.id}
