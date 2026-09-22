@@ -11,10 +11,12 @@ import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { formatPostedTime } from "@/lib/formatters";
 import { supabase } from "@/lib/supabase/client";
+import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import {
-  getWorkshopRepairRequests,
-  type RepairRequestRow,
-} from "@/lib/supabase/repair-requests";
+  fetchWorkshopDiscoveryFeed,
+  type WorkshopDiscoveryCursor,
+  type WorkshopDiscoveryFeedItem,
+} from "@/lib/supabase/workshop-discovery";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import { getWorkshopRequestMetrics } from "@/lib/supabase/repair-request-metrics";
 import { recordWorkshopRequestView } from "@/lib/supabase/repair-request-views";
@@ -39,6 +41,7 @@ type WorkshopRequest = {
   viewCount: number;
   offerCount: number;
   clientName: string | null;
+  distanceKm: number | null;
 };
 
 const ENRICHMENT_TIMEOUT_MS = 8_000;
@@ -54,9 +57,14 @@ export default function WorkshopWheelsPage() {
   const [accessError, setAccessError] = useState(false);
   const [accessCheckVersion, setAccessCheckVersion] = useState(0);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] =
+    useState<WorkshopDiscoveryCursor | null>(null);
   const [dataError, setDataError] = useState(false);
   const accessAttemptRef = useRef(0);
   const loadAttemptRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const hasLoadedRequestsRef = useRef(false);
   const workshopUserIdRef = useRef<string | null>(null);
 
@@ -99,7 +107,6 @@ export default function WorkshopWheelsPage() {
         setAuthorized(true);
         setAccessError(false);
         setCheckingAccess(false);
-        void loadRequests();
         void markDirectRequestsRead(result.userId);
         return;
       }
@@ -139,58 +146,32 @@ export default function WorkshopWheelsPage() {
     [],
   );
 
-  const loadRequests = async (
-    { silent = false }: { silent?: boolean } = {},
-  ) => {
+  async function loadRequests(
+    { loadMore = false }: { loadMore?: boolean } = {},
+  ) {
+    if (loadMore && (!nextCursor || loadingMoreRef.current)) return;
+
     const attemptId = ++loadAttemptRef.current;
     const isCurrentAttempt = () => attemptId === loadAttemptRef.current;
 
-    if (!silent) {
+    if (loadMore) {
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
       setLoadingRequests(true);
       setDataError(false);
     }
 
-    let wheelsRows: RepairRequestRow[];
+    let wheelsItems: WorkshopDiscoveryFeedItem[];
 
     try {
-      const rows = await getWorkshopRepairRequests();
-      const workshopUserId = workshopUserIdRef.current;
-
-      if (!workshopUserId) {
-        throw new Error("Workshop user is unavailable for request loading.");
-      }
-
-      const { data: existingOffers, error: existingOffersError } =
-        await supabase
-          .from("repair_offers")
-          .select("request_id")
-          .eq("workshop_user_id", workshopUserId);
-
-      if (existingOffersError) throw existingOffersError;
-
-      const offeredRequestIds = new Set(
-        (existingOffers ?? [])
-          .map((offer) => offer.request_id)
-          .filter(Boolean),
-      );
-
-      wheelsRows = rows.filter((request) => {
-        const requestType = request.request_type ?? "repair";
-        const isVisibleToWorkshop =
-          requestType === "repair" ||
-          (requestType === "direct_request" &&
-            request.target_workshop_id === workshopUserId);
-
-        return (
-          request.service_type === "wheels" &&
-          request.status === "open" &&
-          !request.accepted_offer_id &&
-          isVisibleToWorkshop &&
-          !offeredRequestIds.has(request.id)
-        );
+      const page = await fetchWorkshopDiscoveryFeed({
+        serviceType: "wheels",
+        cursor: loadMore ? nextCursor : null,
       });
+      wheelsItems = page.items;
 
-      const mapped: WorkshopRequest[] = wheelsRows.map((request) => ({
+      const mapped: WorkshopRequest[] = wheelsItems.map(({ requestData: request, distanceKm }) => ({
         id: request.id,
         carBrand: request.car_brand || "Marcă necunoscută",
         carModel: request.car_model || "Model necunoscut",
@@ -205,33 +186,21 @@ export default function WorkshopWheelsPage() {
         viewCount: 0,
         offerCount: 0,
         clientName: null,
+        distanceKm,
       }));
 
       if (!isCurrentAttempt()) return;
 
-      setRequests((current) => {
-        if (!silent) return mapped;
-
-        const currentById = new Map(
-          current.map((request) => [request.id, request]),
-        );
-
-        return mapped.map((request) => {
-          const existing = currentById.get(request.id);
-
-          return existing
-            ? {
-                ...request,
-                viewCount: existing.viewCount,
-                offerCount: existing.offerCount,
-                clientName: existing.clientName,
-              }
-            : request;
-        });
-      });
+      setRequests((current) =>
+        loadMore ? deduplicateRequests([...current, ...mapped]) : mapped,
+      );
+      setNextCursor(page.nextCursor);
+      setHasMore(page.hasMore);
       setDataError(false);
       hasLoadedRequestsRef.current = true;
       setLoadingRequests(false);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
     } catch (error) {
       if (!isCurrentAttempt()) return;
 
@@ -239,17 +208,21 @@ export default function WorkshopWheelsPage() {
         console.error("[DATA] critical:error", error);
       }
 
-      if (!silent || !hasLoadedRequestsRef.current) {
+      if (!loadMore || !hasLoadedRequestsRef.current) {
         hasLoadedRequestsRef.current = false;
         setRequests([]);
         setDataError(true);
+        setNextCursor(null);
+        setHasMore(false);
       }
 
       setLoadingRequests(false);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
       return;
     }
 
-    const requestIds = wheelsRows.map((request) => request.id);
+    const requestIds = wheelsItems.map((item) => item.requestId);
     const [metricsResult, clientNamesResult] = await Promise.allSettled([
       withTimeout(
         getWorkshopRequestMetrics(requestIds),
@@ -299,10 +272,18 @@ export default function WorkshopWheelsPage() {
         };
       }),
     );
-  };
+  }
+
+  const loadInitialRequests = useEffectEvent(() => {
+    void loadRequests();
+  });
+
+  useEffect(() => {
+    if (authorized) loadInitialRequests();
+  }, [authorized]);
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
-    void loadRequests({ silent: true });
+    void loadRequests();
   });
 
   const recordEngagedView = (requestId: string) => {
@@ -328,6 +309,15 @@ export default function WorkshopWheelsPage() {
       .on(
         "postgres_changes",
         {
+          event: "INSERT",
+          schema: "public",
+          table: "repair_requests",
+        },
+        () => refreshRequestsFromRealtime(),
+      )
+      .on(
+        "postgres_changes",
+        {
           event: "UPDATE",
           schema: "public",
           table: "repair_requests",
@@ -341,11 +331,7 @@ export default function WorkshopWheelsPage() {
           schema: "public",
           table: "repair_requests",
         },
-        (payload) => {
-          setRequests((current) =>
-            current.filter((request) => request.id !== payload.old.id),
-          );
-        },
+        () => refreshRequestsFromRealtime(),
       )
       .on(
         "postgres_changes",
@@ -524,11 +510,30 @@ export default function WorkshopWheelsPage() {
                 </div>
               );
             })}
+            {hasMore && (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void loadRequests({ loadMore: true })}
+                className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
+              >
+                {loadingMore ? "Se încarcă..." : "Încarcă mai multe"}
+              </button>
+            )}
           </div>
         )}
       </div>
     </main>
   );
+}
+
+function deduplicateRequests(requests: WorkshopRequest[]) {
+  const seen = new Set<string>();
+  return requests.filter((request) => {
+    if (seen.has(request.id)) return false;
+    seen.add(request.id);
+    return true;
+  });
 }
 
 function formatPostedAt(value: string) {

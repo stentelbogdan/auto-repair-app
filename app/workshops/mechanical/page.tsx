@@ -3,10 +3,12 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import {
-  getWorkshopRepairRequests,
-  type RepairRequestRow,
-} from "@/lib/supabase/repair-requests";
+  fetchWorkshopDiscoveryFeed,
+  type WorkshopDiscoveryCursor,
+  type WorkshopDiscoveryFeedItem,
+} from "@/lib/supabase/workshop-discovery";
 import CarHeader from "@/app/components/CarHeader";
 import { formatPostedTime } from "@/lib/formatters";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
@@ -41,6 +43,7 @@ type WorkshopRequest = {
   viewCount: number;
   offerCount: number;
   clientName: string | null;
+  distanceKm: number | null;
 };
 
 const filters = [
@@ -70,9 +73,14 @@ export default function WorkshopsPage() {
   const [accessCheckVersion, setAccessCheckVersion] = useState(0);
   const accessAttemptRef = useRef(0);
   const loadAttemptRef = useRef(0);
+  const loadingMoreRef = useRef(false);
   const hasLoadedRequestsRef = useRef(false);
   const workshopUserIdRef = useRef<string | null>(null);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] =
+    useState<WorkshopDiscoveryCursor | null>(null);
   const [dataError, setDataError] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
 
@@ -121,7 +129,6 @@ export default function WorkshopsPage() {
         setAuthorized(true);
         setAccessError(false);
         setCheckingAccess(false);
-        void loadRequests();
         void markDirectRequestsRead(result.userId);
         return;
       }
@@ -161,62 +168,33 @@ export default function WorkshopsPage() {
     [],
   );
 
-  const loadRequests = async (
-    { silent = false }: { silent?: boolean } = {},
-  ) => {
+  async function loadRequests(
+    { loadMore = false }: { loadMore?: boolean } = {},
+  ) {
+    if (loadMore && (!nextCursor || loadingMoreRef.current)) return;
+
     const attemptId = ++loadAttemptRef.current;
     const isCurrentAttempt = () => attemptId === loadAttemptRef.current;
 
-    if (!silent) {
+    if (loadMore) {
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+    } else {
       setLoadingRequests(true);
       setDataError(false);
     }
 
-    let mechanicalRows: RepairRequestRow[];
+    let mechanicalItems: WorkshopDiscoveryFeedItem[];
 
     try {
-      const rows = await getWorkshopRepairRequests();
-      const workshopUserId = workshopUserIdRef.current;
-
-      if (!workshopUserId) {
-        throw new Error("Workshop user is unavailable for request loading.");
-      }
-
-      const { data: existingOffers, error: existingOffersError } =
-        await supabase
-          .from("repair_offers")
-          .select("request_id")
-          .eq("workshop_user_id", workshopUserId);
-
-      if (existingOffersError) {
-        throw existingOffersError;
-      }
-
-      const offeredRequestIds = new Set(
-        (existingOffers || [])
-          .map((offer) => offer.request_id)
-          .filter(Boolean),
-      );
-
-      mechanicalRows = rows.filter((req) => {
-        const requestType = req.request_type ?? "repair";
-
-        const isVisibleToWorkshop =
-          requestType === "repair" ||
-          (requestType === "direct_request" &&
-            req.target_workshop_id === workshopUserId);
-
-        return (
-          req.service_type === "mechanical" &&
-          req.status === "open" &&
-          !req.accepted_offer_id &&
-          isVisibleToWorkshop &&
-          !offeredRequestIds.has(req.id)
-        );
+      const page = await fetchWorkshopDiscoveryFeed({
+        serviceType: "mechanical",
+        cursor: loadMore ? nextCursor : null,
       });
+      mechanicalItems = page.items;
 
-      const mapped: WorkshopRequest[] = mechanicalRows.map(
-        (req: RepairRequestRow) => ({
+      const mapped: WorkshopRequest[] = mechanicalItems.map(
+        ({ requestData: req, distanceKm }) => ({
           id: req.id,
           carBrand: req.car_brand || "Unknown brand",
           carModel: req.car_model || "Unknown model",
@@ -233,34 +211,22 @@ export default function WorkshopsPage() {
           viewCount: 0,
           offerCount: 0,
           clientName: null,
+          distanceKm,
         }),
       );
 
       if (!isCurrentAttempt()) return;
 
-      setRequests((current) => {
-        if (!silent) return mapped;
-
-        const currentById = new Map(
-          current.map((request) => [request.id, request]),
-        );
-
-        return mapped.map((request) => {
-          const existing = currentById.get(request.id);
-
-          return existing
-            ? {
-                ...request,
-                viewCount: existing.viewCount,
-                offerCount: existing.offerCount,
-                clientName: existing.clientName,
-              }
-            : request;
-        });
-      });
+      setRequests((current) =>
+        loadMore ? deduplicateRequests([...current, ...mapped]) : mapped,
+      );
+      setNextCursor(page.nextCursor);
+      setHasMore(page.hasMore);
       setDataError(false);
       hasLoadedRequestsRef.current = true;
       setLoadingRequests(false);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
     } catch (error) {
       if (!isCurrentAttempt()) return;
 
@@ -268,18 +234,22 @@ export default function WorkshopsPage() {
         console.error("[DATA] critical:error", error);
       }
 
-      if (!silent || !hasLoadedRequestsRef.current) {
+      if (!loadMore || !hasLoadedRequestsRef.current) {
         hasLoadedRequestsRef.current = false;
         setRequests([]);
         setDataError(true);
+        setNextCursor(null);
+        setHasMore(false);
       }
 
       setLoadingRequests(false);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
 
       return;
     }
 
-    const requestIds = mechanicalRows.map((request) => request.id);
+    const requestIds = mechanicalItems.map((item) => item.requestId);
     const [metricsResult, clientNamesResult] = await Promise.allSettled([
       withTimeout(
         getWorkshopRequestMetrics(requestIds),
@@ -330,10 +300,18 @@ export default function WorkshopsPage() {
         };
       }),
     );
-  };
+  }
+
+  const loadInitialRequests = useEffectEvent(() => {
+    void loadRequests();
+  });
+
+  useEffect(() => {
+    if (authorized) loadInitialRequests();
+  }, [authorized]);
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
-    void loadRequests({ silent: true });
+    void loadRequests();
   });
 
   const recordEngagedView = (requestId: string) => {
@@ -362,6 +340,15 @@ export default function WorkshopsPage() {
       .on(
         "postgres_changes",
         {
+          event: "INSERT",
+          schema: "public",
+          table: "repair_requests",
+        },
+        () => refreshRequestsFromRealtime(),
+      )
+      .on(
+        "postgres_changes",
+        {
           event: "UPDATE",
           schema: "public",
           table: "repair_requests",
@@ -377,11 +364,7 @@ export default function WorkshopsPage() {
           schema: "public",
           table: "repair_requests",
         },
-        (payload) => {
-          setRequests((current) =>
-            current.filter((request) => request.id !== payload.old.id),
-          );
-        },
+        () => refreshRequestsFromRealtime(),
       )
       .on(
         "postgres_changes",
@@ -610,11 +593,30 @@ export default function WorkshopsPage() {
                 </div>
               );
             })}
+            {hasMore && (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => void loadRequests({ loadMore: true })}
+                className="rounded-2xl border border-white/15 bg-white/5 px-5 py-3 font-semibold text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
+              >
+                {loadingMore ? "Se încarcă..." : "Încarcă mai multe"}
+              </button>
+            )}
           </div>
         )}
       </div>
     </main>
   );
+}
+
+function deduplicateRequests(requests: WorkshopRequest[]) {
+  const seen = new Set<string>();
+  return requests.filter((request) => {
+    if (seen.has(request.id)) return false;
+    seen.add(request.id);
+    return true;
+  });
 }
 
 function formatDamageType(value: string) {

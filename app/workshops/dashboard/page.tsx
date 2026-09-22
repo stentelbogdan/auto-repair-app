@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { getWorkshopRepairRequests } from "@/lib/supabase/repair-requests";
+import { fetchWorkshopDiscoveryCounts } from "@/lib/supabase/workshop-discovery";
 
 type ProfileRow = {
   role: string[] | null;
@@ -146,96 +146,7 @@ function WorkshopDashboardContent() {
 
   const loadStats = async (userId: string) => {
     try {
-      const rows = await getWorkshopRepairRequests();
-
-      const { data: existingOffers, error: existingOffersError } =
-        await supabase
-          .from("repair_offers")
-          .select("request_id")
-          .eq("workshop_user_id", userId);
-
-      if (existingOffersError) {
-        console.error("Failed to load existing offers:", existingOffersError);
-      }
-
-      const offeredRequestIds = (existingOffers || [])
-        .map((offer) => offer.request_id)
-        .filter(Boolean);
-
-      const visibleBodyworkRows = rows.filter((req) => {
-        const requestType = req.request_type ?? "repair";
-
-        const isVisible =
-          requestType === "repair" ||
-          (requestType === "direct_request" &&
-            req.target_workshop_id === userId);
-
-        return (
-          (req.service_type ?? "bodywork") === "bodywork" &&
-          req.status === "open" &&
-          isVisible &&
-          !offeredRequestIds.includes(req.id)
-        );
-      });
-
-      const bodyworkRequestsCount = visibleBodyworkRows.length;
-
-      const visibleMechanicalRows = rows.filter((req) => {
-        const requestType = req.request_type ?? "repair";
-
-        const isVisible =
-          requestType === "repair" ||
-          (requestType === "direct_request" &&
-            req.target_workshop_id === userId);
-
-        return (
-          req.service_type === "mechanical" &&
-          req.status === "open" &&
-          !req.accepted_offer_id &&
-          isVisible &&
-          !offeredRequestIds.includes(req.id)
-        );
-      });
-
-      const mechanicalRequestsCount = visibleMechanicalRows.length;
-
-      const visibleWheelsRows = rows.filter((req) => {
-        const requestType = req.request_type ?? "repair";
-
-        const isVisible =
-          requestType === "repair" ||
-          (requestType === "direct_request" &&
-            req.target_workshop_id === userId);
-
-        return (
-          req.service_type === "wheels" &&
-          req.status === "open" &&
-          !req.accepted_offer_id &&
-          isVisible &&
-          !offeredRequestIds.includes(req.id)
-        );
-      });
-
-      const wheelsRequestsCount = visibleWheelsRows.length;
-
-      const visibleTowingRows = rows.filter((req) => {
-        const requestType = req.request_type ?? "repair";
-
-        const isVisible =
-          requestType === "repair" ||
-          (requestType === "direct_request" &&
-            req.target_workshop_id === userId);
-
-        return (
-          req.service_type === "towing" &&
-          req.status === "open" &&
-          !req.accepted_offer_id &&
-          isVisible &&
-          !offeredRequestIds.includes(req.id)
-        );
-      });
-
-      const towingRequestsCount = visibleTowingRows.length;
+      const discoveryCounts = await fetchWorkshopDiscoveryCounts();
 
       const directBodyworkUnreadResult = await supabase
         .from("repair_requests")
@@ -288,10 +199,10 @@ function WorkshopDashboardContent() {
         }).length || 0;
 
       setStats({
-        bodyworkRequests: bodyworkRequestsCount,
-        mechanicalRequests: mechanicalRequestsCount,
-        wheelsRequests: wheelsRequestsCount,
-        towingRequests: towingRequestsCount,
+        bodyworkRequests: discoveryCounts.bodywork,
+        mechanicalRequests: discoveryCounts.mechanical,
+        wheelsRequests: discoveryCounts.wheels,
+        towingRequests: discoveryCounts.towing,
         myOffers: myOffersResult.count || 0,
         wonJobs: wonCount,
         directBodyworkUnread: directBodyworkUnreadResult.count || 0,
