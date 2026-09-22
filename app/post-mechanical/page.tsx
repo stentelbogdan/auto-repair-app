@@ -13,7 +13,6 @@ import { supabase } from "@/lib/supabase/client";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { carBrands, carModelsByBrand } from "@/lib/data/car-data";
 import GeoLocationCombobox from "@/app/components/GeoLocationCombobox";
-import type { GeoLocation } from "@/lib/geo/geo-location";
 import { CheckCircle2, XCircle } from "lucide-react";
 import {
   formatLicensePlateInput,
@@ -72,6 +71,7 @@ function PostJobContent() {
     carModel,
     carYear,
     city,
+    selectedLocation,
     licensePlate,
     category: damageType,
     symptomIdsByCategory,
@@ -83,7 +83,6 @@ function PostJobContent() {
 
   const licensePlateErrorMessage = getLicensePlateError(licensePlate);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState<GeoLocation | null>(null);
 
   const availableModels = carModelsByBrand[carBrand] || [];
 
@@ -353,11 +352,13 @@ function PostJobContent() {
               <GeoLocationCombobox
                 value={city}
                 onChange={(value) => {
-                  updateDraft({ city: value });
-                  setSelectedLocation(null);
+                  updateDraft({ city: value, selectedLocation: null });
                 }}
                 onSelect={(suggestion) =>
-                  setSelectedLocation(suggestion.location)
+                  updateDraft({
+                    city: suggestion.city,
+                    selectedLocation: suggestion.location,
+                  })
                 }
                 placeholder="Scrie localitatea"
                 className="w-full rounded-2xl border border-black/10 bg-black/[0.03] px-4 py-3 outline-none focus:border-orange-400"

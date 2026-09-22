@@ -13,6 +13,7 @@ import {
   MECHANICAL_CATEGORIES,
   type MechanicalCategoryId,
 } from "@/lib/mechanical/mechanical-categories";
+import type { GeoLocation } from "@/lib/geo/geo-location";
 
 export type SymptomIdsByCategory = Partial<
   Record<MechanicalCategoryId, string[]>
@@ -23,6 +24,7 @@ export type MechanicalDraft = {
   carModel: string;
   carYear: string;
   city: string;
+  selectedLocation: GeoLocation | null;
   licensePlate: string;
   category: MechanicalCategoryId | null;
   symptomIdsByCategory: SymptomIdsByCategory;
@@ -54,6 +56,7 @@ function createInitialDraft(): MechanicalDraft {
     carModel: "",
     carYear: "",
     city: "",
+    selectedLocation: null,
     licensePlate: "",
     category: null,
     symptomIdsByCategory: {},
