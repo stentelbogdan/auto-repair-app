@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { LucideIcon } from "lucide-react";
+import { MapPin, type LucideIcon } from "lucide-react";
 import ImageGallery from "@/app/components/ImageGallery";
 import LicensePlate from "@/app/components/LicensePlate";
 import type { MechanicalCategoryId } from "@/lib/mechanical/mechanical-categories";
@@ -41,6 +41,7 @@ type CarHeaderProps = {
   year?: string | null;
   city?: string | null;
   variant?: "compact" | "listLarge";
+  separateLocation?: boolean;
   platePosition?: "top" | "bottom";
   details?: CarHeaderDetail[];
   affectedParts?: string[];
@@ -61,6 +62,7 @@ export default function CarHeader({
   year,
   city,
   variant = "compact",
+  separateLocation = false,
   platePosition = "top",
   details = [],
   affectedParts = [],
@@ -175,15 +177,25 @@ export default function CarHeader({
           {title}
         </h2>
 
-        <p
-          className={
-            isLarge
-              ? "mt-2 text-[15px] leading-5 text-black/65"
-              : "mt-1 text-[13px] leading-[18px] text-black/65"
-          }
-        >
-          {year || "-"} • {city || "-"}
-        </p>
+        {separateLocation ? (
+          <div className="mt-2">
+            <p className="text-[15px] leading-5 text-black/65">{year || "-"}</p>
+            <p className="mt-3 flex min-w-0 items-start gap-1.5 text-[15px] font-semibold leading-5 text-blue-600">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="min-w-0 break-words">{city || "-"}</span>
+            </p>
+          </div>
+        ) : (
+          <p
+            className={
+              isLarge
+                ? "mt-2 text-[15px] leading-5 text-black/65"
+                : "mt-1 text-[13px] leading-[18px] text-black/65"
+            }
+          >
+            {year || "-"} • {city || "-"}
+          </p>
+        )}
 
         {platePosition === "top" && details.length > 0 && (
           <div className="mt-4 space-y-2">

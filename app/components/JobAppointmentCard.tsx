@@ -111,6 +111,7 @@ export default function JobAppointmentCard({
         year={carYear || ""}
         city={city || ""}
         variant="listLarge"
+        separateLocation
         affectedParts={affectedParts}
         damageTypes={damageTypes}
         mechanicalDetails={mechanicalDetails}

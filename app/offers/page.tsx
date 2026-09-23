@@ -473,6 +473,7 @@ export default function OffersPage() {
                       year={request.carYear}
                       city={request.city}
                       variant="listLarge"
+                      separateLocation
                       affectedParts={affectedPartLabels}
                       damageTypes={
                         mechanicalDetails.length > 0 ||

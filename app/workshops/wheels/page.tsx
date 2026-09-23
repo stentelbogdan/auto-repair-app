@@ -467,6 +467,7 @@ export default function WorkshopWheelsPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    separateLocation
                     wheelsSummary={wheelsSummary}
                     onActiveInteraction={() => recordEngagedView(request.id)}
                     details={[

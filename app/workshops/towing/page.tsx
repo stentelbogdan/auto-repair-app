@@ -500,6 +500,7 @@ export default function WorkshopTowingPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    separateLocation
                     towingSummary={towingSummary}
                     onActiveInteraction={() => recordEngagedView(request.id)}
                     details={[

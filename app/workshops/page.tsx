@@ -541,6 +541,7 @@ export default function WorkshopsPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    separateLocation
                     affectedParts={affectedPartLabels}
                     damageTypes={damageTypeLabels}
                     onActiveInteraction={() => recordEngagedView(request.id)}

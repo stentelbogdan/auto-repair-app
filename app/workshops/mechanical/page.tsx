@@ -545,6 +545,7 @@ export default function WorkshopsPage() {
                     year={request.carYear}
                     city={request.city}
                     variant="listLarge"
+                    separateLocation
                     mechanicalDetails={mechanicalDetails}
                     onActiveInteraction={() => recordEngagedView(request.id)}
                     details={[

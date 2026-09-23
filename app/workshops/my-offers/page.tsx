@@ -933,6 +933,7 @@ export default function WorkshopMyOffersPage() {
                     year={request?.car_year || ""}
                     city={request?.city || ""}
                     variant="listLarge"
+                    separateLocation
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
                     damageTypes={

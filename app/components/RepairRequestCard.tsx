@@ -125,6 +125,7 @@ export default function RepairRequestCard({
             year={request.car_year}
             city={request.city}
             variant="listLarge"
+            separateLocation
             platePosition="bottom"
             affectedParts={affectedPartLabels}
             damageTypes={damageTypeLabels}

@@ -452,6 +452,7 @@ export default function WorkshopRequestDetailsPage() {
             year={request.car_year}
             city={request.city}
             variant="listLarge"
+            separateLocation
             affectedParts={affectedPartLabels}
             damageTypes={damageTypeLabels}
             mechanicalDetails={mechanicalDetails}

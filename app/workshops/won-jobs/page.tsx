@@ -1040,6 +1040,7 @@ export default function WorkshopWonJobsPage() {
                     year={job.request.carYear}
                     city={job.request.city}
                     variant="listLarge"
+                    separateLocation
                     affectedParts={affectedPartLabels}
                     damageTypes={
                       wheelsSummary || towingSummary
@@ -1303,6 +1304,7 @@ export default function WorkshopWonJobsPage() {
                     year={job.request.carYear}
                     city={job.request.city}
                     variant="listLarge"
+                    separateLocation
                     platePosition="bottom"
                     affectedParts={affectedPartLabels}
                     damageTypes={

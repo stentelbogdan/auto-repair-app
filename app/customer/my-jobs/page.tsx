@@ -752,6 +752,7 @@ export default function MyJobsPage() {
                         year={request.car_year}
                         city={request.city}
                         variant="listLarge"
+                        separateLocation
                         affectedParts={affectedPartLabels}
                         damageTypes={
                           mechanicalDetails.length > 0 ||
