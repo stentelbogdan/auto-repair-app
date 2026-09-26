@@ -14,6 +14,12 @@ type Props = {
   params: Promise<{ slug: string }>;
 };
 
+type PublicReviewRequestContext = {
+  request_id: string;
+  car_year: string | null;
+  city: string | null;
+};
+
 export default async function WorkshopProfilePage({ params }: Props) {
   const { slug } = await params;
 
@@ -33,17 +39,15 @@ export default async function WorkshopProfilePage({ params }: Props) {
     .eq("workshop_user_id", workshop.id)
     .order("created_at", { ascending: false });
 
-  const requestIds = (reviews || [])
-    .map((review) => review.request_id)
-    .filter(Boolean);
-
-  const { data: reviewRequests } = await supabase
-    .from("repair_requests")
-    .select("id, car_brand, car_model, car_year, city")
-    .in("id", requestIds);
+  const { data: reviewRequestData } = await supabase
+    .rpc("get_public_workshop_review_request_context", {
+      p_workshop_id: workshop.id,
+    });
+  const reviewRequests = (reviewRequestData ||
+    []) as PublicReviewRequestContext[];
 
   const requestsById = new Map(
-    (reviewRequests || []).map((request) => [request.id, request]),
+    reviewRequests.map((request) => [request.request_id, request]),
   );
 
   const customerIds = (reviews || [])
@@ -211,7 +215,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
                 <h2 className="text-2xl font-black">Review-uri clienți</h2>
 
                 <div className="mt-5 grid gap-4">
-                  {reviewList.map((review: any) => {
+                  {reviewList.map((review) => {
                     const reviewRequest = requestsById.get(review.request_id);
 
                     const customerProfile = customersById.get(

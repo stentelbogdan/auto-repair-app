@@ -467,7 +467,13 @@ export default function CustomerJobDetailPage() {
 
                 <button
                   type="button"
-                  onClick={() => router.push(`/chat/${request.id}`)}
+                  disabled={!request.accepted_offer_id}
+                  onClick={() => {
+                    if (!request.accepted_offer_id) return;
+                    router.push(
+                      `/chat/${request.id}?offerId=${request.accepted_offer_id}`,
+                    );
+                  }}
                   className="mt-4 w-full rounded-2xl bg-black px-5 py-3 text-sm font-bold text-white"
                 >
                   Contactează service-ul

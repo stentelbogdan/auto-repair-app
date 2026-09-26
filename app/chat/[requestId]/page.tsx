@@ -300,16 +300,10 @@ export default function ChatPage() {
     }
     systemMessageCreatedRef.current = true;
 
-    const { error: systemMessageError } = await supabase
-      .from("messages")
-      .insert({
-        request_id: requestId,
-        offer_id: offerId,
-        sender_id: userId,
-        sender_role: "system",
-        message: "Conversația a fost începută din profilul service-ului.",
-        images: [],
-      });
+    const { error: systemMessageError } = await supabase.rpc(
+      "ensure_message_conversation_started",
+      { p_request_id: requestId, p_offer_id: offerId },
+    );
 
     if (systemMessageError) {
       systemMessageCreatedRef.current = false;
