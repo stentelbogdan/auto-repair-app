@@ -95,6 +95,8 @@ export default function MyRequestsPage() {
 
     let handleVisibilityChange: (() => void) | null = null;
 
+    let hasSubscribed = false;
+
     const fetchRequests = async (userId: string): Promise<void> => {
       const data = await getOwnRepairRequests(userId);
 
@@ -312,7 +314,11 @@ export default function MyRequestsPage() {
                * după o reconectare este posibil să fi ratat
                * evenimente cât timp WebSocket-ul era căzut.
                */
-              void refreshRequests(userId);
+              if (hasSubscribed) {
+                void refreshRequests(userId);
+              }
+
+              hasSubscribed = true;
               return;
             }
 

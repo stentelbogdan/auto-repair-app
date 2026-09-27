@@ -67,6 +67,8 @@ export default function WorkshopWheelsPage() {
   const accessAttemptRef = useRef(0);
   const loadAttemptRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const realtimeRefreshInProgressRef = useRef(false);
+  const realtimeRefreshPendingRef = useRef(false);
   const hasLoadedRequestsRef = useRef(false);
   const workshopUserIdRef = useRef<string | null>(null);
 
@@ -144,6 +146,7 @@ export default function WorkshopWheelsPage() {
   useEffect(
     () => () => {
       loadAttemptRef.current += 1;
+      realtimeRefreshPendingRef.current = false;
     },
     [],
   );
@@ -155,6 +158,10 @@ export default function WorkshopWheelsPage() {
     }: { loadMore?: boolean; background?: boolean } = {},
   ) {
     if (loadMore && (!nextCursor || loadingMoreRef.current)) return;
+
+    if (loadMore && realtimeRefreshInProgressRef.current) {
+      realtimeRefreshPendingRef.current = true;
+    }
 
     const attemptId = ++loadAttemptRef.current;
     const isCurrentAttempt = () => attemptId === loadAttemptRef.current;
@@ -318,8 +325,36 @@ export default function WorkshopWheelsPage() {
   }, [authorized]);
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
-    void loadRequests({ background: true });
+    if (
+      realtimeRefreshInProgressRef.current ||
+      loadingMoreRef.current
+    ) {
+      realtimeRefreshPendingRef.current = true;
+      return;
+    }
+
+    realtimeRefreshInProgressRef.current = true;
+
+    void (async () => {
+      try {
+        do {
+          realtimeRefreshPendingRef.current = false;
+          await loadRequests({ background: true });
+        } while (
+          realtimeRefreshPendingRef.current &&
+          !loadingMoreRef.current
+        );
+      } finally {
+        realtimeRefreshInProgressRef.current = false;
+      }
+    })();
   });
+
+  useEffect(() => {
+    if (!loadingMore && realtimeRefreshPendingRef.current) {
+      refreshRequestsFromRealtime();
+    }
+  }, [loadingMore]);
 
   const recordEngagedView = (requestId: string) => {
     void recordWorkshopRequestView(requestId).then((created) => {
