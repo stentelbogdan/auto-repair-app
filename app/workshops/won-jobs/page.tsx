@@ -8,7 +8,10 @@ import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
-import { markNotificationsAsRead } from "@/lib/notifications";
+import {
+  CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
+  markNotificationsAsRead,
+} from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
 import {
   getAffectedPartLabels,
@@ -272,9 +275,19 @@ export default function WorkshopWonJobsPage() {
 
         setAuthorized(true);
 
+        const effectiveTab = new URLSearchParams(
+          window.location.search,
+        ).get("tab");
+
         await markNotificationsAsRead({
           recipientRole: "workshop",
-          types: ["customer_confirmed_appointment"],
+          types:
+            effectiveTab === "completed"
+              ? [
+                  "customer_confirmed_appointment",
+                  CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
+                ]
+              : ["customer_confirmed_appointment"],
         });
 
         const { error: readError } = await supabase

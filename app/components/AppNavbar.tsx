@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
 import {
+  CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
   WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
   WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
@@ -119,6 +120,39 @@ function getCustomerJobsTargetUrl(targetUrl: string | null) {
   }
 }
 
+function getWorkshopReviewTargetUrl(targetUrl: string | null) {
+  if (!targetUrl?.startsWith("/workshops/won-jobs")) {
+    return null;
+  }
+
+  try {
+    const parsedTarget = new URL(targetUrl, window.location.origin);
+    const tabValues = parsedTarget.searchParams.getAll("tab");
+    const categoryValues = parsedTarget.searchParams.getAll("category");
+    const hasOnlyAllowedParams = Array.from(
+      parsedTarget.searchParams.keys(),
+    ).every((key) => key === "tab" || key === "category");
+    const category = categoryValues[0] ?? null;
+
+    if (
+      parsedTarget.origin !== window.location.origin ||
+      parsedTarget.pathname !== "/workshops/won-jobs" ||
+      parsedTarget.hash !== "" ||
+      !hasOnlyAllowedParams ||
+      tabValues.length !== 1 ||
+      tabValues[0] !== "completed" ||
+      categoryValues.length > 1 ||
+      (category !== null && !isRepairServiceType(category))
+    ) {
+      return null;
+    }
+
+    return `${parsedTarget.pathname}${parsedTarget.search}`;
+  } catch {
+    return null;
+  }
+}
+
 export default function AppNavbar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -149,10 +183,13 @@ export default function AppNavbar() {
   const [appointmentConfirmedUnreadCount, setAppointmentConfirmedUnreadCount] =
     useState(0);
   const [jobStartedUnreadCount, setJobStartedUnreadCount] = useState(0);
+  const [reviewSubmittedUnreadCount, setReviewSubmittedUnreadCount] =
+    useState(0);
   const [appointmentToast, setAppointmentToast] = useState<{
     title: string;
     message: string;
     targetUrl: string | null;
+    icon: "calendar" | "review";
   } | null>(null);
   const [fromParam, setFromParam] = useState<string | null>(null);
   const perfStartRef = useRef(0);
@@ -799,6 +836,7 @@ export default function AppNavbar() {
         ...proposalTypes,
         ...confirmedTypes,
         WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+        CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
         ...rejectedOfferTypes,
       ];
       const { data: notifications, error } = await supabase
@@ -820,6 +858,7 @@ export default function AppNavbar() {
         setAppointmentConfirmedUnreadCount(0);
         setJobStartedUnreadCount(0);
         setRejectedOfferUnreadCount(0);
+        setReviewSubmittedUnreadCount(0);
         return;
       }
 
@@ -827,6 +866,7 @@ export default function AppNavbar() {
       let confirmedCount = 0;
       let jobStartedCount = 0;
       let rejectedOfferCount = 0;
+      let reviewSubmittedCount = 0;
 
       for (const notification of notifications || []) {
         if (proposalTypes.has(notification.type)) {
@@ -847,12 +887,20 @@ export default function AppNavbar() {
         ) {
           rejectedOfferCount += 1;
         }
+
+        if (
+          notification.recipient_role === "workshop" &&
+          notification.type === CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
+        ) {
+          reviewSubmittedCount += 1;
+        }
       }
 
       setAppointmentProposalUnreadCount(proposalCount);
       setAppointmentConfirmedUnreadCount(confirmedCount);
       setJobStartedUnreadCount(jobStartedCount);
       setRejectedOfferUnreadCount(rejectedOfferCount);
+      setReviewSubmittedUnreadCount(reviewSubmittedCount);
     };
 
     const loadUnreadWonJobs = async () => {
@@ -1020,6 +1068,7 @@ export default function AppNavbar() {
         (payload) => {
           const notification = payload.new as {
             actor_id?: string | null;
+            recipient_role?: string | null;
             type?: string | null;
             title?: string | null;
             message?: string | null;
@@ -1029,6 +1078,14 @@ export default function AppNavbar() {
           if (
             notification.type ===
             CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE
+          ) {
+            return;
+          }
+
+          if (
+            notification.type ===
+              CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE &&
+            (notification.recipient_role !== "workshop" || !isWorkshopMode)
           ) {
             return;
           }
@@ -1048,7 +1105,18 @@ export default function AppNavbar() {
             message:
               notification.message ||
               "Ai primit o nouă actualizare de programare.",
-            targetUrl: notification.target_url || null,
+            targetUrl:
+              notification.type ===
+              CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
+                ? getWorkshopReviewTargetUrl(
+                    notification.target_url || null,
+                  ) ?? "/workshops/won-jobs?tab=completed"
+                : notification.target_url || null,
+            icon:
+              notification.type ===
+              CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
+                ? "review"
+                : "calendar",
           });
 
           const timeoutId = window.setTimeout(() => {
@@ -1570,26 +1638,39 @@ export default function AppNavbar() {
       if (
         isWorkshopMode &&
         userId &&
-        appointmentConfirmedUnreadCount > 0
+        (appointmentConfirmedUnreadCount > 0 ||
+          reviewSubmittedUnreadCount > 0)
       ) {
         try {
           const { data: notification, error: notificationError } =
             await supabase
               .from("notifications")
-              .select("request_id")
+              .select("type, target_url, request_id")
               .eq("recipient_id", userId)
+              .eq("recipient_role", "workshop")
               .is("read_at", null)
               .in("type", [
                 "customer_confirmed_appointment",
-                "workshop_confirmed_appointment",
+                CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
               ])
               .order("created_at", { ascending: false })
               .limit(1)
-              .maybeSingle<{ request_id: string | null }>();
+              .maybeSingle<{
+                type: string;
+                target_url: string | null;
+                request_id: string | null;
+              }>();
 
           if (notificationError) throw notificationError;
 
-          if (notification?.request_id) {
+          if (
+            notification?.type ===
+            CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
+          ) {
+            workshopJobsUrl =
+              getWorkshopReviewTargetUrl(notification.target_url) ??
+              "/workshops/won-jobs?tab=completed";
+          } else if (notification?.request_id) {
             const { data: request, error: requestError } = await supabase
               .from("repair_requests")
               .select("service_type")
@@ -1809,6 +1890,9 @@ export default function AppNavbar() {
   const offersNavigationUnreadCount = isClientMode
     ? offerUnreadCount + appointmentProposalUnreadCount
     : appointmentProposalUnreadCount + rejectedOfferUnreadCount;
+  const workshopReviewUnreadCount = isWorkshopMode
+    ? reviewSubmittedUnreadCount
+    : 0;
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur-xl">
@@ -1915,19 +1999,27 @@ export default function AppNavbar() {
 
               {isWorkshopMode && wonJobsUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
-                  {wonJobsUnreadCount > 9 ? "9+" : wonJobsUnreadCount}
+                  {wonJobsUnreadCount + workshopReviewUnreadCount > 9
+                    ? "9+"
+                    : wonJobsUnreadCount + workshopReviewUnreadCount}
                 </span>
               )}
 
-              {appointmentConfirmedUnreadCount + jobStartedUnreadCount > 0 &&
+              {appointmentConfirmedUnreadCount +
+                jobStartedUnreadCount +
+                workshopReviewUnreadCount >
+                0 &&
                 !(isClientMode && progressUnreadCount > 0) &&
                 !(isWorkshopMode && wonJobsUnreadCount > 0) && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
-                    {appointmentConfirmedUnreadCount + jobStartedUnreadCount >
+                    {appointmentConfirmedUnreadCount +
+                      jobStartedUnreadCount +
+                      workshopReviewUnreadCount >
                     9
                       ? "9+"
                       : appointmentConfirmedUnreadCount +
-                        jobStartedUnreadCount}
+                        jobStartedUnreadCount +
+                        workshopReviewUnreadCount}
                   </span>
                 )}
             </button>
@@ -1996,7 +2088,8 @@ export default function AppNavbar() {
           className="fixed left-1/2 top-24 z-[999] w-[92%] max-w-sm -translate-x-1/2 rounded-3xl border border-orange-500/25 bg-black/95 px-4 py-3 text-left text-white shadow-2xl backdrop-blur-xl disabled:cursor-not-allowed disabled:opacity-60"
         >
           <p className="text-sm font-bold text-orange-300">
-            📅 {appointmentToast.title}
+            {appointmentToast.icon === "review" ? "⭐" : "📅"}{" "}
+            {appointmentToast.title}
           </p>
 
           <p className="mt-1 text-xs leading-5 text-white/65">

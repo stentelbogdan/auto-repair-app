@@ -11,6 +11,9 @@ export const WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE =
 export const WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE =
   "workshop_request_closed";
 
+export const CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE =
+  "customer_review_submitted";
+
 type MarkNotificationsAsReadInput = {
   types: string[];
   recipientRole: NotificationRecipientRole;
