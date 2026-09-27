@@ -45,6 +45,8 @@ type WorkshopRequest = {
 };
 
 const ENRICHMENT_TIMEOUT_MS = 8_000;
+const DISCOVERY_PAGE_SIZE = 20;
+const MAX_DISCOVERY_PAGE_SIZE = 99;
 
 export default function WorkshopWheelsPage() {
   const router = useRouter();
@@ -147,7 +149,10 @@ export default function WorkshopWheelsPage() {
   );
 
   async function loadRequests(
-    { loadMore = false }: { loadMore?: boolean } = {},
+    {
+      loadMore = false,
+      background = false,
+    }: { loadMore?: boolean; background?: boolean } = {},
   ) {
     if (loadMore && (!nextCursor || loadingMoreRef.current)) return;
 
@@ -157,7 +162,7 @@ export default function WorkshopWheelsPage() {
     if (loadMore) {
       loadingMoreRef.current = true;
       setLoadingMore(true);
-    } else {
+    } else if (!background) {
       setLoadingRequests(true);
       setDataError(false);
     }
@@ -165,11 +170,38 @@ export default function WorkshopWheelsPage() {
     let wheelsItems: WorkshopDiscoveryFeedItem[];
 
     try {
-      const page = await fetchWorkshopDiscoveryFeed({
+      const backgroundTargetCount = Math.max(
+        requests.length,
+        DISCOVERY_PAGE_SIZE,
+      );
+      let page = await fetchWorkshopDiscoveryFeed({
         serviceType: "wheels",
+        pageSize: background
+          ? Math.min(backgroundTargetCount, MAX_DISCOVERY_PAGE_SIZE)
+          : undefined,
         cursor: loadMore ? nextCursor : null,
       });
       wheelsItems = page.items;
+
+      while (
+        background &&
+        wheelsItems.length < backgroundTargetCount &&
+        page.hasMore &&
+        page.nextCursor
+      ) {
+        page = await fetchWorkshopDiscoveryFeed({
+          serviceType: "wheels",
+          pageSize: Math.min(
+            backgroundTargetCount - wheelsItems.length,
+            MAX_DISCOVERY_PAGE_SIZE,
+          ),
+          cursor: page.nextCursor,
+        });
+        wheelsItems = deduplicateDiscoveryItems([
+          ...wheelsItems,
+          ...page.items,
+        ]);
+      }
 
       const mapped: WorkshopRequest[] = wheelsItems.map(({ requestData: request, distanceKm }) => ({
         id: request.id,
@@ -208,7 +240,10 @@ export default function WorkshopWheelsPage() {
         console.error("[DATA] critical:error", error);
       }
 
-      if (!loadMore || !hasLoadedRequestsRef.current) {
+      if (
+        (!background && !loadMore) ||
+        !hasLoadedRequestsRef.current
+      ) {
         hasLoadedRequestsRef.current = false;
         setRequests([]);
         setDataError(true);
@@ -283,7 +318,7 @@ export default function WorkshopWheelsPage() {
   }, [authorized]);
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
-    void loadRequests();
+    void loadRequests({ background: true });
   });
 
   const recordEngagedView = (requestId: string) => {
@@ -533,6 +568,15 @@ function deduplicateRequests(requests: WorkshopRequest[]) {
   return requests.filter((request) => {
     if (seen.has(request.id)) return false;
     seen.add(request.id);
+    return true;
+  });
+}
+
+function deduplicateDiscoveryItems(items: WorkshopDiscoveryFeedItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.requestId)) return false;
+    seen.add(item.requestId);
     return true;
   });
 }

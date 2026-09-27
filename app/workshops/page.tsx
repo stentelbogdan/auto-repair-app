@@ -61,6 +61,8 @@ const filters = [
 ];
 
 const ENRICHMENT_TIMEOUT_MS = 8_000;
+const DISCOVERY_PAGE_SIZE = 20;
+const MAX_DISCOVERY_PAGE_SIZE = 99;
 
 export default function WorkshopsPage() {
   const router = useRouter();
@@ -160,7 +162,10 @@ export default function WorkshopsPage() {
   );
 
   async function loadRequests(
-    { loadMore = false }: { loadMore?: boolean } = {},
+    {
+      loadMore = false,
+      background = false,
+    }: { loadMore?: boolean; background?: boolean } = {},
   ) {
     if (loadMore && (!nextCursor || loadingMoreRef.current)) return;
 
@@ -170,7 +175,7 @@ export default function WorkshopsPage() {
     if (loadMore) {
       loadingMoreRef.current = true;
       setLoadingMore(true);
-    } else {
+    } else if (!background) {
       setLoadingRequests(true);
       setDataError(false);
     }
@@ -178,11 +183,38 @@ export default function WorkshopsPage() {
     let bodyworkItems: WorkshopDiscoveryFeedItem[];
 
     try {
-      const page = await fetchWorkshopDiscoveryFeed({
+      const backgroundTargetCount = Math.max(
+        requests.length,
+        DISCOVERY_PAGE_SIZE,
+      );
+      let page = await fetchWorkshopDiscoveryFeed({
         serviceType: "bodywork",
+        pageSize: background
+          ? Math.min(backgroundTargetCount, MAX_DISCOVERY_PAGE_SIZE)
+          : undefined,
         cursor: loadMore ? nextCursor : null,
       });
       bodyworkItems = page.items;
+
+      while (
+        background &&
+        bodyworkItems.length < backgroundTargetCount &&
+        page.hasMore &&
+        page.nextCursor
+      ) {
+        page = await fetchWorkshopDiscoveryFeed({
+          serviceType: "bodywork",
+          pageSize: Math.min(
+            backgroundTargetCount - bodyworkItems.length,
+            MAX_DISCOVERY_PAGE_SIZE,
+          ),
+          cursor: page.nextCursor,
+        });
+        bodyworkItems = deduplicateDiscoveryItems([
+          ...bodyworkItems,
+          ...page.items,
+        ]);
+      }
 
       const mapped: WorkshopRequest[] = bodyworkItems.map(
         ({ requestData: req, distanceKm }) => ({
@@ -226,7 +258,10 @@ export default function WorkshopsPage() {
         console.error("[DATA] critical:error", error);
       }
 
-      if (!loadMore || !hasLoadedRequestsRef.current) {
+      if (
+        (!background && !loadMore) ||
+        !hasLoadedRequestsRef.current
+      ) {
         hasLoadedRequestsRef.current = false;
         setRequests([]);
         setDataError(true);
@@ -303,7 +338,7 @@ export default function WorkshopsPage() {
   }, [authorized]);
 
   const refreshRequestsFromRealtime = useEffectEvent(() => {
-    void loadRequests();
+    void loadRequests({ background: true });
   });
 
   const recordEngagedView = (requestId: string) => {
@@ -613,6 +648,15 @@ function deduplicateRequests(requests: WorkshopRequest[]) {
   return requests.filter((request) => {
     if (seen.has(request.id)) return false;
     seen.add(request.id);
+    return true;
+  });
+}
+
+function deduplicateDiscoveryItems(items: WorkshopDiscoveryFeedItem[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.requestId)) return false;
+    seen.add(item.requestId);
     return true;
   });
 }
