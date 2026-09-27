@@ -41,6 +41,59 @@ type ConversationInboxStateRow = {
   hidden_at: string;
 };
 
+type RefreshScheduler = {
+  schedule: () => void;
+  invalidate: () => void;
+};
+
+function createRefreshScheduler(
+  refresh: () => Promise<void>,
+  isSessionActive: () => boolean,
+): RefreshScheduler {
+  let inFlight = false;
+  let pending = false;
+  let active = true;
+
+  const run = async () => {
+    if (!active || !isSessionActive()) return;
+
+    inFlight = true;
+    pending = false;
+
+    try {
+      await refresh();
+    } catch (error) {
+      console.error("Failed to refresh navbar badge:", error);
+    } finally {
+      if (!active || !isSessionActive()) return;
+
+      inFlight = false;
+
+      if (pending) {
+        pending = false;
+        void run();
+      }
+    }
+  };
+
+  return {
+    schedule: () => {
+      if (!active || !isSessionActive()) return;
+
+      if (inFlight) {
+        pending = true;
+        return;
+      }
+
+      void run();
+    },
+    invalidate: () => {
+      active = false;
+      pending = false;
+    },
+  };
+}
+
 function getConversationKey(requestId: string, offerId: string | null) {
   return `${requestId}::${offerId ?? "direct"}`;
 }
@@ -89,8 +142,6 @@ export default function AppNavbar() {
   const [showProgressToast, setShowProgressToast] = useState(false);
   const isAdmin = userRoles.includes("admin");
   const [wonJobsUnreadCount, setWonJobsUnreadCount] = useState(0);
-  const [directRequestsUnreadCount, setDirectRequestsUnreadCount] = useState(0);
-  const [newRequestsUnreadCount, setNewRequestsUnreadCount] = useState(0);
   const [appointmentProposalUnreadCount, setAppointmentProposalUnreadCount] =
     useState(0);
   const [rejectedOfferUnreadCount, setRejectedOfferUnreadCount] = useState(0);
@@ -274,8 +325,6 @@ export default function AppNavbar() {
       setProgressUnreadCount(0);
       setOfferUnreadCount(0);
       setWonJobsUnreadCount(0);
-      setDirectRequestsUnreadCount(0);
-      setNewRequestsUnreadCount(0);
       setAppointmentProposalUnreadCount(0);
       setRejectedOfferUnreadCount(0);
       setAppointmentConfirmedUnreadCount(0);
@@ -288,6 +337,34 @@ export default function AppNavbar() {
     unreadMessagesRefreshInFlightRef.current = false;
     unreadMessagesPendingRefreshRef.current = false;
     unreadMessagesPendingReasonRef.current = null;
+    let disposed = false;
+    const timeoutIds = new Set<number>();
+    const isSessionActive = () =>
+      !disposed &&
+      unreadMessagesSchedulerSessionRef.current === schedulerSession;
+
+    setUnreadCount(0);
+    setAppointmentProposalUnreadCount(0);
+    setAppointmentConfirmedUnreadCount(0);
+    setJobStartedUnreadCount(0);
+    setRejectedOfferUnreadCount(0);
+    setAppointmentToast(null);
+
+    if (isClientMode) {
+      setProgressUnreadCount(0);
+      setOfferUnreadCount(0);
+      setWonJobsUnreadCount(0);
+      setShowProgressToast(false);
+      lastProgressCountRef.current = 0;
+      progressCountInitializedRef.current = false;
+    } else {
+      setProgressUnreadCount(0);
+      setOfferUnreadCount(0);
+      setWonJobsUnreadCount(0);
+      setShowProgressToast(false);
+      lastProgressCountRef.current = 0;
+      progressCountInitializedRef.current = false;
+    }
     logPerf("scheduler:session:start", {
       schedulerSession,
       isWorkshopMode,
@@ -635,6 +712,8 @@ export default function AppNavbar() {
         "get_unread_progress_updates_count",
       );
 
+      if (!isSessionActive()) return;
+
       if (error) {
         console.error("Failed to load progress unread:", error);
         setProgressUnreadCount(0);
@@ -650,9 +729,12 @@ export default function AppNavbar() {
       ) {
         setShowProgressToast(true);
 
-        setTimeout(() => {
+        const timeoutId = window.setTimeout(() => {
+          timeoutIds.delete(timeoutId);
+          if (!isSessionActive()) return;
           setShowProgressToast(false);
         }, 4000);
+        timeoutIds.add(timeoutId);
       }
 
       progressCountInitializedRef.current = true;
@@ -665,6 +747,8 @@ export default function AppNavbar() {
         .from("repair_requests")
         .select("id, status")
         .eq("user_id", userId);
+
+      if (!isSessionActive()) return;
 
       if (requestsError) {
         console.error("Failed to load customer requests:", requestsError);
@@ -687,6 +771,8 @@ export default function AppNavbar() {
         .in("request_id", requestIds)
         .is("customer_read_at", null);
 
+      if (!isSessionActive()) return;
+
       if (error) {
         console.error("Failed to load unread offers:", error);
         setOfferUnreadCount(0);
@@ -697,63 +783,37 @@ export default function AppNavbar() {
     };
 
     const loadUnreadAppointmentNotifications = async () => {
-      const [
-        { count: proposalCount, error: proposalError },
-        { count: confirmedCount, error: confirmedError },
-        { count: jobStartedCount, error: jobStartedError },
-        { count: rejectedOfferCount, error: rejectedOfferError },
-      ] = await Promise.all([
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("recipient_id", userId)
-          .is("read_at", null)
-          .in("type", [
-            "customer_proposed_appointment",
-            "workshop_proposed_appointment",
-          ]),
-
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("recipient_id", userId)
-          .is("read_at", null)
-          .in("type", [
-            "customer_confirmed_appointment",
-            "workshop_confirmed_appointment",
-          ]),
-
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("recipient_id", userId)
-          .is("read_at", null)
-          .eq("type", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE),
-
-        supabase
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("recipient_id", userId)
-          .eq("recipient_role", "workshop")
-          .is("read_at", null)
-          .in("type", [
-            WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
-            WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
-          ]),
+      const proposalTypes = new Set([
+        "customer_proposed_appointment",
+        "workshop_proposed_appointment",
       ]);
+      const confirmedTypes = new Set([
+        "customer_confirmed_appointment",
+        "workshop_confirmed_appointment",
+      ]);
+      const rejectedOfferTypes = new Set([
+        WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
+        WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
+      ]);
+      const notificationTypes = [
+        ...proposalTypes,
+        ...confirmedTypes,
+        WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+        ...rejectedOfferTypes,
+      ];
+      const { data: notifications, error } = await supabase
+        .from("notifications")
+        .select("type, recipient_role")
+        .eq("recipient_id", userId)
+        .is("read_at", null)
+        .in("type", notificationTypes);
 
-      if (
-        proposalError ||
-        confirmedError ||
-        jobStartedError ||
-        rejectedOfferError
-      ) {
+      if (!isSessionActive()) return;
+
+      if (error) {
         console.error(
           "Failed to load appointment notifications:",
-          proposalError ||
-            confirmedError ||
-            jobStartedError ||
-            rejectedOfferError,
+          error,
         );
 
         setAppointmentProposalUnreadCount(0);
@@ -763,10 +823,36 @@ export default function AppNavbar() {
         return;
       }
 
-      setAppointmentProposalUnreadCount(proposalCount || 0);
-      setAppointmentConfirmedUnreadCount(confirmedCount || 0);
-      setJobStartedUnreadCount(jobStartedCount || 0);
-      setRejectedOfferUnreadCount(rejectedOfferCount || 0);
+      let proposalCount = 0;
+      let confirmedCount = 0;
+      let jobStartedCount = 0;
+      let rejectedOfferCount = 0;
+
+      for (const notification of notifications || []) {
+        if (proposalTypes.has(notification.type)) {
+          proposalCount += 1;
+        }
+
+        if (confirmedTypes.has(notification.type)) {
+          confirmedCount += 1;
+        }
+
+        if (notification.type === WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE) {
+          jobStartedCount += 1;
+        }
+
+        if (
+          notification.recipient_role === "workshop" &&
+          rejectedOfferTypes.has(notification.type)
+        ) {
+          rejectedOfferCount += 1;
+        }
+      }
+
+      setAppointmentProposalUnreadCount(proposalCount);
+      setAppointmentConfirmedUnreadCount(confirmedCount);
+      setJobStartedUnreadCount(jobStartedCount);
+      setRejectedOfferUnreadCount(rejectedOfferCount);
     };
 
     const loadUnreadWonJobs = async () => {
@@ -777,6 +863,8 @@ export default function AppNavbar() {
         .eq("status", "accepted")
         .is("workshop_read_at", null);
 
+      if (!isSessionActive()) return;
+
       if (error) {
         console.error("Failed to load unread won jobs:", error);
         setWonJobsUnreadCount(0);
@@ -786,55 +874,31 @@ export default function AppNavbar() {
       setWonJobsUnreadCount(count || 0);
     };
 
-    const loadUnreadDirectRequests = async () => {
-      const { count, error } = await supabase
-        .from("repair_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("target_workshop_id", userId)
-        .is("target_workshop_read_at", null);
-
-      if (error) {
-        console.error("Failed to load unread direct requests:", error);
-        return;
-      }
-
-      setDirectRequestsUnreadCount(count || 0);
-    };
-
-    const loadUnreadOpenRequests = async () => {
-      if (!isWorkshopMode) {
-        setNewRequestsUnreadCount(0);
-        return;
-      }
-
-      const seenAt = localStorage.getItem(`open_requests_seen_at_${userId}`);
-
-      let query = supabase
-        .from("repair_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "open");
-
-      if (seenAt) {
-        query = query.gt("created_at", seenAt);
-      }
-
-      const { count, error } = await query;
-
-      if (error) {
-        console.error("Failed to load new open requests:", error);
-        setNewRequestsUnreadCount(0);
-        return;
-      }
-
-      setNewRequestsUnreadCount(count || 0);
-    };
+    const progressScheduler = createRefreshScheduler(
+      loadUnreadProgress,
+      isSessionActive,
+    );
+    const offersScheduler = createRefreshScheduler(
+      loadUnreadOffers,
+      isSessionActive,
+    );
+    const wonJobsScheduler = createRefreshScheduler(
+      loadUnreadWonJobs,
+      isSessionActive,
+    );
+    const notificationsScheduler = createRefreshScheduler(
+      loadUnreadAppointmentNotifications,
+      isSessionActive,
+    );
 
     scheduleUnreadMessagesRefresh("effect-start");
-    loadUnreadProgress();
-    loadUnreadOffers();
-    loadUnreadWonJobs();
-    loadUnreadDirectRequests();
-    loadUnreadAppointmentNotifications();
+    if (isClientMode) {
+      progressScheduler.schedule();
+      offersScheduler.schedule();
+    } else {
+      wonJobsScheduler.schedule();
+    }
+    notificationsScheduler.schedule();
 
     const handleConversationInboxStateChange = (payload: {
       eventType: "INSERT" | "UPDATE";
@@ -855,22 +919,12 @@ export default function AppNavbar() {
           schema: "public",
           table: "repair_offers",
         },
-        async () => {
-          await loadUnreadOffers();
-          await loadUnreadWonJobs();
-        },
-      )
-
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "repair_requests",
-        },
-        async () => {
-          await loadUnreadDirectRequests();
-          await loadUnreadOpenRequests();
+        () => {
+          if (isClientMode) {
+            offersScheduler.schedule();
+          } else {
+            wonJobsScheduler.schedule();
+          }
         },
       )
 
@@ -934,8 +988,10 @@ export default function AppNavbar() {
           schema: "public",
           table: "work_progress_updates",
         },
-        async () => {
-          await loadUnreadProgress();
+        () => {
+          if (isClientMode) {
+            progressScheduler.schedule();
+          }
         },
       )
 
@@ -946,8 +1002,10 @@ export default function AppNavbar() {
           schema: "public",
           table: "work_progress_reads",
         },
-        async () => {
-          await loadUnreadProgress();
+        () => {
+          if (isClientMode) {
+            progressScheduler.schedule();
+          }
         },
       )
 
@@ -959,7 +1017,7 @@ export default function AppNavbar() {
           table: "notifications",
           filter: `recipient_id=eq.${userId}`,
         },
-        async (payload) => {
+        (payload) => {
           const notification = payload.new as {
             actor_id?: string | null;
             type?: string | null;
@@ -983,7 +1041,7 @@ export default function AppNavbar() {
             return;
           }
 
-          await loadUnreadAppointmentNotifications();
+          notificationsScheduler.schedule();
 
           setAppointmentToast({
             title: notification.title || "Actualizare programare",
@@ -993,9 +1051,12 @@ export default function AppNavbar() {
             targetUrl: notification.target_url || null,
           });
 
-          window.setTimeout(() => {
+          const timeoutId = window.setTimeout(() => {
+            timeoutIds.delete(timeoutId);
+            if (!isSessionActive()) return;
             setAppointmentToast(null);
           }, 5000);
+          timeoutIds.add(timeoutId);
         },
       )
       .on(
@@ -1006,8 +1067,8 @@ export default function AppNavbar() {
           table: "notifications",
           filter: `recipient_id=eq.${userId}`,
         },
-        async () => {
-          await loadUnreadAppointmentNotifications();
+        () => {
+          notificationsScheduler.schedule();
         },
       )
 
@@ -1040,12 +1101,13 @@ export default function AppNavbar() {
       });
 
     const refreshAllBadges = () => {
-      loadUnreadProgress();
-      loadUnreadOffers();
-      loadUnreadWonJobs();
-      loadUnreadDirectRequests();
-      loadUnreadOpenRequests();
-      loadUnreadAppointmentNotifications();
+      if (isClientMode) {
+        progressScheduler.schedule();
+        offersScheduler.schedule();
+      } else {
+        wonJobsScheduler.schedule();
+      }
+      notificationsScheduler.schedule();
     };
 
     const refreshMessageBadgeOnly = (reason: string) => {
@@ -1127,21 +1189,21 @@ export default function AppNavbar() {
     };
 
     const handleProgressReadUpdated = () => {
-      loadUnreadProgress();
+      if (isClientMode) {
+        progressScheduler.schedule();
+      }
     };
 
     const handleOffersReadUpdated = () => {
-      loadUnreadOffers();
-      loadUnreadWonJobs();
-    };
-
-    const handleDirectRequestsReadUpdated = () => {
-      loadUnreadDirectRequests();
-      loadUnreadOpenRequests();
+      if (isClientMode) {
+        offersScheduler.schedule();
+      } else {
+        wonJobsScheduler.schedule();
+      }
     };
 
     const handleNotificationsReadUpdated = () => {
-      loadUnreadAppointmentNotifications();
+      notificationsScheduler.schedule();
     };
 
     window.addEventListener("focus", handleFocus);
@@ -1155,10 +1217,6 @@ export default function AppNavbar() {
     );
     window.addEventListener("progress-read-updated", handleProgressReadUpdated);
     window.addEventListener("offers-read-updated", handleOffersReadUpdated);
-    window.addEventListener(
-      "direct-requests-read-updated",
-      handleDirectRequestsReadUpdated,
-    );
     window.addEventListener(
       "notifications-read-updated",
       handleNotificationsReadUpdated,
@@ -1187,15 +1245,20 @@ export default function AppNavbar() {
         handleProgressReadUpdated,
       );
       window.removeEventListener("offers-read-updated", handleOffersReadUpdated);
+      disposed = true;
+      progressScheduler.invalidate();
+      offersScheduler.invalidate();
+      wonJobsScheduler.invalidate();
+      notificationsScheduler.invalidate();
+      for (const timeoutId of timeoutIds) {
+        window.clearTimeout(timeoutId);
+      }
+      timeoutIds.clear();
       unreadMessagesSchedulerSessionRef.current += 1;
       unreadMessagesRefreshInFlightRef.current = false;
       unreadMessagesPendingRefreshRef.current = false;
       unreadMessagesPendingReasonRef.current = null;
       unreadMessagesRealtimeDegradedRef.current = false;
-      window.removeEventListener(
-        "direct-requests-read-updated",
-        handleDirectRequestsReadUpdated,
-      );
       window.removeEventListener(
         "notifications-read-updated",
         handleNotificationsReadUpdated,
