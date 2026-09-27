@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -17,10 +17,7 @@ import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import { interactiveButton } from "@/lib/ui";
-import {
-  markNotificationsAsRead,
-  WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
-} from "@/lib/notifications";
+import { WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE } from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
 import {
   getAffectedPartLabels,
@@ -70,6 +67,20 @@ type RepairAppointment = {
 };
 
 type JobsTab = "scheduled" | "in_progress" | "completed";
+
+type UnreadProgressRow = {
+  request_id: string;
+  unread_count: number;
+};
+
+type WorkProgressRow = {
+  id: string;
+  request_id: string;
+  status: string | null;
+  created_at: string;
+};
+
+const PROGRESS_PAGE_SIZE = 500;
 
 const INITIAL_CATEGORY_BY_TAB: Record<JobsTab, RequestCategory> = {
   scheduled: "all",
@@ -123,6 +134,14 @@ export default function MyJobsPage() {
   const focusedRequestCardRef = useRef<HTMLDivElement | null>(null);
   const consumedFocusRequestRef = useRef<string | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
+  const jobsSessionRef = useRef(0);
+  const jobsLoadGenerationRef = useRef(0);
+  const jobsRefreshInFlightRef = useRef(false);
+  const jobsRefreshPendingRef = useRef(false);
+  const jobsRefreshPendingInitialRef = useRef(false);
+  const jobsUserIdRef = useRef<string | null>(null);
+  const hasLoadedJobsRef = useRef(false);
+  const scheduleJobsRefreshRef = useRef<(reason: string) => void>(() => {});
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -146,192 +165,397 @@ export default function MyJobsPage() {
     }
   }, []);
 
-  const loadJobs = async () => {
-    try {
-      const { data: authData } = await supabase.auth.getUser();
+  useEffect(() => {
+    let active = true;
+    let hasSubscribedToProgress = false;
+    const lifecycleSession = jobsSessionRef.current + 1;
+    jobsSessionRef.current = lifecycleSession;
+    jobsLoadGenerationRef.current += 1;
+    jobsRefreshInFlightRef.current = false;
+    jobsRefreshPendingRef.current = false;
+    jobsRefreshPendingInitialRef.current = false;
+    jobsUserIdRef.current = null;
+    hasLoadedJobsRef.current = false;
 
-      if (!authData.user) {
-        router.push("/login");
-        return;
-      }
+    const isLifecycleActive = () =>
+      active && jobsSessionRef.current === lifecycleSession;
 
-      await markNotificationsAsRead({
-        recipientRole: "customer",
-        types: [
-          "workshop_confirmed_appointment",
-          WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
-        ],
-      });
+    const resetJobsState = () => {
+      setRequests([]);
+      setOffers([]);
+      setProgressByRequestId({});
+      setUnreadByRequestId({});
+      setReviewedRequestIds([]);
+      setAppointments([]);
+      setWorkshopSlugs({});
+    };
 
-      const { data: reviewsData } = await supabase
-        .from("reviews")
-        .select("request_id")
-        .eq("customer_user_id", authData.user.id);
+    const loadJobs = async (initialLoad: boolean) => {
+      const generation = jobsLoadGenerationRef.current + 1;
+      jobsLoadGenerationRef.current = generation;
+      const isCurrentLoad = (userId?: string) =>
+        isLifecycleActive() &&
+        jobsLoadGenerationRef.current === generation &&
+        (!userId || jobsUserIdRef.current === userId);
 
-      setReviewedRequestIds(
-        (reviewsData || []).map((review) => review.request_id).filter(Boolean),
-      );
+      try {
+        const { data: authData } = await supabase.auth.getUser();
 
-      const [requestRows, offerRows] = await Promise.all([
-        getOwnRepairRequests(authData.user.id),
-        getOffersForCustomerRequests(authData.user.id),
-      ]);
+        if (!isCurrentLoad()) return;
 
-      setRequests(requestRows);
-      setOffers(offerRows);
-
-      const workshopUserIds = Array.from(
-        new Set(
-          offerRows.map((offer) => offer.workshop_user_id).filter(Boolean),
-        ),
-      );
-
-      if (workshopUserIds.length > 0) {
-        const { data: profilesData } = await supabase
-          .from("profiles")
-          .select("id, workshop_slug")
-          .in("id", workshopUserIds);
-
-        const slugMap: Record<string, string> = {};
-
-        (profilesData || []).forEach((profile) => {
-          if (profile.id && profile.workshop_slug) {
-            slugMap[profile.id] = profile.workshop_slug;
-          }
-        });
-
-        setWorkshopSlugs(slugMap);
-      }
-
-      const { data: appointmentsData, error: appointmentsError } =
-        await supabase
-          .from("repair_appointments")
-          .select(
-            "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status, updated_at",
-          )
-          .eq("customer_id", authData.user.id)
-          .order("updated_at", { ascending: false });
-
-      if (appointmentsError) {
-        console.error("Failed to load appointments:", appointmentsError);
-      }
-
-      setAppointments((appointmentsData || []) as RepairAppointment[]);
-
-      const progressMap: Record<
-        string,
-        {
-          latestStatus: string | null;
-          count: number;
-          completionTimestamp: string | null;
+        if (!authData.user) {
+          jobsUserIdRef.current = null;
+          resetJobsState();
+          router.push("/login");
+          return;
         }
-      > = {};
 
-      const { data: unreadData } = await supabase.rpc(
-        "get_unread_progress_updates_by_request",
-      );
+        const userId = authData.user.id;
 
-      const unreadMap: Record<string, number> = {};
+        if (jobsUserIdRef.current && jobsUserIdRef.current !== userId) {
+          resetJobsState();
+        }
+        jobsUserIdRef.current = userId;
 
-      (unreadData || []).forEach((row: any) => {
-        unreadMap[row.request_id] = row.unread_count;
-      });
+        const { error: notificationsReadError } = await supabase
+          .from("notifications")
+          .update({
+            read_at: new Date().toISOString(),
+          })
+          .eq("recipient_id", userId)
+          .eq("recipient_role", "customer")
+          .is("read_at", null)
+          .in("type", [
+            "workshop_confirmed_appointment",
+            WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+          ]);
 
-      const unreadRequestIds = Object.keys(unreadMap).filter(
-        (requestId) => unreadMap[requestId] > 0,
-      );
+        if (!isCurrentLoad(userId)) return;
 
-      if (unreadRequestIds.length > 0 && authData.user.id) {
-        const { data: unreadUpdates, error: unreadUpdatesError } =
-          await supabase
-            .from("work_progress_updates")
-            .select("id, request_id")
-            .in("request_id", unreadRequestIds);
-
-        if (unreadUpdatesError) {
+        if (notificationsReadError) {
           console.error(
-            "Failed to load unread progress update ids:",
-            unreadUpdatesError,
+            "Failed to mark notifications as read:",
+            notificationsReadError,
           );
         } else {
-          const readsToInsert = (unreadUpdates || []).map((update) => ({
-            update_id: update.id,
-            user_id: authData.user.id,
-            read_at: new Date().toISOString(),
-          }));
+          window.dispatchEvent(new Event("notifications-read-updated"));
+        }
 
-          if (readsToInsert.length > 0) {
-            const { error: progressReadError } = await supabase
-              .from("work_progress_reads")
-              .upsert(readsToInsert, {
-                onConflict: "update_id,user_id",
-              });
+        const { data: reviewsData } = await supabase
+          .from("reviews")
+          .select("request_id")
+          .eq("customer_user_id", userId);
 
-            if (progressReadError) {
-              console.error(
-                "Failed to mark progress updates as read:",
-                progressReadError,
-              );
-            } else {
-              window.dispatchEvent(new Event("progress-read-updated"));
-              window.dispatchEvent(new Event("offers-read-updated"));
-              setUnreadByRequestId({});
+        if (!isCurrentLoad(userId)) return;
+
+        const [requestRows, offerRows] = await Promise.all([
+          getOwnRepairRequests(userId),
+          getOffersForCustomerRequests(userId),
+        ]);
+
+        if (!isCurrentLoad(userId)) return;
+
+        const workshopUserIds = Array.from(
+          new Set(
+            offerRows.map((offer) => offer.workshop_user_id).filter(Boolean),
+          ),
+        );
+        const slugMap: Record<string, string> = {};
+
+        if (workshopUserIds.length > 0) {
+          const { data: profilesData } = await supabase
+            .from("profiles")
+            .select("id, workshop_slug")
+            .in("id", workshopUserIds);
+
+          if (!isCurrentLoad(userId)) return;
+
+          (profilesData || []).forEach((profile) => {
+            if (profile.id && profile.workshop_slug) {
+              slugMap[profile.id] = profile.workshop_slug;
+            }
+          });
+        }
+
+        const { data: appointmentsData, error: appointmentsError } =
+          await supabase
+            .from("repair_appointments")
+            .select(
+              "id, request_id, appointment_date, appointment_time, handover_method, pickup_address, customer_note, workshop_note, proposed_date, proposed_time, status, updated_at",
+            )
+            .eq("customer_id", userId)
+            .order("updated_at", { ascending: false });
+
+        if (!isCurrentLoad(userId)) return;
+
+        if (appointmentsError) {
+          console.error("Failed to load appointments:", appointmentsError);
+        }
+
+        const { data: unreadData } = await supabase.rpc(
+          "get_unread_progress_updates_by_request",
+        );
+
+        if (!isCurrentLoad(userId)) return;
+
+        const unreadMap: Record<string, number> = {};
+
+        ((unreadData || []) as UnreadProgressRow[]).forEach((row) => {
+          unreadMap[row.request_id] = row.unread_count;
+        });
+
+        const unreadRequestIds = Object.keys(unreadMap).filter(
+          (requestId) => unreadMap[requestId] > 0,
+        );
+        let nextUnreadByRequestId: Record<string, number> | null =
+          unreadRequestIds.length === 0 ? unreadMap : null;
+
+        if (unreadRequestIds.length > 0) {
+          const { data: unreadUpdates, error: unreadUpdatesError } =
+            await supabase
+              .from("work_progress_updates")
+              .select("id, request_id")
+              .in("request_id", unreadRequestIds);
+
+          if (!isCurrentLoad(userId)) return;
+
+          if (unreadUpdatesError) {
+            console.error(
+              "Failed to load unread progress update ids:",
+              unreadUpdatesError,
+            );
+          } else {
+            const readsToInsert = (unreadUpdates || []).map((update) => ({
+              update_id: update.id,
+              user_id: userId,
+              read_at: new Date().toISOString(),
+            }));
+
+            if (readsToInsert.length > 0) {
+              const { error: progressReadError } = await supabase
+                .from("work_progress_reads")
+                .upsert(readsToInsert, {
+                  onConflict: "update_id,user_id",
+                });
+
+              if (!isCurrentLoad(userId)) return;
+
+              if (progressReadError) {
+                console.error(
+                  "Failed to mark progress updates as read:",
+                  progressReadError,
+                );
+              } else {
+                nextUnreadByRequestId = {};
+                window.dispatchEvent(new Event("progress-read-updated"));
+                window.dispatchEvent(new Event("offers-read-updated"));
+              }
             }
           }
         }
+
+        type ProgressByRequestId = Record<
+          string,
+          {
+            latestStatus: string | null;
+            count: number;
+            completionTimestamp: string | null;
+          }
+        >;
+        const requestIds = requestRows.map((request) => request.id);
+        let nextProgressByRequestId: ProgressByRequestId | null = null;
+
+        if (requestIds.length === 0) {
+          nextProgressByRequestId = {};
+        } else {
+          const progressUpdates: WorkProgressRow[] = [];
+          const seenProgressUpdateIds = new Set<string>();
+          let progressRangeStart = 0;
+          let expectedProgressCount: number | null = null;
+          let progressCollectionComplete = true;
+
+          while (true) {
+            const { data, error: progressError, count } = await supabase
+              .from("work_progress_updates")
+              .select("id, request_id, status, created_at", {
+                count: "exact",
+              })
+              .in("request_id", requestIds)
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: false })
+              .range(
+                progressRangeStart,
+                progressRangeStart + PROGRESS_PAGE_SIZE - 1,
+              );
+
+            if (!isCurrentLoad(userId)) return;
+
+            if (progressError) {
+              console.error("Failed to load work progress:", progressError);
+              progressCollectionComplete = false;
+              break;
+            }
+
+            if (count === null) {
+              console.error("Failed to determine total work progress count.");
+              progressCollectionComplete = false;
+              break;
+            }
+
+            expectedProgressCount = Math.max(
+              expectedProgressCount ?? 0,
+              count,
+            );
+
+            const progressPage = (data || []) as WorkProgressRow[];
+
+            for (const update of progressPage) {
+              if (seenProgressUpdateIds.has(update.id)) continue;
+
+              seenProgressUpdateIds.add(update.id);
+              progressUpdates.push(update);
+            }
+
+            progressRangeStart += progressPage.length;
+
+            if (progressPage.length === 0) {
+              if (progressRangeStart < expectedProgressCount) {
+                console.error("Work progress pagination ended prematurely.");
+                progressCollectionComplete = false;
+              }
+              break;
+            }
+
+            if (
+              progressPage.length < PROGRESS_PAGE_SIZE &&
+              progressRangeStart >= expectedProgressCount
+            ) {
+              break;
+            }
+          }
+
+          if (
+            progressCollectionComplete &&
+            seenProgressUpdateIds.size !== expectedProgressCount
+          ) {
+            console.error("Work progress pagination returned incomplete data.");
+            progressCollectionComplete = false;
+          }
+
+          if (progressCollectionComplete) {
+            const progressMap: ProgressByRequestId = Object.fromEntries(
+              requestRows.map((request) => [
+                request.id,
+                {
+                  latestStatus: null,
+                  count: 0,
+                  completionTimestamp: null,
+                },
+              ]),
+            );
+            const latestStatusRequestIds = new Set<string>();
+
+            for (const update of progressUpdates) {
+              const progress = progressMap[update.request_id];
+
+              if (!progress) continue;
+
+              progress.count += 1;
+
+              if (!latestStatusRequestIds.has(update.request_id)) {
+                progress.latestStatus = update.status || null;
+                latestStatusRequestIds.add(update.request_id);
+              }
+
+              if (
+                progress.completionTimestamp === null &&
+                normalizeProgressStatus(update.status) === "Ready"
+              ) {
+                progress.completionTimestamp = update.created_at;
+              }
+            }
+
+            nextProgressByRequestId = progressMap;
+          }
+        }
+
+        if (!isCurrentLoad(userId)) return;
+
+        setReviewedRequestIds(
+          (reviewsData || []).map((review) => review.request_id).filter(Boolean),
+        );
+        setRequests(requestRows);
+        setOffers(offerRows);
+        setWorkshopSlugs(slugMap);
+        setAppointments((appointmentsData || []) as RepairAppointment[]);
+        if (nextUnreadByRequestId !== null) {
+          setUnreadByRequestId(nextUnreadByRequestId);
+        }
+        if (nextProgressByRequestId !== null) {
+          setProgressByRequestId(nextProgressByRequestId);
+        }
+        hasLoadedJobsRef.current = true;
+      } catch (error) {
+        if (!isCurrentLoad()) return;
+
+        console.error("Failed to load jobs:", error);
+        if (initialLoad || !hasLoadedJobsRef.current) {
+          alert("Nu am putut încărca programările.");
+        }
+      } finally {
+        if (initialLoad && isCurrentLoad()) {
+          setLoading(false);
+        }
+      }
+    };
+
+    const runRefreshQueue = async (initialLoad: boolean) => {
+      jobsRefreshInFlightRef.current = true;
+      let nextLoadIsInitial = initialLoad;
+
+      try {
+        do {
+          jobsRefreshPendingRef.current = false;
+          jobsRefreshPendingInitialRef.current = false;
+          await loadJobs(nextLoadIsInitial);
+          nextLoadIsInitial = jobsRefreshPendingInitialRef.current;
+        } while (isLifecycleActive() && jobsRefreshPendingRef.current);
+      } finally {
+        if (isLifecycleActive()) {
+          jobsRefreshInFlightRef.current = false;
+        }
+      }
+    };
+
+    const scheduleJobsRefresh = (reason: string, initialLoad = false) => {
+      if (!isLifecycleActive()) return;
+
+      if (jobsRefreshInFlightRef.current) {
+        jobsRefreshPendingRef.current = true;
+        if (initialLoad) {
+          jobsRefreshPendingInitialRef.current = true;
+        }
+        return;
       }
 
-      if (unreadRequestIds.length === 0) {
-        setUnreadByRequestId(unreadMap);
+      if (process.env.NODE_ENV === "development") {
+        console.log("[MY-JOBS] refresh", { reason, initialLoad });
       }
+      void runRefreshQueue(initialLoad);
+    };
 
-      await Promise.all(
-        requestRows.map(async (request) => {
-          const { data } = await supabase
-            .from("work_progress_updates")
-            .select("status, created_at")
-            .eq("request_id", request.id)
-            .order("created_at", { ascending: false });
+    scheduleJobsRefreshRef.current = (reason) => {
+      scheduleJobsRefresh(reason);
+    };
+    scheduleJobsRefresh("initial-load", true);
 
-          progressMap[request.id] = {
-            latestStatus: data?.[0]?.status || null,
-            count: data?.length || 0,
-            completionTimestamp:
-              data?.find(
-                (update) =>
-                  normalizeProgressStatus(update.status) === "Ready",
-              )?.created_at ?? null,
-          };
-        }),
-      );
-
-      setProgressByRequestId(progressMap);
-    } catch (error) {
-      console.error("Failed to load jobs:", error);
-      alert("Nu am putut încărca programările.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadJobs();
-  }, []);
-
-  useEffect(() => {
     const handleFocus = () => {
-      loadJobs();
+      scheduleJobsRefresh("focus");
     };
 
     window.addEventListener("focus", handleFocus);
 
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-    };
-  }, []);
-
-  useEffect(() => {
-    const channel = supabase
+    const appointmentsChannel = supabase
       .channel("customer-appointments-live")
       .on(
         "postgres_changes",
@@ -341,24 +565,12 @@ export default function MyJobsPage() {
           table: "repair_appointments",
         },
         () => {
-          loadJobs();
+          scheduleJobsRefresh("realtime:repair-appointments");
         },
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const refreshJobsFromWorkProgress = useEffectEvent(() => {
-    void loadJobs();
-  });
-
-  useEffect(() => {
-    let hasReconciledOnSubscribe = false;
-
-    const channel = supabase
+    const progressChannel = supabase
       .channel("customer-work-progress-live")
       .on(
         "postgres_changes",
@@ -368,26 +580,73 @@ export default function MyJobsPage() {
           table: "work_progress_updates",
         },
         () => {
-          refreshJobsFromWorkProgress();
+          scheduleJobsRefresh("realtime:work-progress");
         },
       )
       .subscribe((status, error) => {
         if (process.env.NODE_ENV === "development") {
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
             console.warn(`[WORK-PROGRESS-RT] ${status}`, error ?? undefined);
           }
         }
 
-        if (status === "SUBSCRIBED" && !hasReconciledOnSubscribe) {
-          hasReconciledOnSubscribe = true;
-          refreshJobsFromWorkProgress();
+        if (status === "SUBSCRIBED") {
+          if (hasSubscribedToProgress) {
+            scheduleJobsRefresh("realtime:reconnected");
+          }
+
+          hasSubscribedToProgress = true;
         }
       });
 
+    const {
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const nextUserId = session?.user?.id ?? null;
+      const previousUserId = jobsUserIdRef.current;
+
+      if (previousUserId === nextUserId) return;
+
+      if (previousUserId === null) {
+        jobsUserIdRef.current = nextUserId;
+        return;
+      }
+
+      jobsSessionRef.current += 1;
+      jobsLoadGenerationRef.current += 1;
+      jobsRefreshPendingRef.current = false;
+      jobsRefreshPendingInitialRef.current = false;
+      jobsUserIdRef.current = nextUserId;
+      hasLoadedJobsRef.current = false;
+      resetJobsState();
+
+      if (!nextUserId) {
+        router.push("/login");
+        return;
+      }
+
+      jobsSessionRef.current = lifecycleSession;
+      setLoading(true);
+      scheduleJobsRefresh("auth-user-changed", true);
+    });
+
     return () => {
-      supabase.removeChannel(channel);
+      active = false;
+      jobsSessionRef.current += 1;
+      jobsLoadGenerationRef.current += 1;
+      jobsRefreshPendingRef.current = false;
+      jobsRefreshPendingInitialRef.current = false;
+      scheduleJobsRefreshRef.current = () => {};
+      window.removeEventListener("focus", handleFocus);
+      authSubscription.unsubscribe();
+      void supabase.removeChannel(appointmentsChannel);
+      void supabase.removeChannel(progressChannel);
     };
-  }, []);
+  }, [router]);
 
   const jobs = useMemo(() => {
     return requests
@@ -579,7 +838,7 @@ export default function MyJobsPage() {
 
       if (error) throw error;
 
-      await loadJobs();
+      scheduleJobsRefreshRef.current("appointment-accepted");
     } catch (error) {
       console.error("Failed to accept appointment:", error);
       alert("Nu am putut confirma programarea.");
