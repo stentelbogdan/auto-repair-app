@@ -1252,27 +1252,30 @@ export default function MyJobsPage() {
                     </div>
                   </div>
 
-                  {request.status === "completed" &&
-                    (reviewedRequestIds.includes(request.id) ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="rounded-2xl bg-emerald-100 px-4 py-4 text-base font-bold text-emerald-700"
-                      >
-                        ✓ Review trimis
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          router.push(`/review?id=${request.id}`);
-                        }}
-                        className="mx-auto mt-3 block rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
-                      >
-                        ⭐ Lasă review
-                      </button>
-                    ))}
+                  {request.status === "completed" && (
+                    <div className="mt-3 flex justify-center">
+                      {reviewedRequestIds.includes(request.id) ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="rounded-2xl bg-emerald-100 px-4 py-4 text-base font-bold text-emerald-700"
+                        >
+                          ✓ Review trimis
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            router.push(`/review?id=${request.id}`);
+                          }}
+                          className="rounded-2xl bg-orange-500 px-4 py-4 text-base font-bold text-white"
+                        >
+                          ⭐ Lasă review
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
