@@ -16,6 +16,7 @@ import { Eye } from "lucide-react";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { interactiveButton } from "@/lib/ui";
 import { WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE } from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
@@ -1066,6 +1067,15 @@ export default function MyJobsPage() {
                       />
                     </div>
                   </div>
+
+                  {showsTowingDetails && (
+                    <TowingScheduleCard
+                      scheduleType={request.towing_schedule_type}
+                      requestedAt={request.towing_requested_at}
+                      requestedTimezone={request.towing_requested_timezone}
+                      className="mt-4 p-4"
+                    />
+                  )}
 
                   {hasValidTowingRoute && (
                     <div

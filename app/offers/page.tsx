@@ -9,6 +9,7 @@ import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { markNotificationsAsRead } from "@/lib/notifications";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import type {
@@ -501,6 +502,15 @@ export default function OffersPage() {
                       </span>
                     </div>
                   </div>
+
+                  {request.serviceType === "towing" && (
+                    <TowingScheduleCard
+                      scheduleType={request.towingScheduleType}
+                      requestedAt={request.towingRequestedAt}
+                      requestedTimezone={request.towingRequestedTimezone}
+                      className="mb-4 p-4"
+                    />
+                  )}
 
                   {hasValidTowingRoute && (
                     <TowingRouteEstimateCard

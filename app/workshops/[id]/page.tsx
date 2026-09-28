@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
 import type {
   RepairServiceDetails,
@@ -27,7 +28,6 @@ import {
   formatTowingRouteDuration,
   getTowingDisplaySummary,
 } from "@/lib/towing/towing-display";
-import { getTowingScheduleDisplay } from "@/lib/towing/towing-schedule-display";
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
@@ -409,14 +409,6 @@ export default function WorkshopRequestDetailsPage() {
     isFiniteCoordinate(request.destination_lng, -180, 180)
       ? { lat: request.destination_lat, lng: request.destination_lng }
       : null;
-  const towingScheduleDisplay =
-    request.service_type === "towing"
-      ? getTowingScheduleDisplay(
-          request.towing_schedule_type,
-          request.towing_requested_at,
-          request.towing_requested_timezone,
-        )
-      : null;
 
   return (
     <main className="min-h-screen bg-black px-4 py-8 text-white">
@@ -478,15 +470,13 @@ export default function WorkshopRequestDetailsPage() {
 
           <RequestClientName name={clientName} variant="detail" />
 
-          {towingScheduleDisplay && (
-            <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-4">
-              <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
-                Solicitare transport
-              </p>
-              <p className="mt-1 text-sm font-bold text-black/75">
-                {towingScheduleDisplay}
-              </p>
-            </div>
+          {request.service_type === "towing" && (
+            <TowingScheduleCard
+              scheduleType={request.towing_schedule_type}
+              requestedAt={request.towing_requested_at}
+              requestedTimezone={request.towing_requested_timezone}
+              className="mt-4 p-4"
+            />
           )}
 
           {routeEstimate && (

@@ -6,6 +6,7 @@ import CarHeader from "@/app/components/CarHeader";
 import RepairRequestMetrics from "@/app/components/RepairRequestMetrics";
 import RequestClientName from "@/app/components/RequestClientName";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import WorkshopRequestsHeader from "@/app/components/WorkshopRequestsHeader";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 import { checkWorkshopAccess } from "@/lib/auth/workshop-access";
@@ -22,7 +23,6 @@ import {
 } from "@/lib/supabase/workshop-discovery";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import { getTowingDisplaySummary } from "@/lib/towing/towing-display";
-import { getTowingScheduleDisplay } from "@/lib/towing/towing-schedule-display";
 
 type WorkshopRequest = {
   id: string;
@@ -550,12 +550,6 @@ export default function WorkshopTowingPage() {
                       lng: request.destinationLng,
                     }
                   : null;
-              const towingScheduleDisplay = getTowingScheduleDisplay(
-                request.towingScheduleType,
-                request.towingRequestedAt,
-                request.towingRequestedTimezone,
-              );
-
               return (
                 <div
                   key={request.id}
@@ -594,16 +588,12 @@ export default function WorkshopTowingPage() {
                     <RequestClientName name={request.clientName} />
                   </div>
 
-                  {towingScheduleDisplay && (
-                    <div className="mt-4 rounded-2xl border border-black/10 bg-black/[0.03] p-3">
-                      <p className="text-[13px] font-bold uppercase tracking-wide text-orange-600">
-                        Solicitare transport
-                      </p>
-                      <p className="mt-1 text-sm font-bold text-black/75">
-                        {towingScheduleDisplay}
-                      </p>
-                    </div>
-                  )}
+                  <TowingScheduleCard
+                    scheduleType={request.towingScheduleType}
+                    requestedAt={request.towingRequestedAt}
+                    requestedTimezone={request.towingRequestedTimezone}
+                    className="mt-4 p-3"
+                  />
 
                   {routeEstimate && (
                     <div className="mt-4 [&>section]:mb-0">

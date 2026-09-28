@@ -7,10 +7,12 @@ import CarHeader, {
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import RequestClientName from "@/app/components/RequestClientName";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { interactiveButton } from "@/lib/ui";
 import type { MechanicalServiceDetailGroup } from "@/lib/mechanical/mechanical-service-details";
 import type { TowingDisplaySummary } from "@/lib/towing/towing-display";
 import type { TowingRoutePaths } from "@/lib/towing/towing-route";
+import type { TowingScheduleType } from "@/lib/supabase/repair-requests";
 
 type JobImage = {
   name?: string;
@@ -38,6 +40,9 @@ type JobAppointmentCardProps = {
   pickup?: { lat: number; lng: number } | null;
   destination?: { lat: number; lng: number } | null;
   routePaths?: TowingRoutePaths | null;
+  towingScheduleType?: TowingScheduleType | null;
+  towingRequestedAt?: string | null;
+  towingRequestedTimezone?: string | null;
   description?: string | null;
   clientName?: string | null;
 
@@ -76,6 +81,9 @@ export default function JobAppointmentCard({
   pickup,
   destination,
   routePaths,
+  towingScheduleType,
+  towingRequestedAt,
+  towingRequestedTimezone,
   description,
   clientName,
   price,
@@ -129,6 +137,15 @@ export default function JobAppointmentCard({
       />
 
       <RequestClientName name={clientName} />
+
+      {towingScheduleType && (
+        <TowingScheduleCard
+          scheduleType={towingScheduleType}
+          requestedAt={towingRequestedAt}
+          requestedTimezone={towingRequestedTimezone}
+          className="mt-4 p-4"
+        />
+      )}
 
       {hasValidTowingRoute && (
         <div className="mt-4 [&>section]:mb-0">

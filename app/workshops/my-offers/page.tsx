@@ -8,6 +8,7 @@ import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import {
   markNotificationsAsRead,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
@@ -21,7 +22,10 @@ import {
   getAffectedPartLabels,
   getDamageTypeLabels,
 } from "@/lib/car-damage";
-import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import type {
+  RepairServiceDetails,
+  TowingScheduleType,
+} from "@/lib/supabase/repair-requests";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
 import RequestClientName from "@/app/components/RequestClientName";
@@ -78,6 +82,9 @@ type RepairRequest = {
   route_distance_meters: number | null;
   route_duration_seconds: number | null;
   route_paths: TowingRoutePaths | null;
+  towing_schedule_type: TowingScheduleType | null;
+  towing_requested_at: string | null;
+  towing_requested_timezone: string | null;
   description: string | null;
   status?: string | null;
   accepted_offer_id?: string | null;
@@ -186,6 +193,9 @@ export default function WorkshopMyOffersPage() {
             route_distance_meters,
             route_duration_seconds,
             route_paths,
+            towing_schedule_type,
+            towing_requested_at,
+            towing_requested_timezone,
             description,
             status,
             accepted_offer_id,
@@ -277,6 +287,10 @@ export default function WorkshopMyOffersPage() {
                 route_duration_seconds:
                   request.route_duration_seconds ?? null,
                 route_paths: request.route_paths ?? null,
+                towing_schedule_type: request.towing_schedule_type ?? null,
+                towing_requested_at: request.towing_requested_at ?? null,
+                towing_requested_timezone:
+                  request.towing_requested_timezone ?? null,
                 description: request.description ?? null,
                 status: request.status ?? null,
                 accepted_offer_id: request.accepted_offer_id ?? null,
@@ -355,6 +369,9 @@ export default function WorkshopMyOffersPage() {
             route_distance_meters,
             route_duration_seconds,
             route_paths,
+            towing_schedule_type,
+            towing_requested_at,
+            towing_requested_timezone,
             description,
             status,
             accepted_offer_id,
@@ -428,6 +445,10 @@ export default function WorkshopMyOffersPage() {
               route_distance_meters: request.route_distance_meters ?? null,
               route_duration_seconds: request.route_duration_seconds ?? null,
               route_paths: request.route_paths ?? null,
+              towing_schedule_type: request.towing_schedule_type ?? null,
+              towing_requested_at: request.towing_requested_at ?? null,
+              towing_requested_timezone:
+                request.towing_requested_timezone ?? null,
               description: request.description ?? null,
               status: request.status ?? null,
               accepted_offer_id: request.accepted_offer_id ?? null,
@@ -970,6 +991,15 @@ export default function WorkshopMyOffersPage() {
                           : "Clientul a ales un alt service pentru această lucrare."}
                       </p>
                     </div>
+                  )}
+
+                  {request?.service_type === "towing" && (
+                    <TowingScheduleCard
+                      scheduleType={request.towing_schedule_type}
+                      requestedAt={request.towing_requested_at}
+                      requestedTimezone={request.towing_requested_timezone}
+                      className="mt-4 p-4"
+                    />
                   )}
 
                   {routeEstimate && (

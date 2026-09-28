@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
+import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
 import {
@@ -25,7 +26,10 @@ import {
   getDamageTypeLabel,
   getRequestTypeBadgeLabel,
 } from "@/lib/displayLabels";
-import type { RepairServiceDetails } from "@/lib/supabase/repair-requests";
+import type {
+  RepairServiceDetails,
+  TowingScheduleType,
+} from "@/lib/supabase/repair-requests";
 import {
   isRepairServiceType,
   resolveRepairServiceType,
@@ -88,6 +92,9 @@ type WonJobRequestRow = {
   route_distance_meters: number | null;
   route_duration_seconds: number | null;
   route_paths: TowingRoutePaths | null;
+  towing_schedule_type: TowingScheduleType | null;
+  towing_requested_at: string | null;
+  towing_requested_timezone: string | null;
   description: string | null;
   images: Array<{
     name?: string | null;
@@ -149,6 +156,9 @@ type WonJob = {
     routeDistanceMeters: number | null;
     routeDurationSeconds: number | null;
     routePaths: TowingRoutePaths | null;
+    towingScheduleType: TowingScheduleType | null;
+    towingRequestedAt: string | null;
+    towingRequestedTimezone: string | null;
     description: string;
     images: JobImage[];
     status: string;
@@ -472,6 +482,9 @@ export default function WorkshopWonJobsPage() {
             route_distance_meters,
             route_duration_seconds,
             route_paths,
+            towing_schedule_type,
+            towing_requested_at,
+            towing_requested_timezone,
             description,
             images,
             status,
@@ -525,6 +538,10 @@ export default function WorkshopWonJobsPage() {
             routeDistanceMeters: request?.route_distance_meters ?? null,
             routeDurationSeconds: request?.route_duration_seconds ?? null,
             routePaths: request?.route_paths ?? null,
+            towingScheduleType: request?.towing_schedule_type ?? null,
+            towingRequestedAt: request?.towing_requested_at ?? null,
+            towingRequestedTimezone:
+              request?.towing_requested_timezone ?? null,
             description:
               request?.description ||
               "Această lucrare acceptată este acum disponibilă aici.",
@@ -1087,6 +1104,17 @@ export default function WorkshopWonJobsPage() {
 
                   <RequestClientName name={job.clientName} />
 
+                  {job.request.serviceType === "towing" && (
+                    <TowingScheduleCard
+                      scheduleType={job.request.towingScheduleType}
+                      requestedAt={job.request.towingRequestedAt}
+                      requestedTimezone={
+                        job.request.towingRequestedTimezone
+                      }
+                      className="mt-4 p-4"
+                    />
+                  )}
+
                   <div className="mt-5">
                     <OfferSummaryCard
                       title="Lucrare în lucru"
@@ -1231,6 +1259,11 @@ export default function WorkshopWonJobsPage() {
                   pickup={towingRoute?.pickup}
                   destination={towingRoute?.destination}
                   routePaths={job.request.routePaths}
+                  towingScheduleType={job.request.towingScheduleType}
+                  towingRequestedAt={job.request.towingRequestedAt}
+                  towingRequestedTimezone={
+                    job.request.towingRequestedTimezone
+                  }
                   requestTypeLabel={getRequestTypeBadgeLabel(
                     job.request.serviceType,
                   )}
@@ -1354,6 +1387,17 @@ export default function WorkshopWonJobsPage() {
                   />
 
                   <RequestClientName name={job.clientName} />
+
+                  {job.request.serviceType === "towing" && (
+                    <TowingScheduleCard
+                      scheduleType={job.request.towingScheduleType}
+                      requestedAt={job.request.towingRequestedAt}
+                      requestedTimezone={
+                        job.request.towingRequestedTimezone
+                      }
+                      className="mt-4 p-4"
+                    />
+                  )}
 
                   {towingRoute?.routeEstimate && (
                     <div className="mt-4 [&>section]:mb-0">

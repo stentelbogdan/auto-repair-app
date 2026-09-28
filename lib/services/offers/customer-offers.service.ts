@@ -235,6 +235,9 @@ function createRequestMap(
       routeDistanceMeters: request.route_distance_meters ?? null,
       routeDurationSeconds: request.route_duration_seconds ?? null,
       routePaths: request.route_paths ?? null,
+      towingScheduleType: request.towing_schedule_type ?? null,
+      towingRequestedAt: request.towing_requested_at ?? null,
+      towingRequestedTimezone: request.towing_requested_timezone ?? null,
       description: request.description || "",
 
       images: Array.isArray(request.images) ? request.images : [],

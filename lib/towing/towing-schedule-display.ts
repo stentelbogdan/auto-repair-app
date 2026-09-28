@@ -5,6 +5,10 @@ export type TowingRequestedDateTime = {
   time: string;
 };
 
+export type TowingScheduleDisplay =
+  | { kind: "asap"; label: string }
+  | { kind: "scheduled"; date: string; time: string };
+
 export function getTowingRequestedDateTime(
   scheduleType: TowingScheduleType | null | undefined,
   requestedAt: string | null | undefined,
@@ -56,9 +60,9 @@ export function getTowingScheduleDisplay(
   scheduleType: TowingScheduleType | null | undefined,
   requestedAt: string | null | undefined,
   requestedTimezone: string | null | undefined,
-): string | null {
+): TowingScheduleDisplay | null {
   if (scheduleType === "asap") {
-    return "Cât mai repede";
+    return { kind: "asap", label: "Cât mai repede" };
   }
 
   const requestedDateTime = getTowingRequestedDateTime(
@@ -73,5 +77,9 @@ export function getTowingScheduleDisplay(
 
   const [year, month, day] = requestedDateTime.date.split("-");
 
-  return `${day}.${month}.${year} · ${requestedDateTime.time}`;
+  return {
+    kind: "scheduled",
+    date: `${day}.${month}.${year}`,
+    time: requestedDateTime.time,
+  };
 }
