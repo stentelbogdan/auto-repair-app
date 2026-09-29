@@ -4,6 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import {
+  getConversationPeerKey,
+  loadConversationPeers,
+} from "@/lib/messages/conversation-peers";
 
 type Role = "customer" | "workshop";
 
@@ -57,14 +61,6 @@ type MessageRow = {
   images: unknown[] | null;
   created_at: string;
   read_at: string | null;
-};
-
-type ProfileRow = {
-  id: string;
-  full_name: string | null;
-  display_name: string | null;
-  email: string | null;
-  workshop_name: string | null;
 };
 
 type ConversationInboxStateRow = {
@@ -136,28 +132,6 @@ function getLastMessageText(message?: Pick<MessageRow, "message" | "images"> | n
   return Array.isArray(message.images) && message.images.length > 0
     ? "📷 Poză"
     : "Mesaj nou";
-}
-
-function getCustomerPeerName(profile?: ProfileRow) {
-  return (
-    profile?.display_name?.trim() ||
-    profile?.full_name?.trim() ||
-    "Client"
-  );
-}
-
-function getWorkshopPeerName(
-  profile?: ProfileRow,
-  fallbackWorkshopName?: string | null,
-) {
-  return (
-    profile?.workshop_name?.trim() ||
-    profile?.display_name?.trim() ||
-    profile?.full_name?.trim() ||
-    profile?.email?.trim() ||
-    fallbackWorkshopName?.trim() ||
-    "Service"
-  );
 }
 
 function readPendingInboxMutations(): PendingInboxMutationMap {
@@ -613,70 +587,17 @@ export default function MessagesInbox({ role }: { role: Role }) {
           messagesByConversation.set(key, conversationMessages);
         }
 
-        const peerIds = new Set<string>();
+        const peersStart = performance.now();
+        const peerMap = await loadConversationPeers({
+          directRequestIds: directRequests.map((request) => request.id),
+          offerIds: offers.map((offer) => offer.id),
+        });
 
-        if (role === "customer") {
-          for (const offer of offers) {
-            if (offer.workshop_user_id) {
-              peerIds.add(offer.workshop_user_id);
-            }
-          }
-
-          for (const request of directRequests) {
-            if (request.target_workshop_id) {
-              peerIds.add(request.target_workshop_id);
-            }
-          }
-        } else {
-          for (const request of allRequests) {
-            if (request.user_id) {
-              peerIds.add(request.user_id);
-            }
-          }
-
-          for (const offer of offers) {
-            if (requestMap.has(offer.request_id)) {
-              continue;
-            }
-
-            const fallbackCustomerMessage = messagesByConversation
-              .get(getConversationKey(offer.request_id, offer.id))
-              ?.find(
-                (message) =>
-                  message.sender_id !== userId &&
-                  message.sender_role !== "system",
-              );
-
-            if (fallbackCustomerMessage?.sender_id) {
-              peerIds.add(fallbackCustomerMessage.sender_id);
-            }
-          }
-        }
-
-        const profileIds = [...peerIds];
-        const profilesStart = performance.now();
-
-        if (profileIds.length > 0) {
-          logPerf("query:profiles_grouped:start", {
-            peerIds: profileIds.length,
-          });
-        }
-
-        const profilesResult =
-          profileIds.length > 0
-            ? await supabase
-                .from("profiles")
-                .select("id, full_name, display_name, email, workshop_name")
-                .in("id", profileIds)
-            : { data: [], error: null };
-
-        if (profileIds.length > 0) {
-          logPerf("query:profiles_grouped:end", {
-            durationMs: Number((performance.now() - profilesStart).toFixed(1)),
-            count: profilesResult.data?.length || 0,
-            generation,
-          });
-        }
+        logPerf("query:conversation_peers:end", {
+          durationMs: Number((performance.now() - peersStart).toFixed(1)),
+          count: peerMap.size,
+          generation,
+        });
 
         if (
           loadConversationsSessionRef.current !== session ||
@@ -685,17 +606,10 @@ export default function MessagesInbox({ role }: { role: Role }) {
           logPerf("loadConversations:staleIgnored", {
             generation,
             session,
-            phase: "profiles",
+            phase: "conversation-peers",
           });
           return;
         }
-
-        if (profilesResult.error) throw profilesResult.error;
-
-        const profiles = (profilesResult.data || []) as ProfileRow[];
-        const profileMap = new Map(
-          profiles.map((profile) => [profile.id, profile]),
-        );
         const hiddenAtByConversation = new Map(
           inboxStates.map((state) => [
             getConversationKey(state.request_id, state.offer_id ?? null),
@@ -709,23 +623,12 @@ export default function MessagesInbox({ role }: { role: Role }) {
             messagesByConversation.get(
               getConversationKey(offer.request_id, offer.id),
             ) || [];
-          const fallbackCustomerId =
-            role === "workshop" && !request
-              ? conversationMessages.find(
-                  (message) =>
-                    message.sender_id !== userId &&
-                    message.sender_role !== "system",
-                )?.sender_id
-              : null;
-          const peerId =
-            role === "workshop"
-              ? request?.user_id || fallbackCustomerId || null
-              : offer.workshop_user_id;
-          const peerProfile = peerId ? profileMap.get(peerId) : undefined;
           const peerName =
-            role === "workshop"
-              ? getCustomerPeerName(peerProfile)
-              : getWorkshopPeerName(peerProfile, offer.workshop_name);
+            peerMap.get(getConversationPeerKey(offer.request_id, offer.id))
+              ?.peerDisplayName ||
+            (role === "customer"
+              ? offer.workshop_name?.trim() || "Service"
+              : "Client");
 
           const lastMessage = conversationMessages.find(
             (message) => message.sender_role !== "system",
@@ -810,15 +713,10 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 message.read_at == null
               );
             }).length;
-            const peerId =
-              role === "workshop"
-                ? request.user_id
-                : request.target_workshop_id;
-            const peerProfile = peerId ? profileMap.get(peerId) : undefined;
             const peerName =
-              role === "workshop"
-                ? getCustomerPeerName(peerProfile)
-                : getWorkshopPeerName(peerProfile);
+              peerMap.get(getConversationPeerKey(request.id, null))
+                ?.peerDisplayName ||
+              (role === "workshop" ? "Client" : "Service");
 
             return [
               {

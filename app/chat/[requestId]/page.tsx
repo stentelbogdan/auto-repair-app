@@ -5,6 +5,11 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import {
+  getConversationPeerKey,
+  loadConversationPeers,
+  loadPublicWorkshopSummaries,
+} from "@/lib/messages/conversation-peers";
+import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
@@ -160,10 +165,12 @@ export default function ChatPage() {
     index: number;
   } | null>(null);
 
-  const [workshopProfile, setWorkshopProfile] = useState<{
-    workshop_name: string | null;
-    workshop_slug: string | null;
+  const [peerProfile, setPeerProfile] = useState<{
+    displayName: string;
+    isWorkshop: boolean;
+    workshopSlug: string | null;
   } | null>(null);
+  const peerProfileLoadGenerationRef = useRef(0);
   const perfStartRef = useRef<number>(performance.now());
 
   const logPerf = useCallback(
@@ -500,68 +507,62 @@ export default function ChatPage() {
     }
   }, [isDirectDraft, requestId]);
 
-  const loadWorkshopProfile = useCallback(async () => {
-    if (isDirectDraft && directWorkshopId) {
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("workshop_name, workshop_slug")
-        .eq("id", directWorkshopId)
-        .single();
+  const loadPeerProfile = useCallback(async () => {
+    const generation = peerProfileLoadGenerationRef.current + 1;
+    peerProfileLoadGenerationRef.current = generation;
 
-      setWorkshopProfile({
-        workshop_name: profileData?.workshop_name || "Service",
-        workshop_slug: profileData?.workshop_slug || null,
-      });
-      return;
-    }
+    try {
+      if (isDirectDraft && directWorkshopId) {
+        const summaries = await loadPublicWorkshopSummaries([
+          directWorkshopId,
+        ]);
 
-    const { data: request } = await supabase
-      .from("repair_requests")
-      .select("target_workshop_id")
-      .eq("id", requestId)
-      .single();
+        if (peerProfileLoadGenerationRef.current !== generation) return;
 
-    if (request?.target_workshop_id) {
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("workshop_name, workshop_slug")
-        .eq("id", request.target_workshop_id)
-        .single();
+        const workshop = summaries.get(directWorkshopId);
+        setPeerProfile({
+          displayName: workshop?.workshopName?.trim() || "Service",
+          isWorkshop: true,
+          workshopSlug: workshop?.workshopSlug || null,
+        });
+        return;
+      }
 
-      setWorkshopProfile({
-        workshop_name: profileData?.workshop_name || "Service",
-        workshop_slug: profileData?.workshop_slug || null,
+      const peers = await loadConversationPeers({
+        directRequestIds: offerId ? [] : [requestId],
+        offerIds: offerId ? [offerId] : [],
       });
 
-      return;
+      if (peerProfileLoadGenerationRef.current !== generation) return;
+
+      const peer = peers.get(getConversationPeerKey(requestId, offerId));
+
+      if (!peer) {
+        setPeerProfile(null);
+        return;
+      }
+
+      let workshopSlug: string | null = null;
+
+      if (peer.peerWorkshopName !== null) {
+        const summaries = await loadPublicWorkshopSummaries([peer.peerId]);
+
+        if (peerProfileLoadGenerationRef.current !== generation) return;
+
+        workshopSlug = summaries.get(peer.peerId)?.workshopSlug || null;
+      }
+
+      setPeerProfile({
+        displayName: peer.peerDisplayName,
+        isWorkshop: peer.peerWorkshopName !== null,
+        workshopSlug,
+      });
+    } catch (error) {
+      if (peerProfileLoadGenerationRef.current !== generation) return;
+
+      console.error("Failed to load conversation peer:", error);
+      setPeerProfile(null);
     }
-
-    let offerQuery = supabase
-      .from("repair_offers")
-      .select("workshop_user_id, workshop_name")
-      .eq("request_id", requestId);
-
-    if (offerId) {
-      offerQuery = offerQuery.eq("id", offerId);
-    } else {
-      offerQuery = offerQuery.eq("status", "accepted");
-    }
-
-    const { data: offerData } = await offerQuery.maybeSingle();
-
-    if (!offerData?.workshop_user_id) return;
-
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("workshop_name, workshop_slug")
-      .eq("id", offerData.workshop_user_id)
-      .single();
-
-    setWorkshopProfile({
-      workshop_name:
-        profileData?.workshop_name || offerData.workshop_name || "Service",
-      workshop_slug: profileData?.workshop_slug || null,
-    });
   }, [directWorkshopId, isDirectDraft, offerId, requestId]);
 
   useEffect(() => {
@@ -591,9 +592,10 @@ export default function ChatPage() {
         target_workshop_id: directWorkshopId,
       });
       void getUser();
-      void loadWorkshopProfile();
+      void loadPeerProfile();
 
       return () => {
+        peerProfileLoadGenerationRef.current += 1;
         const invalidatedLoadGeneration = invalidateLoadMessagesGeneration();
         const invalidatedMarkReadGeneration = invalidateMarkReadGeneration();
         logPerf("unmount", {
@@ -614,7 +616,7 @@ export default function ChatPage() {
 
     void loadMessages();
     void loadRequest();
-    void loadWorkshopProfile();
+    void loadPeerProfile();
 
     const channel = supabase
       .channel(`chat-${requestId}`)
@@ -704,6 +706,7 @@ export default function ChatPage() {
     channelRef.current = channel;
 
     return () => {
+      peerProfileLoadGenerationRef.current += 1;
       const invalidatedLoadGeneration = invalidateLoadMessagesGeneration();
       const invalidatedMarkReadGeneration = invalidateMarkReadGeneration();
       logPerf("unmount", {
@@ -724,7 +727,7 @@ export default function ChatPage() {
     isDirectDraft,
     loadMessages,
     loadRequest,
-    loadWorkshopProfile,
+    loadPeerProfile,
     logPerf,
     requestId,
     roleParam,
@@ -1176,23 +1179,30 @@ export default function ChatPage() {
               {requestData?.car_model || ""}
             </h1>
 
-            {workshopProfile?.workshop_slug ? (
+            {peerProfile?.workshopSlug ? (
               <button
                 type="button"
                 onClick={() =>
                   router.push(
-                    `/workshops/profile/${workshopProfile.workshop_slug}`,
+                    `/workshops/profile/${peerProfile.workshopSlug}`,
                   )
                 }
                 className="mt-0.5 block truncate text-left text-sm font-semibold text-orange-300 underline decoration-orange-400/50 underline-offset-4"
               >
-                {workshopProfile.workshop_name || "Service"}
+                {peerProfile.displayName}
               </button>
             ) : (
-              <p className="text-sm text-white/50">
-                {requestData?.car_brand === "Mesaj direct"
-                  ? "Conversație directă"
-                  : `${requestData?.city || "-"} • ${formatStatus(requestData?.status)}`}
+              <p
+                className={`text-sm ${
+                  peerProfile && !peerProfile.isWorkshop
+                    ? "text-orange-300"
+                    : "text-white/50"
+                }`}
+              >
+                {peerProfile?.displayName ||
+                  (requestData?.car_brand === "Mesaj direct"
+                    ? "Conversație directă"
+                    : `${requestData?.city || "-"} • ${formatStatus(requestData?.status)}`)}
               </p>
             )}
           </div>
