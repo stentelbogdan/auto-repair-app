@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
@@ -23,8 +24,9 @@ type LoadState =
 const KPI_LABELS: Array<{
   key: keyof AdminOverview;
   label: string;
+  href?: string;
 }> = [
-  { key: "total_users", label: "Utilizatori" },
+  { key: "total_users", label: "Utilizatori", href: "/admin/users" },
   { key: "total_customers", label: "Clienți" },
   { key: "total_workshops", label: "Service-uri" },
   { key: "open_requests", label: "Cereri active" },
@@ -128,11 +130,12 @@ export default function AdminPage() {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {KPI_LABELS.map(({ key, label }) => (
+          {KPI_LABELS.map(({ key, label, href }) => (
             <KpiCard
               key={key}
               label={label}
               value={loadState.overview[key]}
+              href={href}
             />
           ))}
         </div>
@@ -141,13 +144,38 @@ export default function AdminPage() {
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg">
+function KpiCard({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value: number;
+  href?: string;
+}) {
+  const content = (
+    <>
       <p className="text-sm text-white/50">{label}</p>
       <p className="mt-2 text-4xl font-bold text-white">
         {value.toLocaleString("ro-RO")}
       </p>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="rounded-2xl border border-orange-400/30 bg-white/5 p-6 shadow-lg transition hover:border-orange-400/60 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/70"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-lg">
+      {content}
     </div>
   );
 }
