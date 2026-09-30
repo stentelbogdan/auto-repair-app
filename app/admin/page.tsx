@@ -28,7 +28,11 @@ const KPI_LABELS: Array<{
 }> = [
   { key: "total_users", label: "Utilizatori", href: "/admin/users" },
   { key: "total_customers", label: "Clienți" },
-  { key: "total_workshops", label: "Service-uri" },
+  {
+    key: "total_workshops",
+    label: "Service-uri",
+    href: "/admin/workshops",
+  },
   { key: "open_requests", label: "Cereri active" },
   { key: "in_progress_jobs", label: "În lucru" },
   { key: "completed_jobs", label: "Finalizate" },
