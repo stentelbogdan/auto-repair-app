@@ -27,7 +27,7 @@ const KPI_LABELS: Array<{
   href?: string;
 }> = [
   { key: "total_users", label: "Utilizatori", href: "/admin/users" },
-  { key: "total_customers", label: "Clienți" },
+  { key: "total_customers", label: "Clienți", href: "/admin/customers" },
   {
     key: "total_workshops",
     label: "Service-uri",
