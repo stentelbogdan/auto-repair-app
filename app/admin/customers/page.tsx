@@ -429,7 +429,12 @@ function CustomerCard({ customer }: { customer: AdminCustomerRow }) {
   ];
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-lg sm:p-6">
+    <Link
+      href={`/admin/customers/${customer.customer_id}`}
+      aria-label={`Vezi detaliile clientului ${displayName}`}
+      className="group block min-w-0 rounded-3xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-400/70"
+    >
+    <article className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.05] p-5 shadow-lg transition group-hover:border-orange-400/40 group-hover:bg-white/[0.07] sm:p-6">
       <div className="min-w-0">
         <h2 className="break-words text-lg font-semibold text-white">
           {displayName}
@@ -455,6 +460,10 @@ function CustomerCard({ customer }: { customer: AdminCustomerRow }) {
           </div>
         ))}
       </dl>
+      <p className="mt-5 text-center text-sm font-semibold text-orange-300">
+        Vezi detalii
+      </p>
     </article>
+    </Link>
   );
 }
