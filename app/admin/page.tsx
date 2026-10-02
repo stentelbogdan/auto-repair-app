@@ -33,10 +33,26 @@ const KPI_LABELS: Array<{
     label: "Service-uri",
     href: "/admin/workshops",
   },
-  { key: "open_requests", label: "Cereri active" },
-  { key: "in_progress_jobs", label: "În lucru" },
-  { key: "completed_jobs", label: "Finalizate" },
-  { key: "closed_requests", label: "Închise" },
+  {
+    key: "open_requests",
+    label: "Cereri active",
+    href: "/admin/requests",
+  },
+  {
+    key: "in_progress_jobs",
+    label: "În lucru",
+    href: "/admin/requests",
+  },
+  {
+    key: "completed_jobs",
+    label: "Finalizate",
+    href: "/admin/requests",
+  },
+  {
+    key: "closed_requests",
+    label: "Închise",
+    href: "/admin/requests",
+  },
   { key: "total_reviews", label: "Review-uri" },
 ];
 
