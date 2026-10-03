@@ -53,7 +53,7 @@ const KPI_LABELS: Array<{
     label: "Închise",
     href: "/admin/requests",
   },
-  { key: "total_reviews", label: "Review-uri" },
+  { key: "total_reviews", label: "Review-uri", href: "/admin/reviews" },
 ];
 
 function isUnauthorizedError(error: { code?: string } | null): boolean {
