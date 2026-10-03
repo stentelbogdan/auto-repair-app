@@ -575,6 +575,13 @@ function WorkshopCard({ workshop }: { workshop: AdminWorkshopRow }) {
         />
         <Metric label="Înscris la" value={formatJoinedAt(workshop.created_at)} />
       </div>
+
+      <Link
+        href={`/admin/workshops/${workshop.workshop_id}`}
+        className="mt-5 inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-orange-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-orange-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+      >
+        Vezi detalii
+      </Link>
     </article>
   );
 }

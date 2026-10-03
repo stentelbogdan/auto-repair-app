@@ -8,6 +8,7 @@ import "yet-another-react-lightbox/styles.css";
 type GalleryImage = {
   name?: string;
   url?: string;
+  thumbUrl?: string;
   dataUrl?: string;
 };
 
@@ -29,6 +30,7 @@ type ImageGalleryProps = {
    */
   hideCountBadge?: boolean;
   onOpen?: () => void;
+  onThumbnailError?: () => void;
 };
 
 export default function ImageGallery({
@@ -39,15 +41,19 @@ export default function ImageGallery({
   initialIndex = 0,
   hideCountBadge = false,
   onOpen,
+  onThumbnailError,
 }: ImageGalleryProps) {
   const [open, setOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
 
-  const slides = (images || [])
+  const galleryImages = (images || [])
     .map((img) => ({
       src: img.url || img.dataUrl || "",
+      thumbnailSrc: img.thumbUrl || img.url || img.dataUrl || "",
     }))
     .filter((img) => img.src);
+
+  const slides = galleryImages.map(({ src }) => ({ src }));
 
   const imageCount = slides.length;
 
@@ -77,9 +83,10 @@ export default function ImageGallery({
           aria-label={`Deschide ${alt}`}
         >
           <img
-            src={slides[safeInitialIndex].src}
+            src={galleryImages[safeInitialIndex].thumbnailSrc}
             alt={alt}
             className={className}
+            onError={onThumbnailError}
           />
         </button>
 

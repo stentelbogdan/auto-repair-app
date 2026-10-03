@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import ImageGallery from "@/app/components/ImageGallery";
 import {
   getAffectedPartLabels,
   getDamageTypeLabels,
@@ -432,6 +432,12 @@ function StateCard({
 
 function RequestDetailContent({ detail }: { detail: AdminRequestDetail }) {
   const images = normalizeImages(detail.request_images);
+  const galleryImages = images.flatMap((image) => {
+    const url = image.url || image.thumb_url;
+    if (!url) return [];
+
+    return [{ url, thumbUrl: image.thumb_url || url }];
+  });
   const timeline = normalizeTimeline(detail.progress_timeline);
   const createdAt = formatDateTime(detail.created_at) ?? "Dată indisponibilă";
   const progressCount = Number(detail.progress_update_count ?? 0);
@@ -510,30 +516,19 @@ function RequestDetailContent({ detail }: { detail: AdminRequestDetail }) {
 
         <div className="mt-5">
           <Section title="Fotografii">
-            {images.length > 0 ? (
+            {galleryImages.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {images.map((image, index) => {
-                  const source = image.thumb_url || image.url;
-                  if (!source) return null;
-                  return (
-                    <a
-                      key={`${source}-${index}`}
-                      href={image.url || source}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group relative aspect-square min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5"
-                    >
-                      <Image
-                        src={source}
-                        alt={`Fotografie cerere ${index + 1}`}
-                        fill
-                        unoptimized
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                        className="object-cover transition duration-200 group-hover:scale-[1.03]"
-                      />
-                    </a>
-                  );
-                })}
+                {galleryImages.map((image, index) => (
+                  <ImageGallery
+                    key={`${image.url}-${index}`}
+                    images={galleryImages}
+                    alt={`Fotografie cerere ${index + 1}`}
+                    initialIndex={index}
+                    hideCountBadge
+                    wrapperClassName="aspect-square min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5"
+                    className="aspect-square w-full object-cover transition duration-200 hover:scale-[1.03]"
+                  />
+                ))}
               </div>
             ) : (
               <EmptyText>Nu există fotografii pentru această cerere.</EmptyText>
