@@ -330,7 +330,7 @@ function Card({
     >
       {typeof value !== "undefined" && Number(value) > 0 && (
         <div className="absolute right-4 top-4 flex h-7 min-w-7 items-center justify-center rounded-full bg-black px-2 text-xs font-semibold text-white shadow-md">
-          {Number(value) > 9 ? "9+" : value}
+          {value}
         </div>
       )}
 
