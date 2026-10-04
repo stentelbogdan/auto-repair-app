@@ -15,9 +15,11 @@ type Props = {
 };
 
 type PublicReviewRequestContext = {
+  review_id: string;
   request_id: string;
   car_year: string | null;
   city: string | null;
+  customer_display_name: string;
 };
 
 export default async function WorkshopProfilePage({ params }: Props) {
@@ -33,34 +35,19 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
   const { data: reviews } = await supabase
     .from("reviews")
-    .select(
-      "id, rating, comment, created_at, request_id, images, customer_user_id",
-    )
+    .select("id, rating, comment, created_at, request_id, images")
     .eq("workshop_user_id", workshop.id)
     .order("created_at", { ascending: false });
 
   const { data: reviewRequestData } = await supabase
-    .rpc("get_public_workshop_review_request_context", {
+    .rpc("get_public_workshop_review_context_v2", {
       p_workshop_id: workshop.id,
     });
   const reviewRequests = (reviewRequestData ||
     []) as PublicReviewRequestContext[];
 
-  const requestsById = new Map(
-    reviewRequests.map((request) => [request.request_id, request]),
-  );
-
-  const customerIds = (reviews || [])
-    .map((review) => review.customer_user_id)
-    .filter(Boolean);
-
-  const { data: customerProfiles } = await supabase
-    .from("profiles")
-    .select("id, email")
-    .in("id", customerIds);
-
-  const customersById = new Map(
-    (customerProfiles || []).map((customer) => [customer.id, customer]),
+  const requestsByReviewId = new Map(
+    reviewRequests.map((request) => [request.review_id, request]),
   );
 
   const reviewList = reviews || [];
@@ -216,14 +203,9 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
                 <div className="mt-5 grid gap-4">
                   {reviewList.map((review) => {
-                    const reviewRequest = requestsById.get(review.request_id);
-
-                    const customerProfile = customersById.get(
-                      review.customer_user_id,
-                    );
+                    const reviewRequest = requestsByReviewId.get(review.id);
                     const customerName =
-                      customerProfile?.email?.split("@")[0] ||
-                      "Client verificat";
+                      reviewRequest?.customer_display_name?.trim() || "Client";
 
                     return (
                       <div

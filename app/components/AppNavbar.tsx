@@ -13,6 +13,7 @@ import {
 import { BadgeEuro } from "lucide-react";
 import {
   CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
+  markNotificationsAsRead,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
   WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
   WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
@@ -24,6 +25,7 @@ import {
 import { CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE } from "@/lib/supabase/repair-requests";
 import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
 import { useTowingLiveTrackingControl } from "@/lib/towing/TowingLiveTrackingProvider";
+import { hasWorkshopSlug } from "@/lib/workshops/workshop-slug";
 
 type Role = "customer" | "workshop";
 
@@ -188,6 +190,7 @@ export default function AppNavbar() {
     title: string;
     message: string;
     targetUrl: string | null;
+    type: string | null;
     icon: "calendar" | "review";
   } | null>(null);
   const [fromParam, setFromParam] = useState<string | null>(null);
@@ -1159,6 +1162,7 @@ export default function AppNavbar() {
                     notification.target_url || null,
                   ) ?? "/workshops/won-jobs?tab=completed"
                 : notification.target_url || null,
+            type: notification.type || null,
             icon:
               notification.type ===
               CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
@@ -1673,6 +1677,30 @@ export default function AppNavbar() {
     });
   };
 
+  const getWorkshopReviewDestination = async () => {
+    const fallbackUrl = "/workshops/won-jobs?tab=completed";
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return fallbackUrl;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("workshop_slug")
+      .eq("id", user.id)
+      .maybeSingle<{ workshop_slug: string | null }>();
+
+    if (profileError || !hasWorkshopSlug(profile?.workshop_slug)) {
+      return fallbackUrl;
+    }
+
+    return `/workshops/profile/${encodeURIComponent(profile.workshop_slug.trim())}`;
+  };
+
   const goJobs = () => {
     void runLocked(async ({ navigate }) => {
       const hasUnreadJobStarted = jobStartedUnreadCount > 0;
@@ -1714,9 +1742,11 @@ export default function AppNavbar() {
             notification?.type ===
             CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
           ) {
-            workshopJobsUrl =
-              getWorkshopReviewTargetUrl(notification.target_url) ??
-              "/workshops/won-jobs?tab=completed";
+            await markNotificationsAsRead({
+              recipientRole: "workshop",
+              types: [CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE],
+            });
+            workshopJobsUrl = await getWorkshopReviewDestination();
           } else if (notification?.request_id) {
             const { data: request, error: requestError } = await supabase
               .from("repair_requests")
@@ -1925,12 +1955,27 @@ export default function AppNavbar() {
   };
 
   const openAppointmentToast = () => {
-    const targetUrl = appointmentToast?.targetUrl;
+    const toast = appointmentToast;
 
     setAppointmentToast(null);
 
-    if (targetUrl) {
-      navigate(targetUrl);
+    if (!toast) {
+      return;
+    }
+
+    if (toast.type === CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE) {
+      void runLocked(async ({ navigate }) => {
+        await markNotificationsAsRead({
+          recipientRole: "workshop",
+          types: [CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE],
+        });
+        navigate(await getWorkshopReviewDestination());
+      });
+      return;
+    }
+
+    if (toast.targetUrl) {
+      navigate(toast.targetUrl);
     }
   };
 
