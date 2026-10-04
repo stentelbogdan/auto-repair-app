@@ -62,6 +62,51 @@ const INITIAL_CATEGORY_BY_TAB: Record<JobFilter, RequestCategory> = {
   completed: "all",
 };
 
+const ROMANIAN_PLATE_PREFIXES = new Set([
+  "b",
+  "ab",
+  "ag",
+  "ar",
+  "bc",
+  "bh",
+  "bn",
+  "br",
+  "bt",
+  "bv",
+  "bz",
+  "cj",
+  "cl",
+  "cs",
+  "ct",
+  "cv",
+  "db",
+  "dj",
+  "gj",
+  "gl",
+  "gr",
+  "hd",
+  "hr",
+  "if",
+  "il",
+  "is",
+  "mh",
+  "mm",
+  "ms",
+  "nt",
+  "ot",
+  "ph",
+  "sb",
+  "sj",
+  "sm",
+  "sv",
+  "tl",
+  "tm",
+  "tr",
+  "vl",
+  "vn",
+  "vs",
+]);
+
 type JobStage = "appointments" | "workshop" | "completed";
 type JobPriority = "needs_action" | "waiting" | "ok";
 
@@ -166,6 +211,15 @@ type WonJob = {
     createdAt: string;
   };
 };
+
+function normalizeSearchValue(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
 
 function getJobDamageDetails(request: WonJob["request"]) {
   const affectedPartLabels = getAffectedPartLabels(request.serviceDetails);
@@ -582,7 +636,10 @@ export default function WorkshopWonJobsPage() {
   const activeCategory = activeCategoryByTab[activeTab];
 
   const filteredJobs = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const hasExplicitTrailingWhitespace = /\s$/.test(search);
+    const query = normalizeSearchValue(search);
+    const compactQuery = query.replace(/\s+/g, "");
+    const isRomanianPlatePrefix = ROMANIAN_PLATE_PREFIXES.has(query);
 
     const matchingJobs = jobs.filter((job) => {
       const jobState = getJobState(job);
@@ -594,11 +651,15 @@ export default function WorkshopWonJobsPage() {
 
       const matchesTab = jobState.stage === activeTab;
 
-      const haystack = [
-        job.request.carBrand,
-        job.request.carModel,
+      const normalizedMake = normalizeSearchValue(job.request.carBrand);
+      const normalizedModel = normalizeSearchValue(job.request.carModel);
+      const normalizedCity = normalizeSearchValue(job.request.city);
+
+      const exactSearchValues = [
+        normalizedMake,
+        normalizedModel,
         job.request.carYear,
-        job.request.city,
+        normalizedCity,
         job.request.damageType,
         job.request.description,
         job.workshopName,
@@ -606,11 +667,35 @@ export default function WorkshopWonJobsPage() {
         job.days,
         jobState.label,
         jobState.message,
-      ]
-        .join(" ")
-        .toLowerCase();
+      ].map(normalizeSearchValue);
 
-      const matchesSearch = query ? haystack.includes(query) : true;
+      const normalizedPlate = normalizeSearchValue(
+        job.request.licensePlate,
+      ).replace(/\s+/g, "");
+      let matchesSearch = true;
+
+      if (query) {
+        if (query === "b") {
+          matchesSearch = hasExplicitTrailingWhitespace
+            ? /^b\d/.test(normalizedPlate)
+            : normalizedPlate.startsWith("b");
+        } else if (
+          isRomanianPlatePrefix &&
+          (hasExplicitTrailingWhitespace || query.length === 2)
+        ) {
+          matchesSearch = normalizedPlate.startsWith(compactQuery);
+        } else if (query.length === 1 && !hasExplicitTrailingWhitespace) {
+          matchesSearch =
+            normalizedPlate.includes(compactQuery) ||
+            normalizedMake.startsWith(query) ||
+            normalizedModel.startsWith(query) ||
+            normalizedCity.startsWith(query);
+        } else {
+          matchesSearch =
+            normalizedPlate.includes(compactQuery) ||
+            exactSearchValues.includes(query);
+        }
+      }
       const matchesCategory =
         activeCategory === "all" ||
         resolveRepairServiceType(job.request.serviceType) === activeCategory;
@@ -925,8 +1010,8 @@ export default function WorkshopWonJobsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Caută după mașină, oraș, tip daună..."
-            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-white/25"
+            placeholder="Caută mașină, număr, oraș..."
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none placeholder:text-white/35 focus:border-white/25 sm:text-sm"
           />
         </div>
 
