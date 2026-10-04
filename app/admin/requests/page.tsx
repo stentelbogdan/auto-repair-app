@@ -41,6 +41,14 @@ type AdminRequestRow = {
   appointment_time: string | null;
 };
 
+type AdminRequestStatusCounts = {
+  open_count: number;
+  matched_count: number;
+  in_progress_count: number;
+  completed_count: number;
+  closed_count: number;
+};
+
 type Cursor = {
   createdAt: string;
   id: string;
@@ -57,6 +65,17 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: "completed", label: "Finalizate" },
   { value: "closed", label: "Închise" },
 ];
+
+const STATUS_COUNT_KEYS: Record<
+  RequestStatus,
+  keyof AdminRequestStatusCounts
+> = {
+  open: "open_count",
+  matched: "matched_count",
+  in_progress: "in_progress_count",
+  completed: "completed_count",
+  closed: "closed_count",
+};
 
 const CATEGORY_FILTERS: Array<{ value: CategoryFilter; label: string }> = [
   { value: "all", label: "Toate categoriile" },
@@ -156,6 +175,8 @@ export default function AdminRequestsPage() {
   const [sortOption, setSortOption] =
     useState<SortOption>("created_at_desc");
   const [requests, setRequests] = useState<AdminRequestRow[]>([]);
+  const [statusCounts, setStatusCounts] =
+    useState<AdminRequestStatusCounts | null>(null);
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(false);
@@ -173,6 +194,57 @@ export default function AdminRequestsPage() {
     category: categoryFilter,
     direction,
   });
+  const statusFilterOptions = STATUS_FILTERS.map((option) => {
+    if (option.value === "all" || !statusCounts) {
+      return option;
+    }
+
+    const count = statusCounts[STATUS_COUNT_KEYS[option.value]];
+
+    return {
+      ...option,
+      label: `${option.label} · ${count.toLocaleString("ro-RO")}`,
+    };
+  });
+
+  useEffect(() => {
+    let active = true;
+
+    const loadStatusCounts = async () => {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (!active || sessionError) return;
+
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .rpc("get_admin_request_status_counts")
+        .single<AdminRequestStatusCounts>();
+
+      if (!active) return;
+
+      if (isUnauthorizedError(error)) {
+        router.replace("/");
+        return;
+      }
+
+      if (error || !data) return;
+
+      setStatusCounts(data);
+    };
+
+    void loadStatusCounts();
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   const loadRequests = useCallback(
     async ({
@@ -404,7 +476,7 @@ export default function AdminRequestsPage() {
               label="Status"
               value={statusFilter}
               onChange={(value) => setStatusFilter(value as StatusFilter)}
-              options={STATUS_FILTERS}
+              options={statusFilterOptions}
             />
             <FilterSelect
               id="admin-request-category"

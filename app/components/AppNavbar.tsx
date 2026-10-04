@@ -9,7 +9,6 @@ import {
   Wrench,
   Settings,
   LogOut,
-  ShieldCheck,
 } from "lucide-react";
 import { BadgeEuro } from "lucide-react";
 import {
@@ -306,6 +305,8 @@ export default function AppNavbar() {
     (pathname.startsWith("/chat") && activeRole === "workshop");
 
   const isClientMode = !isWorkshopMode;
+  const isAdminRoute =
+    pathname === "/admin" || pathname.startsWith("/admin/");
 
   useEffect(() => {
     unreadCountRef.current = unreadCount;
@@ -1921,7 +1922,7 @@ export default function AppNavbar() {
                 onClick={goClient}
                 disabled={isNavigating}
                 className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isClientMode
+                  isClientMode && !isAdminRoute
                     ? "bg-white text-black shadow"
                     : "text-white/45 hover:text-white"
                 }`}
@@ -1934,13 +1935,28 @@ export default function AppNavbar() {
                 onClick={goWorkshop}
                 disabled={isNavigating}
                 className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isWorkshopMode
+                  isWorkshopMode && !isAdminRoute
                     ? "bg-orange-400 text-black shadow"
                     : "text-white/45 hover:text-white"
                 }`}
               >
                 Service
               </button>
+
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/admin")}
+                  disabled={isNavigating}
+                  className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isAdminRoute
+                      ? "bg-orange-400 text-black shadow"
+                      : "text-white/45 hover:text-white"
+                  }`}
+                >
+                  Admin
+                </button>
+              )}
             </div>
           </div>
 
@@ -2023,19 +2039,6 @@ export default function AppNavbar() {
                   </span>
                 )}
             </button>
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => navigate("/admin")}
-                disabled={isNavigating}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-orange-400/40 text-orange-300 transition hover:bg-orange-400/10 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Admin Dashboard"
-                title="Admin Dashboard"
-              >
-                <ShieldCheck size={17} strokeWidth={2.25} />
-              </button>
-            )}
 
             <button
               type="button"

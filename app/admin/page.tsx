@@ -26,7 +26,6 @@ const KPI_LABELS: Array<{
   label: string;
   href?: string;
 }> = [
-  { key: "total_users", label: "Utilizatori", href: "/admin/users" },
   { key: "total_customers", label: "Clienți", href: "/admin/customers" },
   {
     key: "total_workshops",
@@ -36,21 +35,6 @@ const KPI_LABELS: Array<{
   {
     key: "open_requests",
     label: "Cereri active",
-    href: "/admin/requests",
-  },
-  {
-    key: "in_progress_jobs",
-    label: "În lucru",
-    href: "/admin/requests",
-  },
-  {
-    key: "completed_jobs",
-    label: "Finalizate",
-    href: "/admin/requests",
-  },
-  {
-    key: "closed_requests",
-    label: "Închise",
     href: "/admin/requests",
   },
   { key: "total_reviews", label: "Review-uri", href: "/admin/reviews" },
