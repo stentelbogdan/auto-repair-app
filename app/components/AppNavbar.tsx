@@ -377,6 +377,33 @@ export default function AppNavbar() {
   }, [userId]);
 
   useEffect(() => {
+    const knownRoles = new Set(["customer", "workshop", "admin"]);
+
+    const handleRolesUpdated = (event: Event) => {
+      if (!(event instanceof CustomEvent) || !Array.isArray(event.detail)) {
+        return;
+      }
+
+      if (
+        !event.detail.every(
+          (role): role is string =>
+            typeof role === "string" && knownRoles.has(role),
+        )
+      ) {
+        return;
+      }
+
+      setUserRoles(Array.from(new Set(event.detail)));
+    };
+
+    window.addEventListener("autorepair:roles-updated", handleRolesUpdated);
+
+    return () => {
+      window.removeEventListener("autorepair:roles-updated", handleRolesUpdated);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!userId) {
       setUnreadCount(0);
       setProgressUnreadCount(0);
@@ -1936,31 +1963,35 @@ export default function AppNavbar() {
             </h1>
 
             <div className="mx-auto mt-4 flex w-fit rounded-full border border-white/10 bg-white/5 p-1 shadow-inner">
-              <button
-                type="button"
-                onClick={goClient}
-                disabled={isNavigating}
-                className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isClientMode && !isAdminRoute
-                    ? "bg-white text-black shadow"
-                    : "text-white/45 hover:text-white"
-                }`}
-              >
-                Client
-              </button>
+              {userRoles.includes("customer") && (
+                <button
+                  type="button"
+                  onClick={goClient}
+                  disabled={isNavigating}
+                  className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isClientMode && !isAdminRoute
+                      ? "bg-white text-black shadow"
+                      : "text-white/45 hover:text-white"
+                  }`}
+                >
+                  Client
+                </button>
+              )}
 
-              <button
-                type="button"
-                onClick={goWorkshop}
-                disabled={isNavigating}
-                className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isWorkshopMode && !isAdminRoute
-                    ? "bg-orange-400 text-black shadow"
-                    : "text-white/45 hover:text-white"
-                }`}
-              >
-                Service
-              </button>
+              {userRoles.includes("workshop") && (
+                <button
+                  type="button"
+                  onClick={goWorkshop}
+                  disabled={isNavigating}
+                  className={`rounded-full px-4 py-1.5 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isWorkshopMode && !isAdminRoute
+                      ? "bg-orange-400 text-black shadow"
+                      : "text-white/45 hover:text-white"
+                  }`}
+                >
+                  Service
+                </button>
+              )}
 
               {isAdmin && (
                 <button

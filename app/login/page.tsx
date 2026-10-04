@@ -155,6 +155,11 @@ export default function LoginPage() {
         }
       }
 
+      if (roles.includes("admin")) {
+        router.push("/admin");
+        return;
+      }
+
       const savedRole = localStorage.getItem("activeRole") as UserRole | null;
 
       if (savedRole === "workshop" && roles.includes("workshop")) {

@@ -426,7 +426,9 @@ export default function AccountPage() {
   };
 
   const handleSave = async () => {
-    if (!editingProfile) {
+    const isAdminOnly = roles.length === 1 && roles[0] === "admin";
+
+    if (!editingProfile && !isAdminOnly) {
       alert("Nu există un profil activ care poate fi salvat.");
       return;
     }
@@ -444,36 +446,38 @@ export default function AccountPage() {
       const safeRoles = roles.length ? roles : ["customer"];
 
       let nextWorkshopSlug = workshopSlug;
-      const updatePayload = isWorkshopMode
-        ? (() => {
-            nextWorkshopSlug = hasWorkshopSlug(workshopSlug)
-              ? workshopSlug
-              : safeRoles.includes("workshop")
-                ? createWorkshopSlug(
-                    workshopName || "Service",
-                    authData.user.id,
-                  )
-                : "";
+      const updatePayload = isAdminOnly
+        ? { role: safeRoles }
+        : isWorkshopMode
+          ? (() => {
+              nextWorkshopSlug = hasWorkshopSlug(workshopSlug)
+                ? workshopSlug
+                : safeRoles.includes("workshop")
+                  ? createWorkshopSlug(
+                      workshopName || "Service",
+                      authData.user.id,
+                    )
+                  : "";
 
-            return {
+              return {
+                role: safeRoles,
+                workshop_name: workshopName,
+                workshop_phone: workshopPhone,
+                workshop_address: workshopAddress,
+                workshop_city: workshopCity,
+                workshop_hours: buildWorkshopHours(),
+                workshop_description: workshopDescription,
+                workshop_logo_url: workshopLogoUrl,
+                workshop_gallery_urls: workshopGalleryUrls,
+                workshop_slug: nextWorkshopSlug || null,
+              };
+            })()
+          : {
               role: safeRoles,
-              workshop_name: workshopName,
-              workshop_phone: workshopPhone,
-              workshop_address: workshopAddress,
-              workshop_city: workshopCity,
-              workshop_hours: buildWorkshopHours(),
-              workshop_description: workshopDescription,
-              workshop_logo_url: workshopLogoUrl,
-              workshop_gallery_urls: workshopGalleryUrls,
-              workshop_slug: nextWorkshopSlug || null,
+              full_name: customerFullName,
+              display_name: customerDisplayName,
+              city: customerCity,
             };
-          })()
-        : {
-            role: safeRoles,
-            full_name: customerFullName,
-            display_name: customerDisplayName,
-            city: customerCity,
-          };
 
       const { error } = await supabase
         .from("profiles")
@@ -488,6 +492,12 @@ export default function AccountPage() {
       if (isWorkshopMode) {
         setWorkshopSlug(nextWorkshopSlug);
       }
+
+      window.dispatchEvent(
+        new CustomEvent<string[]>("autorepair:roles-updated", {
+          detail: safeRoles,
+        }),
+      );
 
       alert("Account updated successfully.");
       router.refresh();
@@ -779,26 +789,28 @@ export default function AccountPage() {
                   onClick={() => toggleRole("workshop")}
                 />
 
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                  <div className="flex items-center gap-3">
-                    <Shield className="h-5 w-5 text-white/45" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-white">Admin</p>
-                      <p className="text-sm text-white/45">
-                        Managed manually in Supabase
-                      </p>
+                {hasAdmin && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="flex items-center gap-3">
+                      <Shield className="h-5 w-5 text-white/45" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-white">Admin</p>
+                        <p className="text-sm text-white/45">
+                          Managed manually in Supabase
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          hasAdmin
+                            ? "bg-green-500/15 text-green-300"
+                            : "bg-white/10 text-white/50"
+                        }`}
+                      >
+                        {hasAdmin ? "Enabled" : "Off"}
+                      </span>
                     </div>
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                        hasAdmin
-                          ? "bg-green-500/15 text-green-300"
-                          : "bg-white/10 text-white/50"
-                      }`}
-                    >
-                      {hasAdmin ? "Enabled" : "Off"}
-                    </span>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </section>
