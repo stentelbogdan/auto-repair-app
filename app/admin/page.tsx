@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -20,6 +20,10 @@ type LoadState =
   | { status: "loading" }
   | { status: "ready"; overview: AdminOverview }
   | { status: "error" };
+
+type LoadOverviewOptions = {
+  background?: boolean;
+};
 
 const KPI_LABELS: Array<{
   key: keyof AdminOverview;
@@ -47,9 +51,22 @@ function isUnauthorizedError(error: { code?: string } | null): boolean {
 export default function AdminPage() {
   const router = useRouter();
   const [loadState, setLoadState] = useState<LoadState>({ status: "loading" });
+  const mountedRef = useRef(false);
+  const loadGenerationRef = useRef(0);
+  const refreshInFlightRef = useRef(false);
+  const refreshPendingRef = useRef(false);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadOverview = useCallback(async () => {
-    setLoadState({ status: "loading" });
+  const loadOverview = useCallback(async (options?: LoadOverviewOptions) => {
+    const background = options?.background ?? false;
+    const generation = loadGenerationRef.current + 1;
+    loadGenerationRef.current = generation;
+    const isCurrentLoad = () =>
+      mountedRef.current && loadGenerationRef.current === generation;
+
+    if (!background) {
+      setLoadState({ status: "loading" });
+    }
 
     try {
       const {
@@ -61,6 +78,8 @@ export default function AdminPage() {
         throw sessionError;
       }
 
+      if (!isCurrentLoad()) return;
+
       if (!session) {
         router.replace("/login");
         return;
@@ -69,6 +88,8 @@ export default function AdminPage() {
       const { data, error } = await supabase
         .rpc("get_admin_overview")
         .single<AdminOverview>();
+
+      if (!isCurrentLoad()) return;
 
       if (isUnauthorizedError(error)) {
         router.replace("/");
@@ -81,14 +102,99 @@ export default function AdminPage() {
 
       setLoadState({ status: "ready", overview: data });
     } catch (error) {
+      if (!isCurrentLoad()) return;
+
       console.error("Failed to load admin overview:", error);
-      setLoadState({ status: "error" });
+      if (!background) {
+        setLoadState({ status: "error" });
+      }
     }
   }, [router]);
 
   useEffect(() => {
+    mountedRef.current = true;
+
+    return () => {
+      mountedRef.current = false;
+      loadGenerationRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
+
+  useEffect(() => {
+    if (loadState.status !== "ready") return;
+
+    let active = true;
+
+    const runRefresh = async () => {
+      if (!active || refreshInFlightRef.current) return;
+
+      refreshInFlightRef.current = true;
+
+      try {
+        do {
+          refreshPendingRef.current = false;
+          await loadOverview({ background: true });
+        } while (active && refreshPendingRef.current);
+      } finally {
+        refreshInFlightRef.current = false;
+      }
+    };
+
+    const scheduleRefresh = () => {
+      if (!active) return;
+
+      if (refreshTimerRef.current !== null) {
+        clearTimeout(refreshTimerRef.current);
+      }
+
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+
+        if (!active) return;
+
+        if (refreshInFlightRef.current) {
+          refreshPendingRef.current = true;
+          return;
+        }
+
+        void runRefresh();
+      }, 250);
+    };
+
+    const channel = supabase
+      .channel("admin-dashboard-overview-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "admin_dashboard_refresh_signal",
+        },
+        scheduleRefresh,
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          scheduleRefresh();
+        }
+      });
+
+    return () => {
+      active = false;
+      refreshPendingRef.current = false;
+      loadGenerationRef.current += 1;
+
+      if (refreshTimerRef.current !== null) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+
+      void supabase.removeChannel(channel);
+    };
+  }, [loadOverview, loadState.status]);
 
   if (loadState.status === "loading") {
     return (
