@@ -324,18 +324,6 @@ export default function AppNavbar() {
 
       setUserEmail(session?.user?.email ?? null);
       setUserId(session?.user?.id ?? null);
-
-      if (session?.user?.id) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
-
-        setUserRoles(Array.isArray(profile?.role) ? profile.role : []);
-      } else {
-        setUserRoles([]);
-      }
     };
 
     loadUser();
@@ -345,10 +333,6 @@ export default function AppNavbar() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUserEmail(session?.user?.email ?? null);
       setUserId(session?.user?.id ?? null);
-
-      if (!session?.user?.id) {
-        setUserRoles([]);
-      }
     });
 
     return () => {
@@ -356,6 +340,41 @@ export default function AppNavbar() {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    setUserRoles([]);
+
+    if (!userId) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadRoles = async () => {
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+      if (!active) return;
+
+      if (error || !Array.isArray(profile?.role)) {
+        setUserRoles([]);
+        return;
+      }
+
+      setUserRoles(profile.role);
+    };
+
+    void loadRoles();
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
