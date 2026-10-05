@@ -89,12 +89,66 @@ const INITIAL_CATEGORY_BY_TAB: Record<JobsTab, RequestCategory> = {
   completed: "all",
 };
 
+const ROMANIAN_PLATE_PREFIXES = new Set([
+  "b",
+  "ab",
+  "ag",
+  "ar",
+  "bc",
+  "bh",
+  "bn",
+  "br",
+  "bt",
+  "bv",
+  "bz",
+  "cj",
+  "cl",
+  "cs",
+  "ct",
+  "cv",
+  "db",
+  "dj",
+  "gj",
+  "gl",
+  "gr",
+  "hd",
+  "hr",
+  "if",
+  "il",
+  "is",
+  "mh",
+  "mm",
+  "ms",
+  "nt",
+  "ot",
+  "ph",
+  "sb",
+  "sj",
+  "sm",
+  "sv",
+  "tl",
+  "tm",
+  "tr",
+  "vl",
+  "vn",
+  "vs",
+]);
+
 const JOB_CATEGORY_TITLES: Record<Exclude<RequestCategory, "all">, string> = {
   bodywork: "DAUNE ESTETICE",
   mechanical: "DAUNE MECANICE",
   wheels: "ROȚI ȘI ANVELOPE",
   towing: "TRACTĂRI AUTO",
 };
+
+function normalizeSearchValue(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
 
 export default function MyJobsPage() {
   const router = useRouter();
@@ -125,6 +179,7 @@ export default function MyJobsPage() {
     tab === "scheduled" || tab === "in_progress" || tab === "completed";
 
   const [activeTab, setActiveTab] = useState<JobsTab>("scheduled");
+  const [search, setSearch] = useState("");
   const [activeCategoryByTab, setActiveCategoryByTab] = useState<
     Record<JobsTab, RequestCategory>
   >(INITIAL_CATEGORY_BY_TAB);
@@ -763,13 +818,64 @@ export default function MyJobsPage() {
   }, [completedJobs, inProgressJobs, scheduledJobs]);
 
   const activeCategory = activeCategoryByTab[activeTab];
-  const filteredVisibleJobs =
-    activeCategory === "all"
-      ? visibleJobs
-      : visibleJobs.filter(
-          ({ request }) =>
-            resolveRepairServiceType(request.service_type) === activeCategory,
-        );
+  const hasExplicitTrailingWhitespace = /\s$/.test(search);
+  const query = normalizeSearchValue(search);
+  const compactQuery = query.replace(/\s+/g, "");
+  const isRomanianPlatePrefix = ROMANIAN_PLATE_PREFIXES.has(query);
+
+  const filteredVisibleJobs = visibleJobs.filter(
+    ({ request, acceptedOffer }) => {
+      const normalizedMake = normalizeSearchValue(request.car_brand);
+      const normalizedModel = normalizeSearchValue(request.car_model);
+      const normalizedCity = normalizeSearchValue(request.city);
+
+      const exactSearchValues = [
+        normalizedMake,
+        normalizedModel,
+        request.car_year,
+        normalizedCity,
+        request.damage_type,
+        request.description,
+        acceptedOffer?.workshop_name,
+        acceptedOffer?.price,
+        acceptedOffer?.days,
+      ].map(normalizeSearchValue);
+
+      const normalizedPlate = normalizeSearchValue(
+        request.license_plate,
+      ).replace(/\s+/g, "");
+      let matchesSearch = true;
+
+      if (query) {
+        if (query === "b") {
+          matchesSearch = hasExplicitTrailingWhitespace
+            ? /^b\d/.test(normalizedPlate)
+            : normalizedPlate.startsWith("b");
+        } else if (
+          isRomanianPlatePrefix &&
+          (hasExplicitTrailingWhitespace || query.length === 2)
+        ) {
+          matchesSearch = normalizedPlate.startsWith(compactQuery);
+        } else if (query.length === 1 && !hasExplicitTrailingWhitespace) {
+          matchesSearch =
+            normalizedPlate.includes(compactQuery) ||
+            normalizedMake.startsWith(query) ||
+            normalizedModel.startsWith(query) ||
+            normalizedCity.startsWith(query);
+        } else {
+          matchesSearch =
+            normalizedPlate.includes(compactQuery) ||
+            exactSearchValues.includes(query);
+        }
+      }
+
+      const matchesCategory =
+        activeCategory === "all" ||
+        resolveRepairServiceType(request.service_type) === activeCategory;
+
+      return matchesSearch && matchesCategory;
+    },
+  );
 
   useEffect(() => {
     if (
@@ -863,6 +969,15 @@ export default function MyJobsPage() {
               : JOB_CATEGORY_TITLES[activeCategory]}
           </p>
         </section>
+
+        <div className="mb-5 w-full lg:ml-auto lg:w-96">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Caută mașină, număr, oraș..."
+            className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none placeholder:text-white/35 focus:border-white/25 sm:text-sm"
+          />
+        </div>
 
         <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
           <TabButton
