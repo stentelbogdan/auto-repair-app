@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
+import { finalizeWorkshopCustomerProposal } from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
@@ -717,38 +717,11 @@ export default function WorkshopMyOffersPage() {
         );
       }
 
-      const confirmedDate =
-        appointment.proposed_date ||
-        appointment.appointment_date ||
-        offer.available_date;
-
-      const confirmedTime =
-        appointment.proposed_time ||
-        appointment.appointment_time ||
-        offer.available_time;
-
-      if (!confirmedDate || !confirmedTime) {
+      if (!appointment.proposed_date || !appointment.proposed_time) {
         throw new Error("Programarea nu are o dată și o oră valide.");
       }
 
-      const { error: appointmentError } = await supabase
-        .from("repair_appointments")
-        .update({
-          status: "confirmed",
-          appointment_date: confirmedDate,
-          appointment_time: confirmedTime,
-          proposed_date: null,
-          proposed_time: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", appointment.id)
-        .eq("offer_id", offer.id);
-
-      if (appointmentError) {
-        throw appointmentError;
-      }
-
-      await acceptRepairOffer({
+      await finalizeWorkshopCustomerProposal({
         offerId: offer.id,
         requestId: request.id,
       });

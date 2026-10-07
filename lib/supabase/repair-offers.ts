@@ -156,14 +156,31 @@ export async function getOffersForWorkshop(userId: string) {
   return (data ?? []) as RepairOfferRow[];
 }
 
-export async function acceptRepairOffer(input: {
+export async function finalizeCustomerRepairOffer(input: {
   offerId: string;
   requestId: string;
 }) {
-  const { error } = await supabase.rpc("accept_repair_offer", {
+  const { error } = await supabase.rpc("finalize_customer_repair_offer", {
     p_offer_id: input.offerId,
     p_request_id: input.requestId,
   });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function finalizeWorkshopCustomerProposal(input: {
+  offerId: string;
+  requestId: string;
+}) {
+  const { error } = await supabase.rpc(
+    "finalize_workshop_customer_proposal",
+    {
+      p_offer_id: input.offerId,
+      p_request_id: input.requestId,
+    },
+  );
 
   if (error) {
     throw error;

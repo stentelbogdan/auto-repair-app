@@ -1,5 +1,4 @@
-import { supabase } from "@/lib/supabase/client";
-import { acceptRepairOffer } from "@/lib/supabase/repair-offers";
+import { finalizeCustomerRepairOffer } from "@/lib/supabase/repair-offers";
 import type { CustomerOfferItem } from "@/lib/services/offers/customer-offers.types";
 
 export type ConfirmCustomerAppointmentInput = {
@@ -79,29 +78,7 @@ export async function confirmCustomerAppointment({
   const { confirmedDate, confirmedTime } =
     getConfirmedDateAndTime(item);
 
-  const { error: appointmentError } = await supabase
-    .from("repair_appointments")
-    .update({
-      status: "confirmed",
-      appointment_date: confirmedDate,
-      appointment_time: confirmedTime,
-      proposed_date: null,
-      proposed_time: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", appointment.id)
-    .eq("offer_id", offer.id);
-
-  if (appointmentError) {
-    throw appointmentError;
-  }
-
-  /*
-   * RPC-ul acceptă oferta și actualizează cererea.
-   * Păstrăm această operație după confirmarea programării,
-   * exact ca în fluxul existent.
-   */
-  await acceptRepairOffer({
+  await finalizeCustomerRepairOffer({
     offerId: offer.id,
     requestId: request.id,
   });
