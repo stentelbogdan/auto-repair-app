@@ -40,3 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# LIVE PostgreSQL schema-audit exports (keep only local instructions)
+/supabase/tests/live_schema_audit_exports/*
+!/supabase/tests/live_schema_audit_exports/README.md
+/supabase/.temp/cli-latest
+/supabase/tests/live_schema_audit_additional/evidence/*.csv

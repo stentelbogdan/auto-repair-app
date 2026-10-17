@@ -9,6 +9,12 @@ export type PreparedRepairImageUpload = {
   preparedImage: PreparedImage;
 };
 
+type RepairImageUploadReservation = {
+  object_path: string;
+  upload_lease_id: string;
+  upload_lease_expires_at: string;
+};
+
 async function fingerprintPreparedImage(file: File): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
 
@@ -17,22 +23,10 @@ async function fingerprintPreparedImage(file: File): Promise<string> {
   ).join("");
 }
 
-export async function removeRepairImageUploads(paths: string[]): Promise<void> {
-  if (!paths.length) return;
-
-  const { error } = await supabase.storage.from("repair-images").remove(paths);
-
-  if (error) throw error;
-}
-
-export async function removeRepairImageUploadsBestEffort(
-  paths: string[],
-): Promise<void> {
-  try {
-    await removeRepairImageUploads(paths);
-  } catch (cleanupError) {
-    console.error("Repair image cleanup failed:", cleanupError);
-  }
+function firstReservation(
+  value: RepairImageUploadReservation[] | RepairImageUploadReservation | null,
+): RepairImageUploadReservation | null {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
 }
 
 export async function uploadPreparedRepairImages(
@@ -59,14 +53,53 @@ export async function uploadPreparedRepairImages(
       if (knownFingerprints.has(fingerprint)) continue;
       knownFingerprints.add(fingerprint);
 
-      const path = `${userId}/${crypto.randomUUID()}.${preparedImage.extension}`;
-      const { error: uploadError } = await supabase.storage
-        .from("repair-images")
-        .upload(path, preparedImage.file, {
-          contentType: preparedImage.contentType,
+      const { data: reservationData, error: reservationError } =
+        await supabase.rpc("reserve_repair_image_upload", {
+          p_file_extension: preparedImage.extension,
         });
+      if (reservationError) throw reservationError;
 
-      if (uploadError) throw uploadError;
+      const reservation = firstReservation(
+        reservationData as
+          | RepairImageUploadReservation[]
+          | RepairImageUploadReservation
+          | null,
+      );
+      if (!reservation) throw new Error("Rezervarea imaginii nu a fost creată.");
+      if (!reservation.object_path.startsWith(`${userId}/`)) {
+        throw new Error("Rezervarea imaginii nu aparține utilizatorului curent.");
+      }
+
+      const path = reservation.object_path;
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from("repair-images")
+          .upload(path, preparedImage.file, {
+            contentType: preparedImage.contentType,
+          });
+        if (uploadError) throw uploadError;
+
+        const { error: confirmationError } = await supabase.rpc(
+          "confirm_repair_image_upload",
+          {
+            p_object_path: path,
+            p_upload_lease_id: reservation.upload_lease_id,
+          },
+        );
+        if (confirmationError) throw confirmationError;
+      } catch (error) {
+        const { error: abandonError } = await supabase.rpc(
+          "abandon_repair_image_upload",
+          {
+            p_object_path: path,
+            p_upload_lease_id: reservation.upload_lease_id,
+          },
+        );
+        if (abandonError && process.env.NODE_ENV === "development") {
+          console.warn("Repair image abandonment could not be recorded.", abandonError);
+        }
+        throw error;
+      }
 
       const { data } = supabase.storage.from("repair-images").getPublicUrl(path);
 
@@ -79,9 +112,8 @@ export async function uploadPreparedRepairImages(
       });
     }
   } catch (error) {
-    await removeRepairImageUploadsBestEffort(
-      uploadedImages.flatMap((image) => (image.path ? [image.path] : [])),
-    );
+    // Confirmed but unattached uploads remain registered and are cleaned only
+    // after the server-side safety window.
     throw error;
   }
 

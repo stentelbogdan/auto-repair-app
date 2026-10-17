@@ -18,7 +18,6 @@ import {
   type EditableRepairImage,
   type EditableRepairRequest,
 } from "@/lib/supabase/edit-repair-request";
-import { removeRepairImageUploadsBestEffort } from "@/lib/supabase/repair-request-images";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import { Check } from "lucide-react";
 import { isStructuredServiceDetails } from "@/lib/car-damage";
@@ -620,7 +619,6 @@ export default function EditMyRequestPage() {
 
     saveInProgressRef.current = true;
     let uploadedImages: EditableRepairImage[] = [];
-    let requestUpdateSucceeded = false;
 
     try {
       setSaving(true);
@@ -662,7 +660,6 @@ export default function EditMyRequestPage() {
           description,
           images: nextImages,
         });
-        requestUpdateSucceeded = true;
         savedServiceDetails = towing.serviceDetails;
       } else if (hasFullWheelsEditor && nextWheelsServiceDetails) {
         await updateEditableRepairRequest({
@@ -674,7 +671,6 @@ export default function EditMyRequestPage() {
           images: nextImages,
           locationChange,
         });
-        requestUpdateSucceeded = true;
 
         savedServiceDetails = nextWheelsServiceDetails;
       } else if (isDetailsOnlyRequest) {
@@ -710,7 +706,6 @@ export default function EditMyRequestPage() {
             throw new Error("Cererea nu mai poate fi actualizată.");
           }
         }
-        requestUpdateSucceeded = true;
       } else if (isMechanicalRequest) {
         if (!nextMechanicalServiceDetails || !nextMechanicalDamageType) {
           throw new Error("Datele mecanice nu sunt valide.");
@@ -727,7 +722,6 @@ export default function EditMyRequestPage() {
           images: nextImages,
           locationChange,
         });
-        requestUpdateSucceeded = true;
 
         savedServiceDetails = nextMechanicalServiceDetails;
         savedDamageType = nextMechanicalDamageType;
@@ -767,7 +761,6 @@ export default function EditMyRequestPage() {
           images: nextImages,
           locationChange,
         });
-        requestUpdateSucceeded = true;
 
         savedServiceDetails = nextBodyworkServiceDetails;
       }
@@ -833,12 +826,6 @@ export default function EditMyRequestPage() {
       }
       alert("Modificările au fost salvate.");
     } catch (error) {
-      if (!requestUpdateSucceeded) {
-        await removeRepairImageUploadsBestEffort(
-          uploadedImages.flatMap((image) => (image.path ? [image.path] : [])),
-        );
-      }
-
       if (isRepairRequestEditBlockedError(error)) {
         sessionStorage.setItem("my-requests-active-tab", "with_offer");
         window.alert(

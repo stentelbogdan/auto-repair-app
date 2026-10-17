@@ -24,10 +24,7 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
-import {
-  removeRepairImageUploadsBestEffort,
-  uploadPreparedRepairImages,
-} from "@/lib/supabase/repair-request-images";
+import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
 import { MECHANICAL_CATEGORIES } from "@/lib/mechanical/mechanical-categories";
 import type {
   MechanicalCategorySelection,
@@ -125,8 +122,6 @@ function PostJobContent() {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    let uploadedImagePaths: string[] = [];
-    let requestCreated = false;
 
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -212,9 +207,6 @@ function PostJobContent() {
         preparedImages,
         authData.user.id,
       );
-      uploadedImagePaths = storedImages.flatMap((image) =>
-        image.path ? [image.path] : [],
-      );
 
       if (!selectedLocation) {
         throw new Error("Selectează o localitate validă din lista de sugestii.");
@@ -236,16 +228,11 @@ function PostJobContent() {
         targetWorkshopId: targetWorkshopId || null,
         discoveryLocation: { ...selectedLocation, source: "locality" },
       });
-      requestCreated = true;
-
       resetDraft();
       sessionStorage.setItem("job-posted-success", "true");
 
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
-      if (!requestCreated) {
-        await removeRepairImageUploadsBestEffort(uploadedImagePaths);
-      }
       console.error("Submit failed:", error);
       alert(
         error instanceof Error
