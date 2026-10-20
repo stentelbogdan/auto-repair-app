@@ -249,6 +249,8 @@ export function useSafeNavigation(options: UseSafeNavigationOptions = {}) {
     previousPathnameRef.current = pathname;
 
     if (isNavigatingRef.current) {
+      // A completed route transition must release the UI lock immediately.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       releaseNavigation();
     }
   }, [pathname, releaseNavigation]);

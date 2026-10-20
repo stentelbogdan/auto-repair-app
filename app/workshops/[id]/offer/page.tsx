@@ -136,8 +136,16 @@ export default function MakeOfferPage() {
       });
 
       router.push("/workshops/my-offers");
-    } catch (error: any) {
-      alert(error?.message || "Nu am putut trimite oferta.");
+    } catch (error: unknown) {
+      const errorMessage =
+        typeof error === "object" &&
+        error !== null &&
+        "message" in error &&
+        typeof error.message === "string"
+          ? error.message
+          : null;
+
+      alert(errorMessage || "Nu am putut trimite oferta.");
     } finally {
       setIsSubmitting(false);
     }

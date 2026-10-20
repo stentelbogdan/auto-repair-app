@@ -307,6 +307,8 @@ export function Model({
   useEffect(() => {
     if (isSelectionMode) return;
 
+    // The mode transition must clear the visible hover state synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHoveredPartId(null);
     document.body.style.cursor = "default";
 

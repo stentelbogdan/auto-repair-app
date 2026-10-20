@@ -92,11 +92,19 @@ export default function InWorkshopCarPage() {
           status: data.status,
           accepted_offer_id: data.accepted_offer_id,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errorMessage =
+          typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof error.message === "string"
+            ? error.message
+            : null;
+
         console.log(error);
         console.log(JSON.stringify(error, null, 2));
 
-        alert(error?.message || JSON.stringify(error));
+        alert(errorMessage || JSON.stringify(error));
 
         console.error(error);
       } finally {
