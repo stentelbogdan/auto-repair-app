@@ -45,7 +45,12 @@ function mockClient(options: { storageFails?: boolean } = {}) {
 
 test("records a successful Storage API deletion", async () => {
   const { client, rpcCalls } = mockClient();
-  const result = await runRepairImageCleanup(client, TEST_URL, TEST_PROJECT_REF);
+  const result = await runRepairImageCleanup(
+    client,
+    LIVE_URL,
+    LIVE_PROJECT_REF,
+    "production",
+  );
 
   assert.deepEqual(result, { claimed: 1, deleted: 1, failed: 0 });
   assert.deepEqual(rpcCalls.at(-1), {
@@ -60,7 +65,12 @@ test("records a successful Storage API deletion", async () => {
 
 test("returns a failed deletion to the retry queue", async () => {
   const { client, rpcCalls } = mockClient({ storageFails: true });
-  const result = await runRepairImageCleanup(client, TEST_URL, TEST_PROJECT_REF);
+  const result = await runRepairImageCleanup(
+    client,
+    LIVE_URL,
+    LIVE_PROJECT_REF,
+    "production",
+  );
 
   assert.deepEqual(result, { claimed: 1, deleted: 0, failed: 1 });
   assert.equal(rpcCalls.at(-1)?.args.p_deleted, false);
@@ -82,8 +92,8 @@ test("rejects a URL that does not match the configured project before cleanup", 
   const { client, rpcCalls } = mockClient();
 
   await assert.rejects(
-    runRepairImageCleanup(client, LIVE_URL, TEST_PROJECT_REF),
-    /does not match the approved server-side project/,
+    runRepairImageCleanup(client, LIVE_URL, TEST_PROJECT_REF, "production"),
+    /must target the LIVE project/,
   );
   assert.deepEqual(rpcCalls, []);
 });
@@ -106,8 +116,48 @@ test("rejects an unapproved project reference before any cleanup call", async ()
   const { client, rpcCalls } = mockClient();
 
   await assert.rejects(
-    runRepairImageCleanup(client, TEST_URL, "unapproved-project"),
-    /project is not approved/,
+    runRepairImageCleanup(client, TEST_URL, "unapproved-project", "production"),
+    /must target the LIVE project/,
+  );
+  assert.deepEqual(rpcCalls, []);
+});
+
+test("disables privileged cleanup in Preview before any cleanup call", async () => {
+  const { client, rpcCalls } = mockClient();
+
+  await assert.rejects(
+    runRepairImageCleanup(client, TEST_URL, TEST_PROJECT_REF, "preview"),
+    /disabled in Preview/,
+  );
+  assert.deepEqual(rpcCalls, []);
+});
+
+test("rejects a LIVE cleanup configuration in Preview before any cleanup call", async () => {
+  const { client, rpcCalls } = mockClient();
+
+  await assert.rejects(
+    runRepairImageCleanup(client, LIVE_URL, LIVE_PROJECT_REF, "preview"),
+    /must target TEST/,
+  );
+  assert.deepEqual(rpcCalls, []);
+});
+
+test("rejects a TEST target in Production before any cleanup call", async () => {
+  const { client, rpcCalls } = mockClient();
+
+  await assert.rejects(
+    runRepairImageCleanup(client, TEST_URL, TEST_PROJECT_REF, "production"),
+    /must target the LIVE project/,
+  );
+  assert.deepEqual(rpcCalls, []);
+});
+
+test("rejects cleanup outside Production before any cleanup call", async () => {
+  const { client, rpcCalls } = mockClient();
+
+  await assert.rejects(
+    runRepairImageCleanup(client, LIVE_URL, LIVE_PROJECT_REF, "development"),
+    /requires a Production deployment/,
   );
   assert.deepEqual(rpcCalls, []);
 });

@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+// Node's built-in TypeScript test runner requires the source extension.
+// @ts-expect-error TS5097 is intentionally limited to this local import.
+import { LIVE_SUPABASE_PROJECT_REF, TEST_SUPABASE_PROJECT_REF, assertSupabaseProjectUrl } from "./project-boundary.ts";
+
 type DeleteClaim = {
   object_path: string;
   delete_claim_id: string;
@@ -67,6 +71,28 @@ export function assertApprovedRepairImageCleanupUrl(
   }
 }
 
+export function assertRepairImageCleanupDeployment(
+  rawUrl: string,
+  projectRef: string,
+  vercelEnvironment = process.env.VERCEL_ENV,
+): void {
+  if (vercelEnvironment === "preview") {
+    if (projectRef !== TEST_SUPABASE_PROJECT_REF) {
+      throw new Error("Preview cleanup configuration must target TEST.");
+    }
+    assertSupabaseProjectUrl(rawUrl, TEST_SUPABASE_PROJECT_REF);
+    throw new Error("Repair image cleanup is disabled in Preview.");
+  }
+  if (vercelEnvironment !== "production") {
+    throw new Error("Repair image cleanup requires a Production deployment.");
+  }
+  if (projectRef !== LIVE_SUPABASE_PROJECT_REF) {
+    throw new Error("Production cleanup must target the LIVE project.");
+  }
+
+  assertSupabaseProjectUrl(rawUrl, LIVE_SUPABASE_PROJECT_REF);
+}
+
 function configuredSupabaseUrl(): string {
   const url = process.env.SUPABASE_URL;
   if (!url) {
@@ -91,9 +117,15 @@ export async function runRepairImageCleanup(
   client?: SupabaseClient,
   suppliedUrl?: string,
   suppliedProjectRef?: string,
+  suppliedVercelEnvironment?: string,
 ): Promise<RepairImageCleanupResult> {
   const url = suppliedUrl ?? configuredSupabaseUrl();
   const projectRef = suppliedProjectRef ?? configuredCleanupProjectRef();
+  assertRepairImageCleanupDeployment(
+    url,
+    projectRef,
+    suppliedVercelEnvironment,
+  );
   assertApprovedRepairImageCleanupUrl(url, projectRef);
   const cleanupClient = client ?? createAdminClient(url);
 

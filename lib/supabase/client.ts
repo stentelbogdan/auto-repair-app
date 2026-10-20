@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { assertSupabaseProjectUrl } from "@/lib/supabase/project-boundary";
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 let reconnectRealtime: (() => void) | null = null;
@@ -11,6 +13,11 @@ if (!supabaseUrl) {
 if (!supabaseAnonKey) {
   throw new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is missing");
 }
+
+assertSupabaseProjectUrl(
+  supabaseUrl,
+  process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF,
+);
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {

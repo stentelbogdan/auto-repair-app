@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { assertSupabaseDeploymentBoundary } from "@/lib/supabase/project-boundary";
 import { getGeoapifyRoute } from "@/lib/towing/geoapify-routing";
 
 const MIN_RECALCULATION_INTERVAL_MS = 30_000;
@@ -143,6 +144,20 @@ export async function POST(request: Request) {
   if (!supabaseUrl || !supabaseAnonKey) {
     return Response.json(
       { error: "Serviciul nu este configurat." },
+      { status: 503 },
+    );
+  }
+
+  try {
+    assertSupabaseDeploymentBoundary({
+      url: supabaseUrl,
+      vercelEnvironment: process.env.VERCEL_ENV,
+      bundledExpectedProjectRef:
+        process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF,
+    });
+  } catch {
+    return Response.json(
+      { error: "Configurația serviciului este invalidă." },
       { status: 503 },
     );
   }
