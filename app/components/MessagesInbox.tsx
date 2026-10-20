@@ -86,7 +86,10 @@ type PendingInboxMutationReference = {
 };
 
 const PENDING_INBOX_MUTATIONS_STORAGE_KEY = "pending-inbox-mutations";
-const SUPABASE_STORAGE_HOSTNAME = "ouoiykudvcoqbkybkqvs.supabase.co";
+const SUPABASE_STORAGE_HOSTNAMES = new Set([
+  "ouoiykudvcoqbkybkqvs.supabase.co",
+  "bstjobvvxxfqqwyjoimx.supabase.co",
+]);
 
 function isOptimizableInboxImage(src: string) {
   try {
@@ -94,7 +97,7 @@ function isOptimizableInboxImage(src: string) {
 
     return (
       url.protocol === "https:" &&
-      url.hostname === SUPABASE_STORAGE_HOSTNAME &&
+      SUPABASE_STORAGE_HOSTNAMES.has(url.hostname) &&
       url.pathname.startsWith("/storage/v1/object/public/")
     );
   } catch {

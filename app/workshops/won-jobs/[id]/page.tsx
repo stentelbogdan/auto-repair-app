@@ -119,6 +119,7 @@ export default function WonJobDetailPage() {
   };
 
   const uploadProgressImages = async () => {
+    const uploadedPaths: string[] = [];
     try {
       setUploading(true);
       setSuccessMessage("");
@@ -135,12 +136,15 @@ export default function WonJobDetailPage() {
         preparedImages.push(preparedImage);
       }
 
-      const uploadedUrls: string[] = [];
+      const { data: authData } = await supabase.auth.getUser();
+
+      if (!authData.user) {
+        alert("Not authenticated");
+        return;
+      }
 
       for (const preparedImage of preparedImages) {
-        const filePath = `${requestId}/${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}.${preparedImage.extension}`;
+        const filePath = `${requestId}/${authData.user.id}/${crypto.randomUUID()}.${preparedImage.extension}`;
 
         const { error: uploadError } = await supabase.storage
           .from("work-progress")
@@ -153,18 +157,7 @@ export default function WonJobDetailPage() {
           continue;
         }
 
-        const { data } = supabase.storage
-          .from("work-progress")
-          .getPublicUrl(filePath);
-
-        uploadedUrls.push(data.publicUrl);
-      }
-
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (!authData.user) {
-        alert("Not authenticated");
-        return;
+        uploadedPaths.push(filePath);
       }
 
       try {
@@ -173,7 +166,7 @@ export default function WonJobDetailPage() {
           senderId: authData.user.id,
           status: selectedStatus,
           message,
-          images: uploadedUrls,
+          images: uploadedPaths,
         });
       } catch (error) {
         console.error(error);
@@ -189,7 +182,7 @@ export default function WonJobDetailPage() {
 
       console.log("REQUEST STATUS =", verifyData);
 
-      console.log("Uploaded:", uploadedUrls);
+      console.log("Uploaded:", uploadedPaths);
 
       setSuccessMessage("success");
 
@@ -210,6 +203,9 @@ export default function WonJobDetailPage() {
       setProgressImages([]);
       setUploadedPreviewUrls([]);
     } catch (error) {
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from("work-progress").remove(uploadedPaths);
+      }
       console.error(error);
       alert(
         error instanceof Error

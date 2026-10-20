@@ -210,6 +210,7 @@ export default function WorkProgressPhotosPage() {
     setSubmitting(true);
     setFeedback(null);
 
+    const uploadedPaths: string[] = [];
     try {
       const preparedImages: PreparedImage[] = [];
 
@@ -221,12 +222,8 @@ export default function WorkProgressPhotosPage() {
         preparedImages.push(preparedImage);
       }
 
-      const uploadedUrls: string[] = [];
-
       for (const preparedImage of preparedImages) {
-        const filePath = `${requestId}/${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}.${preparedImage.extension}`;
+        const filePath = `${requestId}/${userId}/${crypto.randomUUID()}.${preparedImage.extension}`;
 
         const { error: uploadError } = await supabase.storage
           .from("work-progress")
@@ -236,11 +233,7 @@ export default function WorkProgressPhotosPage() {
 
         if (uploadError) throw uploadError;
 
-        const { data } = supabase.storage
-          .from("work-progress")
-          .getPublicUrl(filePath);
-
-        uploadedUrls.push(data.publicUrl);
+        uploadedPaths.push(filePath);
       }
 
       await saveWorkProgressUpdate({
@@ -248,7 +241,7 @@ export default function WorkProgressPhotosPage() {
         senderId: userId,
         status: currentStatus,
         message,
-        images: uploadedUrls,
+        images: uploadedPaths,
       });
 
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -261,6 +254,9 @@ export default function WorkProgressPhotosPage() {
         message: "Pozele au fost trimise către client.",
       });
     } catch (error) {
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from("work-progress").remove(uploadedPaths);
+      }
       setFeedback({
         type: "error",
         message:

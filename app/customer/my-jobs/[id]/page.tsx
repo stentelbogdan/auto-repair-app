@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Home } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { resolvePrivateImagePaths } from "@/lib/supabase/private-storage-images";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
 import ImageGallery from "@/app/components/ImageGallery";
 import {
@@ -147,7 +148,14 @@ export default function CustomerJobDetailPage() {
         if (progressError) {
           console.error(progressError);
         } else {
-          setProgressUpdates(progressData || []);
+          const rows = (progressData || []) as WorkProgressUpdate[];
+          const paths = rows.flatMap((update) => update.images || []);
+          const urls = await resolvePrivateImagePaths(supabase, "work-progress", paths);
+          let imageIndex = 0;
+          setProgressUpdates(rows.map((update) => ({
+            ...update,
+            images: (update.images || []).map(() => urls[imageIndex++]).filter(Boolean),
+          })));
 
           const unreadUpdates =
             progressData?.map((update) => ({

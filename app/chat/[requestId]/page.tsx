@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { resolvePrivateImagePaths } from "@/lib/supabase/private-storage-images";
 import {
   getConversationPeerKey,
   loadConversationPeers,
@@ -18,10 +19,28 @@ import Zoom from "yet-another-react-lightbox/plugins/zoom";
 import "yet-another-react-lightbox/styles.css";
 
 type ChatImage = {
-  url: string;
+  url?: string;
   path?: string;
   name?: string;
 };
+
+async function hydrateChatImages(messages: Message[]) {
+  const paths = messages.flatMap((message) =>
+    (message.images || []).flatMap((image) =>
+      image.path && !image.url ? [image.path] : [],
+    ),
+  );
+  const urls = await resolvePrivateImagePaths(supabase, "chat-images", paths);
+  const signedUrlByPath = new Map(paths.map((path, index) => [path, urls[index]]));
+
+  return messages.map((message) => ({
+    ...message,
+    images: (message.images || []).map((image) => ({
+      ...image,
+      url: image.url || (image.path ? signedUrlByPath.get(image.path) : ""),
+    })),
+  }));
+}
 
 type Message = {
   id: string;
@@ -287,7 +306,7 @@ export default function ChatPage() {
         count: data.length,
         generation,
       });
-      setMessages(data);
+      setMessages(await hydrateChatImages(data as Message[]));
       setMessagesLoading(false);
       return;
     }
@@ -628,7 +647,7 @@ export default function ChatPage() {
           table: "messages",
           filter: `request_id=eq.${requestId}`,
         },
-        (payload) => {
+        async (payload) => {
           const insertedMessage = payload.new as Message;
           logPerf("realtime:INSERT", {
             messageId: insertedMessage.id,
@@ -644,12 +663,13 @@ export default function ChatPage() {
             return;
           }
 
+          const [hydratedMessage] = await hydrateChatImages([insertedMessage]);
           setMessages((prev) => {
             if (prev.some((message) => message.id === insertedMessage.id)) {
               return prev;
             }
 
-            return [...prev, insertedMessage].sort(
+            return [...prev, hydratedMessage].sort(
               (a, b) =>
                 new Date(a.created_at).getTime() -
                 new Date(b.created_at).getTime(),
@@ -665,7 +685,7 @@ export default function ChatPage() {
           table: "messages",
           filter: `request_id=eq.${requestId}`,
         },
-        (payload) => {
+        async (payload) => {
           const updatedMessage = payload.new as Message;
           logPerf("realtime:UPDATE", {
             messageId: updatedMessage.id,
@@ -681,9 +701,10 @@ export default function ChatPage() {
             return;
           }
 
+          const [hydratedMessage] = await hydrateChatImages([updatedMessage]);
           setMessages((prev) =>
             prev.map((message) =>
-              message.id === updatedMessage.id ? updatedMessage : message,
+              message.id === updatedMessage.id ? hydratedMessage : message,
             ),
           );
         },
@@ -928,7 +949,8 @@ export default function ChatPage() {
     try {
       for (const { originalName, preparedImage } of preparedImages) {
         const fileName = `${crypto.randomUUID()}.${preparedImage.extension}`;
-        const filePath = `${targetRequestId}/${senderId}/${fileName}`;
+        const conversationId = isDirectDraft || !offerId ? "direct" : offerId;
+        const filePath = `${targetRequestId}/${conversationId}/${senderId}/${fileName}`;
 
         const { error } = await supabase.storage
           .from("chat-images")
@@ -942,12 +964,7 @@ export default function ChatPage() {
           throw error;
         }
 
-        const { data } = supabase.storage
-          .from("chat-images")
-          .getPublicUrl(filePath);
-
         uploadedImages.push({
-          url: data.publicUrl,
           path: filePath,
           name: originalName,
         });
@@ -1055,10 +1072,16 @@ export default function ChatPage() {
       });
 
       if (error) {
+        const uploadedPaths = uploadedImages.flatMap((image) =>
+          image.path ? [image.path] : [],
+        );
+        if (uploadedPaths.length > 0) {
+          await supabase.storage.from("chat-images").remove(uploadedPaths);
+        }
         await cleanupFailedDraftRequest(
           resolvedRequest,
           authData.user.id,
-          uploadedImages,
+          [],
         );
         console.error("Failed to send message:", error);
         alert("Mesajul nu a putut fi trimis.");
@@ -1083,10 +1106,16 @@ export default function ChatPage() {
       }
     } catch (error: unknown) {
       if (resolvedRequest && !messageInserted) {
+        const uploadedPaths = uploadedImages.flatMap((image) =>
+          image.path ? [image.path] : [],
+        );
+        if (uploadedPaths.length > 0) {
+          await supabase.storage.from("chat-images").remove(uploadedPaths);
+        }
         await cleanupFailedDraftRequest(
           resolvedRequest,
           authData.user.id,
-          uploadedImages,
+          [],
         );
       }
 
@@ -1261,12 +1290,12 @@ export default function ChatPage() {
                         >
                           {images.map((image, index) => (
                             <button
-                              key={`${image.url}-${index}`}
+                              key={`${image.path || image.url}-${index}`}
                               type="button"
                               onClick={() => {
                                 const allImages = getAllChatImages();
                                 const imageIndex = allImages.findIndex(
-                                  (item) => item.url === image.url,
+                                  (item) => (item.path || item.url) === (image.path || image.url),
                                 );
 
                                 setSelectedChatGallery({
@@ -1277,7 +1306,7 @@ export default function ChatPage() {
                               className="block overflow-hidden rounded-2xl bg-black/20"
                             >
                               <img
-                                src={image.url}
+                                src={image.url || ""}
                                 alt={image.name || "Poză chat"}
                                 className="h-40 w-64 max-w-full object-cover"
                               />
@@ -1417,9 +1446,9 @@ export default function ChatPage() {
         close={() => setSelectedChatGallery(null)}
         index={selectedChatGallery?.index || 0}
         slides={
-          selectedChatGallery?.images.map((image) => ({
-            src: image.url,
-          })) || []
+          selectedChatGallery?.images.flatMap((image) =>
+            image.url ? [{ src: image.url }] : [],
+          ) || []
         }
         plugins={[Zoom]}
         controller={{

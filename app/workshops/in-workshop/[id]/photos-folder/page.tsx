@@ -2,6 +2,7 @@
 
 import ImageGallery from "@/app/components/ImageGallery";
 import { supabase } from "@/lib/supabase/client";
+import { resolvePrivateImagePaths } from "@/lib/supabase/private-storage-images";
 import {
   formatProgressStatus,
   getProgressWorkflow,
@@ -185,10 +186,18 @@ export default function WorkPhotosFolderPage() {
         if (progressError) throw progressError;
         if (!active) return;
 
-        const photoUpdates = ((progressData ?? []) as ProgressUpdateRow[])
+        const rawUpdates = ((progressData ?? []) as ProgressUpdateRow[])
           .map((update) => ({
             ...update,
             images: sanitizeImageUrls(update.images),
+          }));
+        const paths = rawUpdates.flatMap((update) => update.images);
+        const urls = await resolvePrivateImagePaths(supabase, "work-progress", paths);
+        let imageIndex = 0;
+        const photoUpdates = rawUpdates
+          .map((update) => ({
+            ...update,
+            images: update.images.map(() => urls[imageIndex++]).filter(Boolean),
           }))
           .filter((update) => update.images.length > 0);
 
