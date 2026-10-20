@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type MouseEvent } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { getPublicWorkshopSummaries } from "@/lib/supabase/profiles";
 import { interactiveCard } from "@/lib/ui";
 
 type WorkshopSummaryCardProps = {
@@ -29,11 +30,11 @@ export default function WorkshopSummaryCard({
     async function loadWorkshopStats() {
       if (!workshopUserId) return;
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("workshop_logo_url")
-        .eq("id", workshopUserId)
-        .single();
+      const { data: profilesData } = await getPublicWorkshopSummaries(
+        supabase,
+        [workshopUserId],
+      );
+      const profileData = profilesData?.[0];
 
       setProfileLogoUrl(profileData?.workshop_logo_url || null);
 

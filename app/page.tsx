@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -11,11 +12,6 @@ import {
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type UserRole = "customer" | "workshop";
-
-type ProfileRow = {
-  role: string[] | null;
-  workshop_slug?: string | null;
-};
 
 const AUTH_TIMEOUT_MESSAGE =
   "Serviciul de autentificare răspunde greu. Încearcă din nou.";
@@ -37,11 +33,7 @@ export default function LoginPage() {
 
       if (!data.user) return;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", data.user.id)
-        .single<ProfileRow>();
+      const { data: profile } = await getOwnProfile(supabase);
 
       const roles = Array.isArray(profile?.role) ? profile.role : [];
 
@@ -91,11 +83,7 @@ export default function LoginPage() {
       if (userId) {
         const { data: existingProfile, error: fetchProfileError } =
           await withTimeout(
-            supabase
-              .from("profiles")
-              .select("role, workshop_slug")
-              .eq("id", userId)
-              .maybeSingle<ProfileRow>(),
+            getOwnProfile(supabase),
             PROFILE_TIMEOUT_MS,
             "Profile lookup",
           );
@@ -210,11 +198,7 @@ export default function LoginPage() {
       const userId = data.user.id;
 
       const { data: profile, error: profileError } = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", userId)
-          .single<ProfileRow>(),
+        getOwnProfile(supabase),
         PROFILE_TIMEOUT_MS,
         "Profile lookup",
       );

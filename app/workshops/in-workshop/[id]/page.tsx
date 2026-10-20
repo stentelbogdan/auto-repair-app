@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -57,11 +58,7 @@ export default function InWorkshopCarPage() {
           return;
         }
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("workshop_name, full_name")
-          .eq("id", authData.user.id)
-          .maybeSingle();
+        const { data: profile } = await getOwnProfile(supabase);
 
         setWorkshopName(
           profile?.workshop_name || profile?.full_name || "Service",

@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -41,6 +42,11 @@ import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 import { interactiveButton } from "@/lib/ui";
 import { getWorkshopRequestClientNames } from "@/lib/supabase/workshop-client-names";
+import {
+  workshopProposeRepairAppointment,
+  workshopResolveCustomerAppointment,
+} from "@/lib/supabase/repair-appointments";
+import { markWorkshopRepairOffersRead } from "@/lib/supabase/repair-offers";
 import RequestClientName from "@/app/components/RequestClientName";
 import RequestCategoryFilter, {
   type RequestCategoryCounts,
@@ -109,10 +115,6 @@ const ROMANIAN_PLATE_PREFIXES = new Set([
 
 type JobStage = "appointments" | "workshop" | "completed";
 type JobPriority = "needs_action" | "waiting" | "ok";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 type JobImage = {
   name: string;
@@ -318,11 +320,7 @@ export default function WorkshopWonJobsPage() {
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
         if (profileError) {
           console.error("Failed to load profile:", profileError);
@@ -354,16 +352,18 @@ export default function WorkshopWonJobsPage() {
               : ["customer_confirmed_appointment"],
         });
 
-        const { error: readError } = await supabase
-          .from("repair_offers")
-          .update({
-            workshop_read_at: new Date().toISOString(),
-          })
-          .eq("workshop_user_id", authData.user.id)
-          .eq("status", "accepted")
-          .is("workshop_read_at", null);
-
-        if (readError) {
+        try {
+          const { data: unreadOffers, error: unreadOffersError } = await supabase
+            .from("repair_offers")
+            .select("id")
+            .eq("workshop_user_id", authData.user.id)
+            .eq("status", "accepted")
+            .is("workshop_read_at", null);
+          if (unreadOffersError) throw unreadOffersError;
+          await markWorkshopRepairOffersRead(
+            (unreadOffers ?? []).map((offer) => offer.id),
+          );
+        } catch (readError) {
           console.error("Failed to mark won jobs as read:", readError);
         }
 
@@ -439,17 +439,13 @@ export default function WorkshopWonJobsPage() {
         .map((offer) => offer.id);
 
       if (unreadAcceptedOfferIds.length > 0) {
-        const { error: markReadError } = await supabase
-          .from("repair_offers")
-          .update({ workshop_read_at: new Date().toISOString() })
-          .in("id", unreadAcceptedOfferIds);
-
-        if (markReadError) {
-          console.error("Failed to mark won jobs as read:", markReadError);
-        } else {
+        try {
+          await markWorkshopRepairOffersRead(unreadAcceptedOfferIds);
           setTimeout(() => {
             window.dispatchEvent(new Event("offers-read-updated"));
           }, 300);
+        } catch (markReadError) {
+          console.error("Failed to mark won jobs as read:", markReadError);
         }
       }
 
@@ -861,61 +857,22 @@ export default function WorkshopWonJobsPage() {
     if (!job.appointment) return;
 
     try {
-      const { error } = await supabase
-        .from("repair_appointments")
-        .update({
-          status,
-          appointment_date:
-            status === "confirmed" && job.appointment.proposed_date
-              ? job.appointment.proposed_date
-              : job.appointment.appointment_date,
-          appointment_time:
-            status === "confirmed" && job.appointment.proposed_time
-              ? job.appointment.proposed_time
-              : job.appointment.appointment_time,
-          proposed_date:
-            status === "confirmed" ? null : job.appointment.proposed_date,
-          proposed_time:
-            status === "confirmed" ? null : job.appointment.proposed_time,
-          workshop_note:
-            status === "confirmed" ? null : job.appointment.workshop_note,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", job.appointment.id);
+      if (!job.appointment.updated_at) {
+        throw new Error("Programarea nu are versiunea necesară actualizării.");
+      }
 
-      if (error) throw error;
+      const updatedAppointment = await workshopResolveCustomerAppointment({
+        appointmentId: job.appointment.id,
+        expectedUpdatedAt: job.appointment.updated_at,
+        decision: status,
+      });
 
       setJobs((prev) =>
         prev.map((item) =>
           item.requestId === job.requestId
             ? {
                 ...item,
-                appointment: item.appointment
-                  ? {
-                      ...item.appointment,
-                      status,
-                      appointment_date:
-                        status === "confirmed" && item.appointment.proposed_date
-                          ? item.appointment.proposed_date
-                          : item.appointment.appointment_date,
-                      appointment_time:
-                        status === "confirmed" && item.appointment.proposed_time
-                          ? item.appointment.proposed_time
-                          : item.appointment.appointment_time,
-                      proposed_date:
-                        status === "confirmed"
-                          ? null
-                          : item.appointment.proposed_date,
-                      proposed_time:
-                        status === "confirmed"
-                          ? null
-                          : item.appointment.proposed_time,
-                      workshop_note:
-                        status === "confirmed"
-                          ? null
-                          : item.appointment.workshop_note,
-                    }
-                  : item.appointment,
+                appointment: updatedAppointment as RepairAppointment,
               }
             : item,
         ),
@@ -935,22 +892,17 @@ export default function WorkshopWonJobsPage() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("repair_appointments")
-        .update({
-          proposed_date: newAppointmentDate,
-          proposed_time: newAppointmentTime,
-          status: "workshop_proposed",
-          workshop_note: "Service-ul a propus o altă dată.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", job.appointment.id)
-        .select(
-          "id, request_id, appointment_date, appointment_time, proposed_date, proposed_time, handover_method, pickup_address, customer_note, workshop_note, status, updated_at",
-        )
-        .single();
+      if (!job.appointment.updated_at) {
+        throw new Error("Programarea nu are versiunea necesară actualizării.");
+      }
 
-      if (error) throw error;
+      const data = await workshopProposeRepairAppointment({
+        appointmentId: job.appointment.id,
+        expectedUpdatedAt: job.appointment.updated_at,
+        proposedDate: newAppointmentDate,
+        proposedTime: newAppointmentTime,
+        workshopNote: "Service-ul a propus o altă dată.",
+      });
 
       setJobs((prev) =>
         prev.map((item) =>

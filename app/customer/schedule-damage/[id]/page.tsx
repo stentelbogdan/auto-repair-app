@@ -17,6 +17,10 @@ import {
 } from "@/lib/supabase/repair-offers";
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import { getTowingRequestedDateTime } from "@/lib/towing/towing-schedule-display";
+import {
+  customerProposeRepairAppointment,
+  workshopProposeRepairAppointment,
+} from "@/lib/supabase/repair-appointments";
 
 type HandoverMethod = "customer_dropoff" | "workshop_pickup";
 
@@ -47,6 +51,7 @@ export default function ScheduleDamagePage() {
   const isWorkshopMode = roleFromUrl === "workshop";
   const isInitialOfferMode =
     isWorkshopMode && searchParams.get("mode") === "initial-offer";
+  const isWorkshopEditMode = isWorkshopMode && !isInitialOfferMode;
 
   const [request, setRequest] = useState<RepairRequest | null>(null);
   const [offer, setOffer] = useState<RepairOffer | null>(null);
@@ -571,7 +576,7 @@ export default function ScheduleDamagePage() {
         const { data: existingAppointment, error: appointmentLoadError } =
           await supabase
             .from("repair_appointments")
-            .select("id")
+            .select("id, updated_at, workshop_note")
             .eq("offer_id", offer.id)
             .eq("request_id", request.id)
             .eq("workshop_id", authData.user.id)
@@ -600,33 +605,16 @@ export default function ScheduleDamagePage() {
           offerId: offer.id,
         });
 
-        const { data: updatedAppointment, error: appointmentUpdateError } =
-          await supabase
-            .from("repair_appointments")
-            .update({
-              proposed_date: appointmentDate,
-              proposed_time: appointmentTime,
-
-              handover_method: effectiveHandoverMethod,
-
-              pickup_address:
-                effectiveHandoverMethod === "workshop_pickup"
-                  ? effectivePickupAddress?.trim() || null
-                  : null,
-
-              customer_note: customerNote.trim() || null,
-              workshop_note: null,
-
-              status: "workshop_proposed",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", existingAppointment.id)
-            .select(
-              "id, proposed_date, proposed_time, status, workshop_id, customer_id",
-            )
-            .single();
-
-        if (appointmentUpdateError) {
+        let updatedAppointment;
+        try {
+          updatedAppointment = await workshopProposeRepairAppointment({
+            appointmentId: existingAppointment.id,
+            expectedUpdatedAt: existingAppointment.updated_at,
+            proposedDate: appointmentDate,
+            proposedTime: appointmentTime,
+            workshopNote: existingAppointment.workshop_note,
+          });
+        } catch (appointmentUpdateError) {
           console.error(
             "Failed to update workshop appointment:",
             appointmentUpdateError,
@@ -649,7 +637,7 @@ export default function ScheduleDamagePage() {
       const { data: existingAppointment, error: appointmentLoadError } =
         await supabase
           .from("repair_appointments")
-          .select("id")
+          .select("id, updated_at")
           .eq("offer_id", offer.id)
           .eq("request_id", request.id)
           .eq("customer_id", authData.user.id)
@@ -669,28 +657,20 @@ export default function ScheduleDamagePage() {
         return;
       }
 
-      const { error: appointmentUpdateError } = await supabase
-        .from("repair_appointments")
-        .update({
-          proposed_date: appointmentDate,
-          proposed_time: appointmentTime,
-
-          handover_method: effectiveHandoverMethod,
-
-          pickup_address:
+      try {
+        await customerProposeRepairAppointment({
+          appointmentId: existingAppointment.id,
+          expectedUpdatedAt: existingAppointment.updated_at,
+          proposedDate: appointmentDate,
+          proposedTime: appointmentTime,
+          handoverMethod: effectiveHandoverMethod,
+          pickupAddress:
             effectiveHandoverMethod === "workshop_pickup"
               ? effectivePickupAddress?.trim() || null
               : null,
-
-          customer_note: customerNote.trim() || null,
-          workshop_note: null,
-
-          status: "customer_proposed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", existingAppointment.id);
-
-      if (appointmentUpdateError) {
+          customerNote: customerNote.trim() || null,
+        });
+      } catch (appointmentUpdateError) {
         console.error(
           "Failed to update customer appointment:",
           appointmentUpdateError,
@@ -789,75 +769,79 @@ export default function ScheduleDamagePage() {
               onTimeChange={setAppointmentTime}
             />
 
-            <div className="rounded-[26px] bg-white p-5 text-black">
-              {request.service_type !== "towing" && (
-                <>
-                  <p className="text-sm font-bold text-black/70">
-                    Cum predai mașina?
-                  </p>
+            {!isWorkshopEditMode && (
+              <div className="rounded-[26px] bg-white p-5 text-black">
+                {request.service_type !== "towing" && (
+                  <>
+                    <p className="text-sm font-bold text-black/70">
+                      Cum predai mașina?
+                    </p>
 
-                  <div className="mt-3 grid gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setHandoverMethod("customer_dropoff")}
-                      className={`rounded-2xl border p-4 text-left ${
-                        handoverMethod === "customer_dropoff"
-                          ? "border-orange-500 bg-orange-50"
-                          : "border-black/10 bg-gray-50"
-                      }`}
-                    >
-                      <p className="font-black">Aduc eu mașina la service</p>
-                      <p className="mt-1 text-sm text-black/55">
-                        Te prezinți la service la data și ora aleasă.
-                      </p>
-                    </button>
+                    <div className="mt-3 grid gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setHandoverMethod("customer_dropoff")}
+                        className={`rounded-2xl border p-4 text-left ${
+                          handoverMethod === "customer_dropoff"
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-black/10 bg-gray-50"
+                        }`}
+                      >
+                        <p className="font-black">Aduc eu mașina la service</p>
+                        <p className="mt-1 text-sm text-black/55">
+                          Te prezinți la service la data și ora aleasă.
+                        </p>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setHandoverMethod("workshop_pickup")}
-                      className={`rounded-2xl border p-4 text-left ${
-                        handoverMethod === "workshop_pickup"
-                          ? "border-orange-500 bg-orange-50"
-                          : "border-black/10 bg-gray-50"
-                      }`}
-                    >
-                      <p className="font-black">Service-ul ridică mașina</p>
-                      <p className="mt-1 text-sm text-black/55">
-                        Completezi adresa de unde poate fi ridicată mașina.
-                      </p>
-                    </button>
-                  </div>
-
-                  {handoverMethod === "workshop_pickup" && (
-                    <div className="mt-4">
-                      <label className="text-sm font-bold text-black/70">
-                        Adresă ridicare
-                      </label>
-                      <input
-                        value={pickupAddress}
-                        onChange={(event) =>
-                          setPickupAddress(event.target.value)
-                        }
-                        placeholder="Ex: Strada Principală 10, Iași"
-                        className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 outline-none focus:border-orange-500"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setHandoverMethod("workshop_pickup")}
+                        className={`rounded-2xl border p-4 text-left ${
+                          handoverMethod === "workshop_pickup"
+                            ? "border-orange-500 bg-orange-50"
+                            : "border-black/10 bg-gray-50"
+                        }`}
+                      >
+                        <p className="font-black">Service-ul ridică mașina</p>
+                        <p className="mt-1 text-sm text-black/55">
+                          Completezi adresa de unde poate fi ridicată mașina.
+                        </p>
+                      </button>
                     </div>
-                  )}
-                </>
-              )}
 
-              <div className={request.service_type === "towing" ? "" : "mt-4"}>
-                <label className="text-sm font-bold text-black/70">
-                  Mesaj opțional
-                </label>
-                <textarea
-                  value={customerNote}
-                  onChange={(event) => setCustomerNote(event.target.value)}
-                  placeholder="Ex: Pot ajunge după ora 09:30 sau mașina are nevoie de platformă..."
-                  className="mt-2 min-h-28 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 outline-none focus:border-orange-500"
-                />
+                    {handoverMethod === "workshop_pickup" && (
+                      <div className="mt-4">
+                        <label className="text-sm font-bold text-black/70">
+                          Adresă ridicare
+                        </label>
+                        <input
+                          value={pickupAddress}
+                          onChange={(event) =>
+                            setPickupAddress(event.target.value)
+                          }
+                          placeholder="Ex: Strada Principală 10, Iași"
+                          className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div
+                  className={request.service_type === "towing" ? "" : "mt-4"}
+                >
+                  <label className="text-sm font-bold text-black/70">
+                    Mesaj opțional
+                  </label>
+                  <textarea
+                    value={customerNote}
+                    onChange={(event) => setCustomerNote(event.target.value)}
+                    placeholder="Ex: Pot ajunge după ora 09:30 sau mașina are nevoie de platformă..."
+                    className="mt-2 min-h-28 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 outline-none focus:border-orange-500"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <button
               type="button"

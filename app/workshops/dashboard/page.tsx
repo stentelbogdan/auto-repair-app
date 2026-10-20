@@ -1,14 +1,11 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { fetchWorkshopDiscoveryCounts } from "@/lib/supabase/workshop-discovery";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 type DashboardStats = {
   bodyworkRequests: number;
@@ -71,11 +68,7 @@ function WorkshopDashboardContent() {
           return;
         }
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
+        const { data: profile } = await getOwnProfile(supabase);
 
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 

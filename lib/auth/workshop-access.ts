@@ -1,3 +1,4 @@
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { supabase } from "@/lib/supabase/client";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
@@ -9,10 +10,6 @@ export type WorkshopAccessResult =
   | { status: "forbidden" }
   | { status: "timeout"; stage: WorkshopAccessStage }
   | { status: "error"; stage: WorkshopAccessStage; error: unknown };
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 const GET_USER_TIMEOUT_MS = 12_000;
 const PROFILE_TIMEOUT_MS = 10_000;
@@ -58,11 +55,7 @@ export async function checkWorkshopAccess(): Promise<WorkshopAccessResult> {
 
   const loadProfile = () =>
     withTimeout(
-      supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single<ProfileRow>(),
+      getOwnProfile(supabase),
       PROFILE_TIMEOUT_MS,
       "Workshop access profile check",
     );

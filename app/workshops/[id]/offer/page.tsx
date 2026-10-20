@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -12,10 +13,6 @@ type RepairRequestRow = {
   car_model: string;
   car_year: string;
   city: string;
-};
-
-type ProfileRow = {
-  role: string[] | null;
 };
 
 export default function MakeOfferPage() {
@@ -45,11 +42,7 @@ export default function MakeOfferPage() {
           return;
         }
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
+        const { data: profile } = await getOwnProfile(supabase);
 
         const roles = Array.isArray(profile?.role) ? profile.role : [];
 
@@ -122,11 +115,7 @@ export default function MakeOfferPage() {
         return;
       }
 
-      const { data: workshopProfile } = await supabase
-        .from("profiles")
-        .select("workshop_name")
-        .eq("id", authData.user.id)
-        .single();
+      const { data: workshopProfile } = await getOwnProfile(supabase);
 
       const workshopEmail = authData.user.email ?? "Workshop";
 

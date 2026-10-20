@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -10,10 +11,6 @@ import {
 } from "@/lib/workshops/workshop-slug";
 
 type UserRole = "customer" | "workshop";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -36,11 +33,7 @@ export default function AuthCallbackPage() {
         "pendingRegisterRole",
       ) as UserRole | null;
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle<ProfileRow>();
+      const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
       if (profileError) {
         alert(profileError.message);

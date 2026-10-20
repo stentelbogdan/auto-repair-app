@@ -26,89 +26,44 @@ export async function createRepairOffer(input: {
   handoverMethod?: "customer_dropoff" | "workshop_pickup";
   pickupAddress?: string;
 }) {
-  // 1. Luăm clientul căruia îi aparține cererea
-  const { data: request, error: requestError } = await supabase
-    .from("repair_requests")
-    .select("user_id")
-    .eq("id", input.requestId)
-    .single();
-
-  if (requestError) {
-    throw requestError;
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) throw authError;
+  if (!authData.user || authData.user.id !== input.workshopUserId) {
+    throw new Error("Service-ul autentificat nu corespunde ofertei.");
   }
 
-  if (!request?.user_id) {
-    throw new Error("Nu am putut identifica clientul cererii.");
-  }
-
-  // 2. Creăm oferta
-  const { data: offer, error: offerError } = await supabase
-    .from("repair_offers")
-    .insert({
-      request_id: input.requestId,
-      workshop_user_id: input.workshopUserId,
-      price: input.price,
-      days: input.days,
-      message: input.message,
-      workshop_name: input.workshopName,
-      available_date: input.availableDate || null,
-      available_time: input.availableTime || null,
-      status: "pending",
-    })
-    .select()
-    .single();
-
-  if (offerError) {
-    throw offerError;
-  }
-
-  if (!offer?.id) {
-    throw new Error("Oferta a fost creată fără un ID valid.");
-  }
-
-  // 3. Creăm programarea inițială propusă de service
-  const { error: appointmentError } = await supabase
-    .from("repair_appointments")
-    .insert({
-      request_id: input.requestId,
-      offer_id: offer.id,
-      customer_id: request.user_id,
-      workshop_id: input.workshopUserId,
-
-      appointment_date: input.availableDate || null,
-      appointment_time: input.availableTime || null,
-
-      original_date: input.availableDate || null,
-      original_time: input.availableTime || null,
-
-      proposed_date: input.availableDate || null,
-      proposed_time: input.availableTime || null,
-
-      handover_method: input.handoverMethod || "customer_dropoff",
-
-      pickup_address:
+  const { data: offerId, error: createError } = await supabase.rpc(
+    "create_repair_offer_with_appointment",
+    {
+      p_request_id: input.requestId,
+      p_price: input.price,
+      p_days: input.days,
+      p_message: input.message,
+      p_workshop_name: input.workshopName,
+      p_available_date: input.availableDate || null,
+      p_available_time: input.availableTime || null,
+      p_handover_method: input.handoverMethod || "customer_dropoff",
+      p_pickup_address:
         input.handoverMethod === "workshop_pickup"
           ? input.pickupAddress?.trim() || null
           : null,
+    },
+  );
 
-      status: "requested",
-    });
-
-  if (appointmentError) {
-    const { error: rollbackError } = await supabase
-      .from("repair_offers")
-      .delete()
-      .eq("id", offer.id);
-
-    if (rollbackError) {
-      console.error(
-        "Programarea nu a fost creată, iar oferta nu a putut fi ștearsă:",
-        rollbackError,
-      );
-    }
-
-    throw appointmentError;
+  if (createError) throw createError;
+  if (typeof offerId !== "string") {
+    throw new Error("Oferta a fost creată fără un ID valid.");
   }
+
+  const { data: offer, error: offerError } = await supabase
+    .from("repair_offers")
+    .select("*")
+    .eq("id", offerId)
+    .eq("request_id", input.requestId)
+    .eq("workshop_user_id", input.workshopUserId)
+    .single();
+
+  if (offerError) throw offerError;
 
   return offer as RepairOfferRow;
 }
@@ -185,4 +140,26 @@ export async function finalizeWorkshopCustomerProposal(input: {
   if (error) {
     throw error;
   }
+}
+
+export async function markCustomerRepairOffersRead(offerIds: string[]) {
+  const uniqueOfferIds = [...new Set(offerIds)];
+  if (uniqueOfferIds.length === 0) return;
+
+  const { error } = await supabase.rpc("mark_customer_repair_offers_read", {
+    p_offer_ids: uniqueOfferIds,
+  });
+
+  if (error) throw error;
+}
+
+export async function markWorkshopRepairOffersRead(offerIds: string[]) {
+  const uniqueOfferIds = [...new Set(offerIds)];
+  if (uniqueOfferIds.length === 0) return;
+
+  const { error } = await supabase.rpc("mark_workshop_repair_offers_read", {
+    p_offer_ids: uniqueOfferIds,
+  });
+
+  if (error) throw error;
 }

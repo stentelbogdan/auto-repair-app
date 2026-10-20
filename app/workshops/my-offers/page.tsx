@@ -1,9 +1,13 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { finalizeWorkshopCustomerProposal } from "@/lib/supabase/repair-offers";
+import {
+  finalizeWorkshopCustomerProposal,
+  markWorkshopRepairOffersRead,
+} from "@/lib/supabase/repair-offers";
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
@@ -46,10 +50,6 @@ import RequestCategoryFilter, {
   type RequestCategoryCounts,
   type RequestCategoryFilter as RequestCategory,
 } from "@/app/components/RequestCategoryFilter";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 const OFFER_PAGE_TITLES: Record<RequestCategory, string> = {
   all: "OFERTELE TALE",
@@ -504,11 +504,7 @@ export default function WorkshopMyOffersPage() {
 
         const workshopUserId = authData.user.id;
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", workshopUserId)
-          .single<ProfileRow>();
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
         if (cancelled) {
           return;
@@ -726,15 +722,9 @@ export default function WorkshopMyOffersPage() {
         requestId: request.id,
       });
 
-      const { error: workshopReadError } = await supabase
-        .from("repair_offers")
-        .update({
-          workshop_read_at: new Date().toISOString(),
-        })
-        .eq("id", offer.id)
-        .eq("workshop_user_id", offer.workshop_user_id);
-
-      if (workshopReadError) {
+      try {
+        await markWorkshopRepairOffersRead([offer.id]);
+      } catch (workshopReadError) {
         console.error(
           "Failed to keep the confirmed offer marked as read:",
           workshopReadError,

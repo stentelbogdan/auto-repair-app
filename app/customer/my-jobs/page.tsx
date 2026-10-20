@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { customerAcceptWorkshopAppointment } from "@/lib/supabase/repair-appointments";
+import {
+  getPublicWorkshopSummaries,
+  type PublicWorkshopSummary,
+} from "@/lib/supabase/profiles";
 import {
   getOwnRepairRequests,
   type RepairRequestRow,
@@ -319,16 +324,16 @@ export default function MyJobsPage() {
         const slugMap: Record<string, string> = {};
 
         if (workshopUserIds.length > 0) {
-          const { data: profilesData } = await supabase
-            .from("profiles")
-            .select("id, workshop_slug")
-            .in("id", workshopUserIds);
+          const { data: profilesData } = await getPublicWorkshopSummaries(
+            supabase,
+            workshopUserIds,
+          );
 
           if (!isCurrentLoad(userId)) return;
 
-          (profilesData || []).forEach((profile) => {
-            if (profile.id && profile.workshop_slug) {
-              slugMap[profile.id] = profile.workshop_slug;
+          ((profilesData || []) as PublicWorkshopSummary[]).forEach((profile) => {
+            if (profile.workshop_id && profile.workshop_slug) {
+              slugMap[profile.workshop_id] = profile.workshop_slug;
             }
           });
         }
@@ -933,17 +938,16 @@ export default function MyJobsPage() {
     };
   }, []);
 
-  const acceptAppointmentProposal = async (appointmentId: string) => {
+  const acceptAppointmentProposal = async (appointment: RepairAppointment) => {
     try {
-      const { error } = await supabase
-        .from("repair_appointments")
-        .update({
-          status: "confirmed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", appointmentId);
+      if (!appointment.updated_at) {
+        throw new Error("Programarea nu are versiunea necesară actualizării.");
+      }
 
-      if (error) throw error;
+      await customerAcceptWorkshopAppointment({
+        appointmentId: appointment.id,
+        expectedUpdatedAt: appointment.updated_at,
+      });
 
       scheduleJobsRefreshRef.current("appointment-accepted");
     } catch (error) {
@@ -1316,7 +1320,7 @@ export default function MyJobsPage() {
                               return;
                             }
 
-                            acceptAppointmentProposal(appointment.id);
+                            acceptAppointmentProposal(appointment);
                           }}
                           className={`${interactiveButton} w-full rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-black text-white`}
                         >
