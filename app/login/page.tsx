@@ -1,6 +1,12 @@
 "use client";
 
-import { getOwnProfile } from "@/lib/supabase/profiles";
+import {
+  finalizeAuthenticatedRegistration,
+  getOwnProfile,
+  parsePendingRegistrationIntent,
+  parseRegistrationRole,
+  PENDING_REGISTER_ROLE_KEY,
+} from "@/lib/supabase/profiles";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -115,10 +121,22 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: profile, error: profileError } = await withTimeout(
-        getOwnProfile(supabase),
+      const pendingIntent = parsePendingRegistrationIntent(
+        localStorage.getItem(PENDING_REGISTER_ROLE_KEY),
+      );
+      const pendingRole =
+        pendingIntent?.userId === data.user.id ? pendingIntent.role : null;
+      const metadataRole = parseRegistrationRole(
+        data.user.user_metadata?.requested_role,
+      );
+      const { roles, error: profileError } = await withTimeout(
+        finalizeAuthenticatedRegistration(
+          supabase,
+          data.user,
+          pendingRole ?? metadataRole,
+        ),
         PROFILE_TIMEOUT_MS,
-        "Profile lookup",
+        "Profile initialization",
       );
 
       if (profileError) {
@@ -126,7 +144,7 @@ export default function LoginPage() {
         return;
       }
 
-      const roles = Array.isArray(profile?.role) ? profile.role : [];
+      localStorage.removeItem(PENDING_REGISTER_ROLE_KEY);
 
       if (roles.includes("workshop")) {
         try {

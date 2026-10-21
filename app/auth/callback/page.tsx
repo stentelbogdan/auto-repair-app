@@ -1,16 +1,19 @@
 "use client";
 
-import { getOwnProfile } from "@/lib/supabase/profiles";
+import {
+  finalizeAuthenticatedRegistration,
+  parsePendingRegistrationIntent,
+  parseRegistrationRole,
+  PENDING_REGISTER_ROLE_KEY,
+  type RegistrationRole,
+} from "@/lib/supabase/profiles";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
-import {
-  createWorkshopSlug,
-  ensureAuthenticatedWorkshopSlug,
-} from "@/lib/workshops/workshop-slug";
+import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
 
-type UserRole = "customer" | "workshop";
+type UserRole = RegistrationRole;
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -29,63 +32,34 @@ export default function AuthCallbackPage() {
 
       const user = session.user;
 
-      const pendingRole = localStorage.getItem(
-        "pendingRegisterRole",
-      ) as UserRole | null;
+      const pendingIntent = parsePendingRegistrationIntent(
+        localStorage.getItem(PENDING_REGISTER_ROLE_KEY),
+      );
+      const callbackFlowId = new URL(
+        window.location.href,
+      ).searchParams.get("registration_flow");
+      const pendingRole =
+        pendingIntent?.userId === user.id ||
+        (Boolean(callbackFlowId) &&
+          pendingIntent?.oauthFlowId === callbackFlowId)
+          ? pendingIntent.role
+          : null;
+      const metadataRole = parseRegistrationRole(
+        user.user_metadata?.requested_role,
+      );
+      const requestedRole = pendingRole ?? metadataRole;
 
-      const { data: profile, error: profileError } = await getOwnProfile(supabase);
+      const { roles, error: profileError } =
+        await finalizeAuthenticatedRegistration(
+          supabase,
+          user,
+          requestedRole,
+        );
 
       if (profileError) {
         alert(profileError.message);
         router.push("/login");
         return;
-      }
-
-      let roles = Array.isArray(profile?.role) ? profile.role : [];
-
-      if (roles.length === 0) {
-        const selectedRole: UserRole = pendingRole || "customer";
-
-        const fullName =
-          user.user_metadata?.full_name ||
-          user.user_metadata?.name ||
-          user.email ||
-          "Client";
-
-        const profilePayload =
-          selectedRole === "workshop"
-            ? {
-                id: user.id,
-                email: user.email,
-                role: ["workshop"],
-                full_name: fullName,
-                display_name: fullName,
-                workshop_name: fullName,
-                workshop_slug: createWorkshopSlug(fullName, user.id),
-                gdpr_accepted: true,
-                gdpr_accepted_at: new Date().toISOString(),
-              }
-            : {
-                id: user.id,
-                email: user.email,
-                role: ["customer"],
-                full_name: fullName,
-                display_name: fullName,
-                gdpr_accepted: true,
-                gdpr_accepted_at: new Date().toISOString(),
-              };
-
-        const { error: insertError } = await supabase
-          .from("profiles")
-          .upsert(profilePayload);
-
-        if (insertError) {
-          alert(insertError.message);
-          router.push("/login");
-          return;
-        }
-
-        roles = [selectedRole];
       }
 
       if (roles.includes("workshop")) {
@@ -96,7 +70,7 @@ export default function AuthCallbackPage() {
         }
       }
 
-      localStorage.removeItem("pendingRegisterRole");
+      localStorage.removeItem(PENDING_REGISTER_ROLE_KEY);
 
       if (roles.includes("admin")) {
         router.push("/admin");

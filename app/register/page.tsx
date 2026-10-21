@@ -6,8 +6,15 @@ import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
 import { createWorkshopSlug } from "@/lib/workshops/workshop-slug";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
+import {
+  getOwnProfile,
+  mergeRegistrationRole,
+  serializePendingRegistrationIntent,
+  PENDING_REGISTER_ROLE_KEY,
+  type RegistrationRole,
+} from "@/lib/supabase/profiles";
 
-type UserRole = "customer" | "workshop";
+type UserRole = RegistrationRole;
 
 const AUTH_TIMEOUT_MESSAGE =
   "Serviciul de autentificare răspunde greu. Încearcă din nou.";
@@ -50,6 +57,17 @@ export default function RegisterPage() {
         supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: {
+              requested_role: role,
+              full_name: name,
+              display_name: name,
+              city,
+              gdpr_accepted: true,
+              gdpr_accepted_at: new Date().toISOString(),
+            },
+          },
         }),
         SIGN_UP_TIMEOUT_MS,
         "Sign up",
@@ -67,12 +85,40 @@ export default function RegisterPage() {
         return;
       }
 
+      localStorage.setItem(
+        PENDING_REGISTER_ROLE_KEY,
+        serializePendingRegistrationIntent({ role, userId }),
+      );
+      localStorage.setItem("activeRole", role);
+
+      if (!data.session) {
+        alert(
+          "Cont creat cu succes. Verifică emailul pentru confirmare, apoi autentifică-te.",
+        );
+        router.push("/login");
+        return;
+      }
+
+      const { data: existingProfile, error: profileLookupError } =
+        await withTimeout(
+          getOwnProfile(supabase),
+          PROFILE_TIMEOUT_MS,
+          "Profile lookup",
+        );
+
+      if (profileLookupError) {
+        alert(profileLookupError.message);
+        return;
+      }
+
+      const roles = mergeRegistrationRole(existingProfile?.role, role);
+
       const profileData =
         role === "workshop"
           ? {
               id: userId,
               email,
-              role: ["workshop"],
+              role: roles,
               full_name: name,
               display_name: name,
               city,
@@ -87,7 +133,7 @@ export default function RegisterPage() {
           : {
               id: userId,
               email,
-              role: ["customer"],
+              role: roles,
               full_name: name,
               display_name: name,
               city,
@@ -108,14 +154,7 @@ export default function RegisterPage() {
 
       setActiveRole(role);
       localStorage.setItem("activeRole", role);
-
-      if (!data.session) {
-        alert(
-          "Cont creat cu succes. Verifică emailul dacă este necesar, apoi autentifică-te.",
-        );
-        router.push("/login");
-        return;
-      }
+      localStorage.removeItem(PENDING_REGISTER_ROLE_KEY);
 
       if (role === "workshop") {
         router.push("/workshops/dashboard");
@@ -141,13 +180,17 @@ export default function RegisterPage() {
   };
 
   const handleGoogleRegister = async () => {
-    localStorage.setItem("pendingRegisterRole", role);
+    const oauthFlowId = crypto.randomUUID();
+    localStorage.setItem(
+      PENDING_REGISTER_ROLE_KEY,
+      serializePendingRegistrationIntent({ role, oauthFlowId }),
+    );
     localStorage.setItem("activeRole", role);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?registration_flow=${encodeURIComponent(oauthFlowId)}`,
       },
     });
 
