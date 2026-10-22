@@ -106,6 +106,21 @@ export function getOwnProfile(supabase: SupabaseClient) {
   return supabase.rpc("get_own_profile").maybeSingle<OwnProfile>();
 }
 
+export function getAuthenticatedProfileDestination(
+  roles: string[],
+  savedRole: RegistrationRole | null,
+) {
+  if (roles.includes("admin")) return "/admin";
+  if (savedRole === "workshop" && roles.includes("workshop")) {
+    return "/workshops/dashboard";
+  }
+  if (roles.includes("workshop") && !roles.includes("customer")) {
+    return "/workshops/dashboard";
+  }
+  if (roles.includes("customer")) return "/customer/dashboard";
+  return null;
+}
+
 export async function finalizeAuthenticatedRegistration(
   supabase: SupabaseClient,
   user: User,
@@ -117,17 +132,27 @@ export async function finalizeAuthenticatedRegistration(
     return { roles: [] as string[], error: profileError };
   }
 
+  if (profile && profile.id !== user.id) {
+    return {
+      roles: [] as string[],
+      error: new Error("Profilul autentificat nu aparține utilizatorului curent."),
+    };
+  }
+
   const existingRoles = Array.isArray(profile?.role) ? profile.role : [];
+  const publicRequestedRole = parseRegistrationRole(requestedRole);
   const needsProfileUpdate =
     !profile ||
     existingRoles.length === 0 ||
-    Boolean(requestedRole && !existingRoles.includes(requestedRole));
+    Boolean(
+      publicRequestedRole && !existingRoles.includes(publicRequestedRole),
+    );
 
   if (!needsProfileUpdate) {
     return { roles: existingRoles, error: null };
   }
 
-  const selectedRole = requestedRole ?? "customer";
+  const selectedRole = publicRequestedRole ?? "customer";
   const roles = mergeRegistrationRole(existingRoles, selectedRole);
   const metadataFullName = user.user_metadata?.full_name;
   const metadataName = user.user_metadata?.name;
@@ -138,9 +163,17 @@ export async function finalizeAuthenticatedRegistration(
     "Client";
   const metadataCity = user.user_metadata?.city;
   const city = typeof metadataCity === "string" ? metadataCity : undefined;
-  const profilePayload = profile
-    ? { id: user.id, role: roles }
-    : selectedRole === "workshop"
+  if (profile) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: roles })
+      .eq("id", user.id);
+
+    return { roles, error };
+  }
+
+  const profilePayload =
+    selectedRole === "workshop"
       ? {
           id: user.id,
           email: user.email,
@@ -162,9 +195,52 @@ export async function finalizeAuthenticatedRegistration(
           gdpr_accepted: true,
           gdpr_accepted_at: new Date().toISOString(),
         };
-  const { error } = await supabase.from("profiles").upsert(profilePayload);
 
-  return { roles, error };
+  const { error } = await supabase.from("profiles").insert(profilePayload);
+
+  if (!error) {
+    return { roles, error: null };
+  }
+
+  if (error.code !== "23505") {
+    return { roles: [] as string[], error };
+  }
+
+  // A callback and an explicit login can finish concurrently. The winner
+  // inserts the profile; the loser must validate that exact authenticated
+  // profile before treating the unique conflict as success.
+  const { data: concurrentProfile, error: concurrentReadError } =
+    await getOwnProfile(supabase);
+
+  if (concurrentReadError) {
+    return { roles: [] as string[], error: concurrentReadError };
+  }
+
+  if (!concurrentProfile || concurrentProfile.id !== user.id) {
+    return { roles: [] as string[], error };
+  }
+
+  const concurrentRoles = Array.isArray(concurrentProfile.role)
+    ? concurrentProfile.role
+    : [];
+
+  if (concurrentRoles.includes(selectedRole)) {
+    return { roles: concurrentRoles, error: null };
+  }
+
+  const mergedConcurrentRoles = mergeRegistrationRole(
+    concurrentRoles,
+    selectedRole,
+  );
+  const { error: concurrentUpdateError } = await supabase
+    .from("profiles")
+    .update({ role: mergedConcurrentRoles })
+    .eq("id", user.id);
+
+  return {
+    roles: concurrentUpdateError ? [] : mergedConcurrentRoles,
+    error: concurrentUpdateError,
+  };
 }
 
 export function getPublicWorkshopProfile(

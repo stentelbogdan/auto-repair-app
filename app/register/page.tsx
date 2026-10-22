@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
-import { createWorkshopSlug } from "@/lib/workshops/workshop-slug";
+import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 import {
-  getOwnProfile,
-  mergeRegistrationRole,
+  finalizeAuthenticatedRegistration,
   serializePendingRegistrationIntent,
   PENDING_REGISTER_ROLE_KEY,
   type RegistrationRole,
@@ -78,7 +77,8 @@ export default function RegisterPage() {
         return;
       }
 
-      const userId = data.user?.id;
+      const user = data.user;
+      const userId = user?.id;
 
       if (!userId) {
         alert("Contul nu a putut fi creat.");
@@ -99,57 +99,23 @@ export default function RegisterPage() {
         return;
       }
 
-      const { data: existingProfile, error: profileLookupError } =
-        await withTimeout(
-          getOwnProfile(supabase),
-          PROFILE_TIMEOUT_MS,
-          "Profile lookup",
-        );
-
-      if (profileLookupError) {
-        alert(profileLookupError.message);
-        return;
-      }
-
-      const roles = mergeRegistrationRole(existingProfile?.role, role);
-
-      const profileData =
-        role === "workshop"
-          ? {
-              id: userId,
-              email,
-              role: roles,
-              full_name: name,
-              display_name: name,
-              city,
-              workshop_name: name,
-              workshop_city: city,
-              ...(data.session
-                ? { workshop_slug: createWorkshopSlug(name, userId) }
-                : {}),
-              gdpr_accepted: true,
-              gdpr_accepted_at: new Date().toISOString(),
-            }
-          : {
-              id: userId,
-              email,
-              role: roles,
-              full_name: name,
-              display_name: name,
-              city,
-              gdpr_accepted: true,
-              gdpr_accepted_at: new Date().toISOString(),
-            };
-
       const { error: profileError } = await withTimeout(
-        supabase.from("profiles").upsert(profileData),
+        finalizeAuthenticatedRegistration(supabase, user, role),
         PROFILE_TIMEOUT_MS,
-        "Profile update",
+        "Profile initialization",
       );
 
       if (profileError) {
         alert(profileError.message);
         return;
+      }
+
+      if (role === "workshop") {
+        await withTimeout(
+          ensureAuthenticatedWorkshopSlug(userId),
+          PROFILE_TIMEOUT_MS,
+          "Workshop profile initialization",
+        );
       }
 
       setActiveRole(role);
