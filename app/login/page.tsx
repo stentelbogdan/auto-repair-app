@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  finalizeAuthenticatedRegistration,
+  getAuthenticatedProfileDestination,
+  parsePendingRegistrationIntent,
+  parseRegistrationRole,
+  PENDING_REGISTER_ROLE_KEY,
+} from "@/lib/supabase/profiles";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -8,10 +15,6 @@ import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
 
 type UserRole = "customer" | "workshop";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 const AUTH_TIMEOUT_MESSAGE =
   "Serviciul de autentificare răspunde greu. Încearcă din nou.";
@@ -34,13 +37,32 @@ export default function LoginPage() {
 
       if (!session) return;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", session.user.id)
-        .single<ProfileRow>();
+      const pendingIntent = parsePendingRegistrationIntent(
+        localStorage.getItem(PENDING_REGISTER_ROLE_KEY),
+      );
+      const pendingRole =
+        pendingIntent?.userId === session.user.id ? pendingIntent.role : null;
+      const metadataRole = parseRegistrationRole(
+        session.user.user_metadata?.requested_role,
+      );
+      const { roles, error: profileError } =
+        await finalizeAuthenticatedRegistration(
+          supabase,
+          session.user,
+          pendingRole ?? metadataRole,
+        );
 
-      const roles = Array.isArray(profile?.role) ? profile.role : [];
+      if (profileError) {
+        alert(profileError.message);
+        return;
+      }
+
+      if (roles.length === 0) {
+        alert("Contul nu are un profil valid.");
+        return;
+      }
+
+      localStorage.removeItem(PENDING_REGISTER_ROLE_KEY);
 
       if (roles.includes("workshop")) {
         try {
@@ -50,23 +72,26 @@ export default function LoginPage() {
         }
       }
 
-      if (roles.includes("admin")) {
-        router.push("/admin");
+      const savedRole = parseRegistrationRole(
+        localStorage.getItem("activeRole"),
+      );
+      const destination = getAuthenticatedProfileDestination(roles, savedRole);
+
+      if (!destination) {
+        alert("Contul nu are un rol valid.");
         return;
       }
 
-      const savedRole = localStorage.getItem("activeRole");
-
-      if (savedRole === "workshop" && roles.includes("workshop")) {
-        router.push("/workshops/dashboard");
-        return;
-      }
-
-      router.push("/customer/dashboard");
+      const activeRole = destination.startsWith("/workshops")
+        ? "workshop"
+        : "customer";
+      setActiveRole(activeRole);
+      localStorage.setItem("activeRole", activeRole);
+      router.push(destination);
     };
 
     checkSession();
-  }, [router]);
+  }, [router, setActiveRole]);
 
   const goToDashboard = (selectedRole: UserRole, roles: string[]) => {
     if (roles.includes("admin")) {
@@ -122,14 +147,22 @@ export default function LoginPage() {
         return;
       }
 
-      const { data: profile, error: profileError } = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", data.user.id)
-          .single<ProfileRow>(),
+      const pendingIntent = parsePendingRegistrationIntent(
+        localStorage.getItem(PENDING_REGISTER_ROLE_KEY),
+      );
+      const pendingRole =
+        pendingIntent?.userId === data.user.id ? pendingIntent.role : null;
+      const metadataRole = parseRegistrationRole(
+        data.user.user_metadata?.requested_role,
+      );
+      const { roles, error: profileError } = await withTimeout(
+        finalizeAuthenticatedRegistration(
+          supabase,
+          data.user,
+          pendingRole ?? metadataRole,
+        ),
         PROFILE_TIMEOUT_MS,
-        "Profile lookup",
+        "Profile initialization",
       );
 
       if (profileError) {
@@ -137,7 +170,7 @@ export default function LoginPage() {
         return;
       }
 
-      const roles = Array.isArray(profile?.role) ? profile.role : [];
+      localStorage.removeItem(PENDING_REGISTER_ROLE_KEY);
 
       if (roles.includes("workshop")) {
         try {

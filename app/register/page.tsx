@@ -4,10 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useAuth } from "@/lib/auth-provider";
-import { createWorkshopSlug } from "@/lib/workshops/workshop-slug";
+import { ensureAuthenticatedWorkshopSlug } from "@/lib/workshops/workshop-slug";
 import { AsyncTimeoutError, withTimeout } from "@/lib/async/with-timeout";
+import {
+  finalizeAuthenticatedRegistration,
+  serializePendingRegistrationIntent,
+  PENDING_REGISTER_ROLE_KEY,
+  type RegistrationRole,
+} from "@/lib/supabase/profiles";
 
-type UserRole = "customer" | "workshop";
+type UserRole = RegistrationRole;
 
 const AUTH_TIMEOUT_MESSAGE =
   "Serviciul de autentificare răspunde greu. Încearcă din nou.";
@@ -50,6 +56,17 @@ export default function RegisterPage() {
         supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: {
+              requested_role: role,
+              full_name: name,
+              display_name: name,
+              city,
+              gdpr_accepted: true,
+              gdpr_accepted_at: new Date().toISOString(),
+            },
+          },
         }),
         SIGN_UP_TIMEOUT_MS,
         "Sign up",
@@ -60,45 +77,32 @@ export default function RegisterPage() {
         return;
       }
 
-      const userId = data.user?.id;
+      const user = data.user;
+      const userId = user?.id;
 
       if (!userId) {
         alert("Contul nu a putut fi creat.");
         return;
       }
 
-      const profileData =
-        role === "workshop"
-          ? {
-              id: userId,
-              email,
-              role: ["workshop"],
-              full_name: name,
-              display_name: name,
-              city,
-              workshop_name: name,
-              workshop_city: city,
-              ...(data.session
-                ? { workshop_slug: createWorkshopSlug(name, userId) }
-                : {}),
-              gdpr_accepted: true,
-              gdpr_accepted_at: new Date().toISOString(),
-            }
-          : {
-              id: userId,
-              email,
-              role: ["customer"],
-              full_name: name,
-              display_name: name,
-              city,
-              gdpr_accepted: true,
-              gdpr_accepted_at: new Date().toISOString(),
-            };
+      localStorage.setItem(
+        PENDING_REGISTER_ROLE_KEY,
+        serializePendingRegistrationIntent({ role, userId }),
+      );
+      localStorage.setItem("activeRole", role);
+
+      if (!data.session) {
+        alert(
+          "Cont creat cu succes. Verifică emailul pentru confirmare, apoi autentifică-te.",
+        );
+        router.push("/login");
+        return;
+      }
 
       const { error: profileError } = await withTimeout(
-        supabase.from("profiles").upsert(profileData),
+        finalizeAuthenticatedRegistration(supabase, user, role),
         PROFILE_TIMEOUT_MS,
-        "Profile update",
+        "Profile initialization",
       );
 
       if (profileError) {
@@ -106,16 +110,17 @@ export default function RegisterPage() {
         return;
       }
 
+      if (role === "workshop") {
+        await withTimeout(
+          ensureAuthenticatedWorkshopSlug(userId),
+          PROFILE_TIMEOUT_MS,
+          "Workshop profile initialization",
+        );
+      }
+
       setActiveRole(role);
       localStorage.setItem("activeRole", role);
-
-      if (!data.session) {
-        alert(
-          "Cont creat cu succes. Verifică emailul dacă este necesar, apoi autentifică-te.",
-        );
-        router.push("/login");
-        return;
-      }
+      localStorage.removeItem(PENDING_REGISTER_ROLE_KEY);
 
       if (role === "workshop") {
         router.push("/workshops/dashboard");
@@ -141,13 +146,17 @@ export default function RegisterPage() {
   };
 
   const handleGoogleRegister = async () => {
-    localStorage.setItem("pendingRegisterRole", role);
+    const oauthFlowId = crypto.randomUUID();
+    localStorage.setItem(
+      PENDING_REGISTER_ROLE_KEY,
+      serializePendingRegistrationIntent({ role, oauthFlowId }),
+    );
     localStorage.setItem("activeRole", role);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?registration_flow=${encodeURIComponent(oauthFlowId)}`,
       },
     });
 

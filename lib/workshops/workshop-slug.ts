@@ -1,12 +1,5 @@
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { supabase } from "@/lib/supabase/client";
-
-type WorkshopProfileForSlug = {
-  role: string[] | null;
-  workshop_name: string | null;
-  full_name: string | null;
-  display_name: string | null;
-  workshop_slug: string | null;
-};
 
 export function hasWorkshopSlug(
   value: string | null | undefined,
@@ -42,13 +35,7 @@ export function createWorkshopSlug(
 export async function ensureAuthenticatedWorkshopSlug(
   userId: string,
 ): Promise<string | null> {
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select(
-      "role, workshop_name, full_name, display_name, workshop_slug",
-    )
-    .eq("id", userId)
-    .maybeSingle<WorkshopProfileForSlug>();
+  const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
   if (profileError) {
     throw profileError;
@@ -97,11 +84,7 @@ export async function ensureAuthenticatedWorkshopSlug(
     return updatedProfile.workshop_slug;
   }
 
-  const { data: currentProfile, error: currentProfileError } = await supabase
-    .from("profiles")
-    .select("workshop_slug")
-    .eq("id", userId)
-    .maybeSingle<{ workshop_slug: string | null }>();
+  const { data: currentProfile, error: currentProfileError } = await getOwnProfile(supabase);
 
   if (currentProfileError) {
     throw currentProfileError;
