@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -356,11 +357,7 @@ export default function AppNavbar() {
     }
 
     const loadRoles = async () => {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", userId)
-        .single();
+      const { data: profile, error } = await getOwnProfile(supabase);
 
       if (!active) return;
 
@@ -1420,11 +1417,7 @@ export default function AppNavbar() {
       return null;
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    const { data: profile } = await getOwnProfile(supabase);
 
     const freshRoles = Array.isArray(profile?.role) ? profile.role : [];
 
@@ -1688,11 +1681,7 @@ export default function AppNavbar() {
       return fallbackUrl;
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("workshop_slug")
-      .eq("id", user.id)
-      .maybeSingle<{ workshop_slug: string | null }>();
+    const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
     if (profileError || !hasWorkshopSlug(profile?.workshop_slug)) {
       return fallbackUrl;

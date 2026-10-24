@@ -1,13 +1,10 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 export default function CustomerDashboardPage() {
   return (
@@ -91,11 +88,7 @@ function CustomerDashboardContent() {
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", session.user.id)
-          .single<ProfileRow>();
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
         if (cancelled) {
           return;

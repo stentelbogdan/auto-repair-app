@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -46,10 +47,6 @@ import RequestCategoryFilter, {
   type RequestCategoryCounts,
   type RequestCategoryFilter as RequestCategory,
 } from "@/app/components/RequestCategoryFilter";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 const OFFER_PAGE_TITLES: Record<RequestCategory, string> = {
   all: "OFERTELE TALE",
@@ -504,11 +501,7 @@ export default function WorkshopMyOffersPage() {
 
         const workshopUserId = authData.user.id;
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", workshopUserId)
-          .single<ProfileRow>();
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
         if (cancelled) {
           return;

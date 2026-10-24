@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -33,23 +34,6 @@ import {
   saveOwnWorkshopServiceArea,
   type WorkshopServiceArea,
 } from "@/lib/supabase/workshop-service-areas";
-
-type ProfileRow = {
-  email: string | null;
-  role: string[] | null;
-  full_name?: string | null;
-  display_name?: string | null;
-  city?: string | null;
-  workshop_name?: string | null;
-  workshop_phone?: string | null;
-  workshop_address?: string | null;
-  workshop_city?: string | null;
-  workshop_hours?: string | null;
-  workshop_description?: string | null;
-  workshop_logo_url?: string | null;
-  workshop_gallery_urls?: string[] | null;
-  workshop_slug?: string | null;
-};
 
 type EditableProfile = "customer" | "workshop";
 type ServiceAreaRadiusOption = "25" | "50" | "100" | "200" | "custom" | "nationwide";
@@ -159,13 +143,7 @@ export default function AccountPage() {
           return;
         }
 
-        const { data: profile, error } = await supabase
-          .from("profiles")
-          .select(
-            "email, role, full_name, display_name, city, workshop_name, workshop_phone, workshop_address, workshop_city, workshop_hours, workshop_description, workshop_logo_url, workshop_gallery_urls, workshop_slug",
-          )
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
+        const { data: profile, error } = await getOwnProfile(supabase);
 
         if (error) {
           alert(error.message);

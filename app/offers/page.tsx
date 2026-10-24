@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -34,10 +35,6 @@ import RequestCategoryFilter, {
   type RequestCategoryCounts,
 } from "@/app/components/RequestCategoryFilter";
 import { isRepairServiceType } from "@/lib/repair-requests/service-types";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 type OfferGroup = {
   request: CustomerOfferRepairRequest;
@@ -193,11 +190,7 @@ export default function OffersPage() {
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
         if (cancelled) {
           return;

@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -109,10 +110,6 @@ const ROMANIAN_PLATE_PREFIXES = new Set([
 
 type JobStage = "appointments" | "workshop" | "completed";
 type JobPriority = "needs_action" | "waiting" | "ok";
-
-type ProfileRow = {
-  role: string[] | null;
-};
 
 type JobImage = {
   name: string;
@@ -318,11 +315,7 @@ export default function WorkshopWonJobsPage() {
           return;
         }
 
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", authData.user.id)
-          .single<ProfileRow>();
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
 
         if (profileError) {
           console.error("Failed to load profile:", profileError);

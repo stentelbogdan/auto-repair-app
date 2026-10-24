@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
+  getPublicWorkshopSummaries,
+  type PublicWorkshopSummary,
+} from "@/lib/supabase/profiles";
+import {
   getOwnRepairRequests,
   type RepairRequestRow,
 } from "@/lib/supabase/repair-requests";
@@ -319,16 +323,16 @@ export default function MyJobsPage() {
         const slugMap: Record<string, string> = {};
 
         if (workshopUserIds.length > 0) {
-          const { data: profilesData } = await supabase
-            .from("profiles")
-            .select("id, workshop_slug")
-            .in("id", workshopUserIds);
+          const { data: profilesData } = await getPublicWorkshopSummaries(
+            supabase,
+            workshopUserIds,
+          );
 
           if (!isCurrentLoad(userId)) return;
 
-          (profilesData || []).forEach((profile) => {
-            if (profile.id && profile.workshop_slug) {
-              slugMap[profile.id] = profile.workshop_slug;
+          ((profilesData || []) as PublicWorkshopSummary[]).forEach((profile) => {
+            if (profile.workshop_id && profile.workshop_slug) {
+              slugMap[profile.workshop_id] = profile.workshop_slug;
             }
           });
         }

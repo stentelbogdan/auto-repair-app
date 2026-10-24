@@ -1,5 +1,6 @@
 "use client";
 
+import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-provider";
@@ -31,11 +32,7 @@ export default function WorkshopProfileActions({
     const userId = authenticatedUserId;
 
     const loadViewerRoles = async () => {
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", userId)
-        .maybeSingle<{ role: string[] | null }>();
+      const { data: profile, error } = await getOwnProfile(supabase);
 
       if (cancelled) {
         return;

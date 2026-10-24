@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/supabase/client";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
+import {
+  getPublicWorkshopSummaries,
+  type PublicWorkshopSummary,
+} from "@/lib/supabase/profiles";
 import type {
   CustomerAppointmentStatus,
   CustomerOfferItem,
@@ -158,10 +162,10 @@ async function loadWorkshopProfileMap(
     return new Map();
   }
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, workshop_slug, workshop_name, workshop_logo_url")
-    .in("id", workshopUserIds);
+  const { data, error } = await getPublicWorkshopSummaries(
+    supabase,
+    workshopUserIds,
+  );
 
   /*
    * Profilul service-ului este informație suplimentară.
@@ -174,9 +178,14 @@ async function loadWorkshopProfileMap(
   }
 
   return new Map(
-    ((data ?? []) as WorkshopProfileRow[]).map((profile) => [
-      profile.id,
-      profile,
+    ((data ?? []) as PublicWorkshopSummary[]).map((profile) => [
+      profile.workshop_id,
+      {
+        id: profile.workshop_id,
+        workshop_slug: profile.workshop_slug,
+        workshop_name: profile.workshop_name,
+        workshop_logo_url: profile.workshop_logo_url,
+      } satisfies WorkshopProfileRow,
     ]),
   );
 }

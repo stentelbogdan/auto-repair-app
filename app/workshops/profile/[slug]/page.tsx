@@ -4,6 +4,7 @@ import ImageGallery from "@/app/components/ImageGallery";
 import ReviewImagesGallery from "./ReviewImagesGallery";
 import { createClient } from "@supabase/supabase-js";
 import WorkshopProfileActions from "./WorkshopProfileActions";
+import { getPublicWorkshopProfile } from "@/lib/supabase/profiles";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -25,11 +26,13 @@ type PublicReviewRequestContext = {
 export default async function WorkshopProfilePage({ params }: Props) {
   const { slug } = await params;
 
-  const { data: workshop } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("workshop_slug", slug)
-    .single();
+  const { data: publicWorkshop } = await getPublicWorkshopProfile(
+    supabase,
+    slug,
+  );
+  const workshop = publicWorkshop
+    ? { ...publicWorkshop, id: publicWorkshop.workshop_id }
+    : null;
 
   if (!workshop) notFound();
 
