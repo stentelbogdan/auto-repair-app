@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ImageGallery from "@/app/components/ImageGallery";
 import TowingRequestForm, { validateTowingRequestFormValues, type TowingRequestFormValues } from "@/app/components/towing/TowingRequestForm";
 import { prepareImageForUpload, type PreparedImage } from "@/lib/images/prepare-image-for-upload";
-import { removeRepairImageUploadsBestEffort, uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
+import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { supabase } from "@/lib/supabase/client";
 
@@ -48,8 +48,6 @@ function PostTowingContent() {
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
-    let uploadedPaths: string[] = [];
-    let requestCreated = false;
     try {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
@@ -65,7 +63,6 @@ function PostTowingContent() {
         prepared.push({ originalName: file.name, preparedImage });
       }
       const storedImages = await uploadPreparedRepairImages(prepared, data.user.id);
-      uploadedPaths = storedImages.flatMap((image) => image.path ? [image.path] : []);
       const values = validation.values;
       if (!values.pickupDiscoveryLocation) {
         throw new Error("Locația de preluare nu a putut fi validată.");
@@ -100,11 +97,9 @@ function PostTowingContent() {
           source: "towing_pickup",
         },
       });
-      requestCreated = true;
       sessionStorage.setItem("job-posted-success", "true");
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
-      if (!requestCreated) await removeRepairImageUploadsBestEffort(uploadedPaths);
       console.error("Submit failed:", error);
       alert(error instanceof Error ? error.message : "A apărut o problemă la salvarea cererii.");
     } finally {

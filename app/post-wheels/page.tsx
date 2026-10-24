@@ -13,10 +13,7 @@ import {
   prepareImageForUpload,
   type PreparedImage,
 } from "@/lib/images/prepare-image-for-upload";
-import {
-  removeRepairImageUploadsBestEffort,
-  uploadPreparedRepairImages,
-} from "@/lib/supabase/repair-request-images";
+import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -122,8 +119,6 @@ function PostWheelsContent() {
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
-    let uploadedImagePaths: string[] = [];
-    let requestCreated = false;
 
     try {
       const serviceDetails = normalizeWheelsServiceDetailsV2({
@@ -171,9 +166,6 @@ function PostWheelsContent() {
         preparedImages,
         authData.user.id,
       );
-      uploadedImagePaths = storedImages.flatMap((image) =>
-        image.path ? [image.path] : [],
-      );
 
       if (!selectedLocation) {
         throw new Error("Selectează o localitate validă din lista de sugestii.");
@@ -195,14 +187,9 @@ function PostWheelsContent() {
         targetWorkshopId: draft.targetWorkshopId || null,
         discoveryLocation: { ...selectedLocation, source: "locality" },
       });
-      requestCreated = true;
-
       sessionStorage.setItem("job-posted-success", "true");
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
-      if (!requestCreated) {
-        await removeRepairImageUploadsBestEffort(uploadedImagePaths);
-      }
       console.error("Submit failed:", error);
       alert(
         error instanceof Error
