@@ -281,7 +281,8 @@ async function deleteObject(input: {
   }
 }
 
-async function processClaim(input: {
+export async function processRepairImageDeletionClaim(input: {
+  revalidateBeforeDelete?: boolean;
   client: RepairImageCleanupClient;
   claim: DeleteClaim;
   getObject: RepairImageCleanupDependencies["getObject"];
@@ -311,6 +312,13 @@ async function processClaim(input: {
   }
 
   if (beforeDelete === "present") {
+    if (input.revalidateBeforeDelete) {
+      const immediatelyBeforeDelete = await revalidateClaim({
+        client: input.client, claim: input.claim, now: input.now,
+        timeoutMs: input.rpcTimeoutMs,
+      });
+      if (!immediatelyBeforeDelete?.storage_object_exists) return false;
+    }
     const deletion = await deleteObject({
       client: input.client,
       claim: input.claim,
@@ -383,7 +391,7 @@ export async function runRepairImageCleanupCore(
   };
 
   for (const claim of claims) {
-    const deleted = await processClaim({
+    const deleted = await processRepairImageDeletionClaim({
       client: cleanupClient,
       claim,
       getObject,

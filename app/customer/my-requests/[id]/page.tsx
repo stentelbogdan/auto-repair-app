@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { createImageDeletionEditor, hasDeletableImagePath, removeLocalImage, type ImageDeletionState } from "@/lib/repair-requests/image-deletion-editor";
 import LicensePlate from "@/app/components/LicensePlate";
 import ImageGallery from "@/app/components/ImageGallery";
 import dynamic from "next/dynamic";
@@ -211,6 +212,9 @@ export default function EditMyRequestPage() {
   const [towingDetails, setTowingDetails] =
     useState<TowingRequestFormValues | null>(null);
   const [images, setImages] = useState<EditableRepairImage[]>([]);
+  const [imageDeletion, setImageDeletion] = useState<ImageDeletionState>({ phase: "idle", message: "" });
+  const imageDeletionRef = useRef<ReturnType<typeof createImageDeletionEditor> | null>(null);
+  const targetedImagesEnabled = process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF === "bstjobvvxxfqqwyjoimx";
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const newFilesRef = useRef<File[]>([]);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
@@ -306,6 +310,59 @@ export default function EditMyRequestPage() {
       };
     });
   };
+
+  useEffect(() => {
+    let active = true;
+    setImageDeletion({ phase: "idle", message: "" });
+    const editor = createImageDeletionEditor(requestId, {
+      token: async () => {
+        const { data, error } = await supabase.auth.getSession();
+        const session = data.session;
+        if (error || !session?.access_token || (session.expires_at && session.expires_at * 1000 <= Date.now())) return null;
+        return session.access_token;
+      },
+      send: async (body, token) => {
+        if (!targetedImagesEnabled) throw new Error("TEST only");
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 180000);
+        try {
+          const response = await fetch("/api/repair-requests/images/delete", {
+            method: "POST", cache: "no-store", redirect: "error",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body), signal: controller.signal,
+          });
+          return { ok: response.ok, body: await response.json() };
+        } finally { window.clearTimeout(timeout); }
+      },
+      readImages: async () => {
+        const { data, error } = await supabase.auth.getUser();
+        if (error || !data.user) throw new Error("Authentication required");
+        const latest = await getEditableRepairRequest(requestId, data.user.id);
+        if (!latest) throw new Error("Request unavailable");
+        if (active) {
+          setOffersCount(latest.offersCount);
+          setRequest(current => current?.id === requestId ? {
+            ...current, status: latest.request.status, accepted_offer_id: latest.request.accepted_offer_id,
+          } : current);
+        }
+        return Array.isArray(latest.request.images) ? latest.request.images : [];
+      },
+      applyImages: next => {
+        if (!active) return;
+        setImages(next);
+        setRequest(current => current?.id === requestId ? { ...current, images: next } : current);
+      },
+      publish: state => { if (active) setImageDeletion(state); },
+      uuid: () => crypto.randomUUID(),
+      storage: {
+        getItem: key => sessionStorage.getItem(key),
+        setItem: (key, value) => sessionStorage.setItem(key, value),
+        removeItem: key => sessionStorage.removeItem(key),
+      },
+    });
+    imageDeletionRef.current = editor;
+    return () => { active = false; editor.dispose(); if (imageDeletionRef.current === editor) imageDeletionRef.current = null; };
+  }, [requestId, targetedImagesEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -513,6 +570,7 @@ export default function EditMyRequestPage() {
   }, []);
 
   const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (saveInProgressRef.current || deleting) { e.target.value = ""; return; }
     if (!e.target.files) return;
 
     const existingFileKeys = new Set(
@@ -543,7 +601,7 @@ export default function EditMyRequestPage() {
   };
 
   const handleSave = async () => {
-    if (saveInProgressRef.current || !request || !canEdit) return;
+    if (saveInProgressRef.current || !request || !canEdit || deleting || !imageDeletionRef.current || imageDeletionRef.current.blocked()) return;
 
     const resolvedServiceType = resolveRepairServiceType(request.service_type);
     const hasFullWheelsEditor =
@@ -623,12 +681,16 @@ export default function EditMyRequestPage() {
     try {
       setSaving(true);
 
+      // Never save a pre-detachment image snapshot. Keep other field drafts intact.
+      const currentImages = await imageDeletionRef.current!.imagesForSave();
       uploadedImages = await uploadEditableRepairImages(
         newFiles,
         request.user_id,
-        images,
+        currentImages,
       );
-      const nextImages = [...images, ...uploadedImages];
+      // Upload may take time; refresh again before writing the image list.
+      const latestImages = await imageDeletionRef.current!.imagesForSave();
+      const nextImages = [...latestImages, ...uploadedImages];
       let savedServiceDetails = request.service_details;
       let savedDamageType = request.damage_type;
 
@@ -844,7 +906,7 @@ export default function EditMyRequestPage() {
   };
 
   const handleDelete = async () => {
-    if (!request || !canEdit) return;
+    if (!request || !canEdit || imageDeletionRef.current?.blocked()) return;
 
     const hasOffers = offersCount > 0;
 
@@ -890,23 +952,17 @@ export default function EditMyRequestPage() {
   };
 
   const removeImage = (index: number) => {
-    if (!canEdit) return;
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    if (!canEdit || !targetedImagesEnabled || saveInProgressRef.current || deleting) return;
+    const image = images[index];
+    if (image) void imageDeletionRef.current?.remove(image);
   };
 
   const removeNewImage = (index: number) => {
     if (!canEdit) return;
 
-    const previewUrl = newImagePreviewsRef.current[index];
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-
-    const nextFiles = newFilesRef.current.filter(
-      (_, fileIndex) => fileIndex !== index,
-    );
-    const nextPreviews = newImagePreviewsRef.current.filter(
-      (_, previewIndex) => previewIndex !== index,
+    if (saveInProgressRef.current || deleting) return;
+    const { files: nextFiles, previews: nextPreviews } = removeLocalImage(
+      newFilesRef.current, newImagePreviewsRef.current, index, url => URL.revokeObjectURL(url),
     );
     newFilesRef.current = nextFiles;
     newImagePreviewsRef.current = nextPreviews;
@@ -1195,6 +1251,21 @@ export default function EditMyRequestPage() {
               Poze existente
             </p>
 
+            {imageDeletion.message && (
+              <div className="mt-3 rounded-xl bg-orange-50 p-3 text-sm text-black/80" role="status" aria-live="polite" aria-busy={imageDeletion.phase === "busy"}>
+                <p>{imageDeletion.message}</p>
+                {imageDeletion.phase === "recovery" && (
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    <button type="button" className="underline" onClick={() => void imageDeletionRef.current?.reconcile()}>Verifică lista din server</button>
+                    <button type="button" className="underline" onClick={() => void imageDeletionRef.current?.retry()}>Reia aceeași operațiune</button>
+                  </div>
+                )}
+              </div>
+            )}
+            {images.some(image => !hasDeletableImagePath(image)) && (
+              <p className="mt-2 text-sm text-black/60">Fotografiile vechi fără o cale validă sunt păstrate; ștergerea securizată nu este disponibilă pentru ele.</p>
+            )}
+
             {images.length === 0 && newImagePreviews.length === 0 ? (
               <div className="mt-3 rounded-2xl bg-black/5 p-6 text-center text-sm text-black/45">
                 Nu ai poze încă.
@@ -1225,10 +1296,12 @@ export default function EditMyRequestPage() {
                       <button
                         type="button"
                         onClick={() => removeImage(index)}
+                        disabled={!targetedImagesEnabled || saving || deleting || imageDeletion.phase !== "idle" || !hasDeletableImagePath(image)}
+                        title={!hasDeletableImagePath(image) ? "Fotografie veche fără path valid; ștergerea securizată nu este disponibilă." : undefined}
                         className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white"
                         aria-label={`Șterge imaginea ${index + 1}`}
                       >
-                        ✕
+                        {imageDeletion.phase === "busy" && imageDeletion.path === image.path ? "Se șterge…" : "✕"}
                       </button>
                     </div>
                   );
@@ -1248,6 +1321,7 @@ export default function EditMyRequestPage() {
                     <button
                       type="button"
                       onClick={() => removeNewImage(index)}
+                      disabled={saving || deleting}
                       className="absolute right-1 top-1 rounded-full bg-black/70 px-2 py-1 text-xs text-white"
                       aria-label={`Șterge imaginea nouă ${index + 1}`}
                     >
@@ -1283,6 +1357,7 @@ export default function EditMyRequestPage() {
                   multiple
                   accept="image/*"
                   onChange={handleFiles}
+                  disabled={saving || deleting}
                   className="hidden"
                 />
               </label>
@@ -1299,7 +1374,7 @@ export default function EditMyRequestPage() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || deleting || imageDeletion.phase !== "idle"}
               className="mt-6 w-full rounded-2xl bg-black px-5 py-4 font-bold text-white disabled:opacity-50"
             >
               {saving ? "Se salvează..." : "Salvează modificările"}
@@ -1318,7 +1393,7 @@ export default function EditMyRequestPage() {
           <button
             type="button"
             onClick={handleDelete}
-            disabled={deleting}
+            disabled={deleting || imageDeletion.phase !== "idle"}
             className="relative z-10 mt-5 w-full rounded-2xl border border-red-500/30 bg-red-500/10 px-5 py-4 font-bold text-red-300 disabled:opacity-50"
           >
             {deleting
