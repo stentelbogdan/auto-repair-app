@@ -90,6 +90,14 @@ export async function deleteTargetedRepairImage(input: Input, accessToken: strin
   });
   const rpc = (key: string, token: string): RepairImageCleanupClient["rpc"] => async (name, args) => {
     const response = await request(`/rest/v1/rpc/${name}`, key, token, { method: "POST", body: JSON.stringify(args) });
+    if (name === "complete_repair_image_deletion") {
+      // This RPC returns void. Never treat an HTTP failure (even JSON null)
+      // as success, and do not relax the data contracts of other RPCs.
+      if (!response.ok) return { data: null, error: { status: response.status } };
+      const body = await response.text();
+      if (body.trim() !== "" && JSON.parse(body) !== null) throw new Error("Invalid completion response");
+      return { data: null, error: null };
+    }
     const data = await response.json();
     return response.ok ? { data, error: null } : { data: null, error: data };
   };

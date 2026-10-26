@@ -161,3 +161,76 @@ test('existing batch core retains its original sequence (mock only)', async () =
   assert.deepEqual(await runRepairImageCleanupCore({ client: f.deps.admin, dependencies: { getObject: f.deps.getObject } }), { claimed: 1, deleted: 1, failed: 0 });
   assert.equal(validations, 2);
 });
+
+for (const mode of ['empty204', 'empty200', 'null', 'http-null', 'http-empty', 'transport', 'object', 'array', 'invalid-json', 'ambiguous-get', 'failed-revalidation', 'empty-claim'] as const) {
+  test(`absent object recovery transport: ${mode}`, async () => {
+    const oldEnv = { ...process.env }; const oldFetch = globalThis.fetch;
+    const calls: string[] = []; let completions = 0;
+    const recoveredClaim = '44444444-4444-4444-8444-444444444444';
+    try {
+      Object.assign(process.env, {
+        VERCEL_ENV: 'preview', SUPABASE_URL: 'https://bstjobvvxxfqqwyjoimx.supabase.co',
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: 'mock-anon', SUPABASE_SERVICE_ROLE_KEY: 'mock-service',
+      });
+      globalThis.fetch = async (url, init) => {
+        const u = String(url); calls.push(u);
+        assert.notEqual(init?.method, 'DELETE', 'Already absent object must not be deleted again');
+        assert.ok(!u.includes('audi.jpg'), 'Other photo must remain untouched');
+        if (u.endsWith('/auth/v1/user')) return Response.json({ id: user });
+        const args = init?.body ? JSON.parse(String(init.body)) : null;
+        if (u.endsWith('/detach_own_repair_request_image')) {
+          assert.equal(args.p_operation_id, op); assert.deepEqual(args.p_selected_image, input.image);
+          return Response.json([{ operation_id: op, outcome: 'detached' }]);
+        }
+        if (u.endsWith('/claim_authorized_repair_image_deletion')) {
+          assert.equal(args.p_operation_id, op);
+          if (mode === 'empty-claim') return new Response(null, { status: 204 });
+          // Models SQL granting a new claim for the same operation after expiry.
+          return Response.json([{ outcome: 'claimed', object_path: path, delete_claim_id: recoveredClaim }]);
+        }
+        if (u.endsWith('/revalidate_repair_image_deletion_claim')) {
+          assert.equal(args.p_delete_claim_id, recoveredClaim); assert.equal(args.p_object_path, path);
+          if (mode === 'failed-revalidation') return Response.json({ code: '55000' }, { status: 409 });
+          return Response.json([{ object_path: path, delete_claim_id: recoveredClaim,
+            delete_lease_expires_at: new Date(Date.now() + 300000).toISOString(), storage_object_exists: false }]);
+        }
+        if (u.endsWith('/complete_repair_image_deletion')) {
+          completions++; assert.equal(args.p_deleted, true); assert.equal(args.p_delete_claim_id, recoveredClaim);
+          if (mode === 'transport') throw new Error('Lost completion response');
+          if (mode === 'http-null') return Response.json(null, { status: 500 });
+          if (mode === 'http-empty') return new Response(null, { status: 503 });
+          if (mode === 'empty204') return new Response(null, { status: 204 });
+          if (mode === 'empty200') return new Response('');
+          if (mode === 'object') return Response.json({});
+          if (mode === 'array') return Response.json([]);
+          if (mode === 'invalid-json') return new Response('not json');
+          return Response.json(null);
+        }
+        assert.equal(u, `${process.env.SUPABASE_URL}/storage/v1/object/authenticated/repair-images/${path}`);
+        return mode === 'ambiguous-get'
+          ? Response.json({ message: 'not found' }, { status: 404 })
+          : Response.json({ code: 'NoSuchKey' }, { status: 404 });
+      };
+      const result = await deleteTargetedRepairImage(input, 'mock-user-token');
+      const success = ['empty204', 'empty200', 'null'].includes(mode);
+      assert.equal(result.operationId, op);
+      assert.equal(result.status, success ? 'deleted' : 'recovery_required');
+      assert.equal(result.physicalDeletionConfirmed, success);
+      assert.equal(completions, ['ambiguous-get', 'failed-revalidation', 'empty-claim'].includes(mode) ? 0 : 1);
+      if (success) assert.equal(calls.filter(u => u.endsWith('/revalidate_repair_image_deletion_claim')).length, 2);
+    } finally { globalThis.fetch = oldFetch; process.env = oldEnv; }
+  });
+}
+
+test('expired claim fails closed; manual same-operation recovery confirms absence without DELETE', async () => {
+  const expired = fixture({ expired: true, missingInitially: true });
+  const failed = await targetedDeletionProtocol(input, expired.deps);
+  assert.equal(failed.status, 'recovery_required');
+  assert.ok(!expired.calls.includes('DELETE'));
+  const recovered = fixture({ missingInitially: true });
+  const result = await targetedDeletionProtocol(input, recovered.deps);
+  assert.equal(result.operationId, failed.operationId);
+  assert.equal(result.status, 'deleted');
+  assert.ok(!recovered.calls.includes('DELETE'));
+  assert.equal(recovered.calls.at(-1), 'complete_repair_image_deletion');
+});

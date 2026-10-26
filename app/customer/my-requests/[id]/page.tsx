@@ -313,6 +313,7 @@ export default function EditMyRequestPage() {
 
   useEffect(() => {
     let active = true;
+    let eligibility: Awaited<ReturnType<typeof getEditableRepairRequest>> = null;
     setImageDeletion({ phase: "idle", message: "" });
     const editor = createImageDeletionEditor(requestId, {
       token: async () => {
@@ -339,16 +340,18 @@ export default function EditMyRequestPage() {
         if (error || !data.user) throw new Error("Authentication required");
         const latest = await getEditableRepairRequest(requestId, data.user.id);
         if (!latest) throw new Error("Request unavailable");
-        if (active) {
+        eligibility = latest;
+        return Array.isArray(latest.request.images) ? latest.request.images : [];
+      },
+      applyImages: next => {
+        if (!active) return;
+        if (eligibility) {
+          const latest = eligibility;
           setOffersCount(latest.offersCount);
           setRequest(current => current?.id === requestId ? {
             ...current, status: latest.request.status, accepted_offer_id: latest.request.accepted_offer_id,
           } : current);
         }
-        return Array.isArray(latest.request.images) ? latest.request.images : [];
-      },
-      applyImages: next => {
-        if (!active) return;
         setImages(next);
         setRequest(current => current?.id === requestId ? { ...current, images: next } : current);
       },
@@ -363,6 +366,28 @@ export default function EditMyRequestPage() {
     imageDeletionRef.current = editor;
     return () => { active = false; editor.dispose(); if (imageDeletionRef.current === editor) imageDeletionRef.current = null; };
   }, [requestId, targetedImagesEnabled]);
+
+  useEffect(() => {
+    // Subscribe only after the authorized initial read has initialized the drafts.
+    if (loading || request?.id !== requestId || !request.user_id || !targetedImagesEnabled) return;
+    const editor = imageDeletionRef.current;
+    if (!editor) return;
+    let listening = true;
+    const channel = supabase.channel(`repair-request-images-${requestId}`)
+      .on("postgres_changes", {
+        event: "UPDATE", schema: "public", table: "repair_requests", filter: `id=eq.${requestId}`,
+      }, payload => { if (listening) editor.notifyUpdate(payload.new.id); })
+      .subscribe(status => { if (listening && status === "SUBSCRIBED") editor.requestRefresh(); });
+    const foreground = () => { if (listening && document.visibilityState === "visible") editor.requestRefresh(); };
+    document.addEventListener("visibilitychange", foreground);
+    window.addEventListener("pageshow", foreground);
+    return () => {
+      listening = false;
+      void supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", foreground);
+      window.removeEventListener("pageshow", foreground);
+    };
+  }, [loading, request?.id, request?.user_id, requestId, targetedImagesEnabled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -675,6 +700,7 @@ export default function EditMyRequestPage() {
       return;
     }
 
+    imageDeletionRef.current!.setPaused(true);
     saveInProgressRef.current = true;
     let uploadedImages: EditableRepairImage[] = [];
 
@@ -900,6 +926,7 @@ export default function EditMyRequestPage() {
       console.error(error);
       alert("Nu am putut salva modificările.");
     } finally {
+      imageDeletionRef.current?.setPaused(false);
       saveInProgressRef.current = false;
       setSaving(false);
     }
@@ -919,6 +946,7 @@ export default function EditMyRequestPage() {
     if (!confirmed) return;
 
     try {
+      imageDeletionRef.current?.setPaused(true);
       setDeleting(true);
 
       await deleteEditableRepairRequest({
@@ -936,6 +964,7 @@ export default function EditMyRequestPage() {
           : "Nu am putut șterge cererea.",
       );
     } finally {
+      imageDeletionRef.current?.setPaused(false);
       setDeleting(false);
     }
   };

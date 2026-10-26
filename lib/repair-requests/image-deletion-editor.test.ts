@@ -114,3 +114,72 @@ test('unavailable session storage fails closed before any mutation', async () =>
   await f.editor.remove(image); assert.equal(f.sent.length,0);
   assert.equal(f.editor.blocked(),true); await assert.rejects(f.editor.imagesForSave());
 });
+
+const settle = () => new Promise(resolve => setImmediate(resolve));
+test('Realtime filters request id and refreshes images without sending a deletion', async () => {
+  const f = fixture();
+  f.editor.notifyUpdate('another-request'); await settle(); assert.equal(f.applied.length, 0);
+  f.editor.notifyUpdate(id); await settle(); assert.deepEqual(f.applied, [[other]]);
+  assert.equal(f.sent.length, 0);
+});
+test('repeated notifications discard stale read and serialize the trailing refresh', async () => {
+  const f = fixture(); const resolvers: ((v: typeof other[]) => void)[] = [];
+  f.deps.readImages = () => new Promise(resolve => resolvers.push(resolve));
+  f.editor.requestRefresh(); f.editor.requestRefresh(); f.editor.requestRefresh();
+  assert.equal(resolvers.length, 1);
+  resolvers[0]([image, other]); await settle();
+  assert.equal(f.applied.length, 0); assert.equal(resolvers.length, 2);
+  resolvers[1]([other]); await settle(); assert.deepEqual(f.applied, [[other]]);
+});
+test('save and upload pause refresh and invalidate an already running snapshot', async () => {
+  const f = fixture(); let resolve!: (v: typeof other[]) => void;
+  f.deps.readImages = () => new Promise(r => { resolve = r; });
+  f.editor.requestRefresh(); f.editor.setPaused(true); f.editor.requestRefresh();
+  resolve([image, other]); await settle(); assert.equal(f.applied.length, 0);
+  f.deps.readImages = async () => [other];
+  assert.deepEqual(await f.editor.imagesForSave(), [other]);
+  f.editor.setPaused(false); await settle();
+  assert.deepEqual(f.applied, [[other], [other]]); assert.equal(f.sent.length, 0);
+});
+test('background refresh preserves pending operation and recovery lock', async () => {
+  const f = fixture('recovery_required'); await f.editor.remove(image);
+  const saved = [...f.storage.values()]; const state = f.states.at(-1);
+  f.editor.requestRefresh(); await settle();
+  assert.deepEqual(f.applied, [[other]]); assert.deepEqual([...f.storage.values()], saved);
+  assert.equal(f.editor.blocked(), true); assert.equal(f.states.at(-1), state);
+  assert.equal(f.sent.length, 1); await assert.rejects(f.editor.imagesForSave());
+});
+test('notifications during deletion wait and never trigger retry', async () => {
+  const f = fixture('recovery_required'); let resolve!: (v: "session-token") => void;
+  f.deps.token = () => new Promise<"session-token" | null>(r => { resolve = r; });
+  const deleting = f.editor.remove(image); f.editor.requestRefresh();
+  assert.equal(f.applied.length, 0); resolve('session-token'); await deleting; await settle();
+  assert.equal(f.sent.length, 1); assert.deepEqual(f.applied, [[other]]); assert.equal(f.editor.blocked(), true);
+});
+test('unmount ignores delayed refresh and subsequent notifications', async () => {
+  const f = fixture(); let resolve!: (v: typeof other[]) => void;
+  f.deps.readImages = () => new Promise(r => { resolve = r; });
+  f.editor.requestRefresh(); f.editor.dispose(); resolve([other]); await settle();
+  f.editor.requestRefresh(); assert.equal(f.applied.length, 0); assert.equal(f.sent.length, 0);
+});
+test('failed background read waits for next foreground/reconnect notification', async () => {
+  const f = fixture('deleted', { readFailure: true });
+  f.editor.requestRefresh(); await settle(); assert.equal(f.applied.length, 0);
+  f.setRead(); f.editor.requestRefresh(); await settle(); assert.deepEqual(f.applied, [[other]]);
+});
+test('page wiring isolates drafts, scopes subscription and cleans foreground listeners', () => {
+  const source = readFileSync(new URL('../../app/customer/my-requests/[id]/page.tsx', import.meta.url), 'utf8');
+  const start = source.indexOf('// Subscribe only after');
+  const effect = source.slice(start, source.indexOf('let cancelled = false', start));
+  assert.ok(effect.includes('loading || request?.id !== requestId'));
+  assert.ok(effect.includes('event: "UPDATE", schema: "public", table: "repair_requests", filter: `id=eq.${requestId}`'));
+  assert.ok(effect.includes('editor.notifyUpdate(payload.new.id)'));
+  assert.ok(effect.includes('status === "SUBSCRIBED"'));
+  for (const event of ['visibilitychange', 'pageshow']) {
+    assert.ok(effect.includes(`addEventListener("${event}"`));
+    assert.ok(effect.includes(`removeEventListener("${event}"`));
+  }
+  assert.ok(effect.includes('supabase.removeChannel(channel)'));
+  assert.ok(effect.includes('document.visibilityState === "visible"'));
+  assert.doesNotMatch(effect, /setDescription|setNewFiles|revokeObjectURL|loadRequest\(/);
+});
