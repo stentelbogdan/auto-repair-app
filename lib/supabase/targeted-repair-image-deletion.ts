@@ -89,7 +89,7 @@ export async function targetedDeletionProtocol(input: Input, deps: {
     diagnostic('CLAIM_OK');
     failedStage = 'TARGETED_DELETION_RECOVERY_REQUIRED';
     const deleted = await processRepairImageDeletionClaim({
-      diagnostic, revalidateBeforeDelete: true, client: deps.admin, claim: { object_path: input.image.path, delete_claim_id: c.delete_claim_id },
+      diagnostic, revalidateBeforeDelete: true, recheckPresentAfterAcceptedDelete: true, client: deps.admin, claim: { object_path: input.image.path, delete_claim_id: c.delete_claim_id },
       getObject: deps.getObject, now: Date.now, rpcTimeoutMs: 15000, storageTimeoutMs: 20000,
     });
     return result(deleted ? "deleted" : "recovery_required");

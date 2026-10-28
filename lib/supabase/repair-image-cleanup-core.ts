@@ -284,6 +284,7 @@ async function deleteObject(input: {
 
 export async function processRepairImageDeletionClaim(input: {
   revalidateBeforeDelete?: boolean;
+  recheckPresentAfterAcceptedDelete?: boolean;
   diagnostic?: ImageDiagnostic;
   client: RepairImageCleanupClient;
   claim: DeleteClaim;
@@ -321,6 +322,7 @@ export async function processRepairImageDeletionClaim(input: {
     return false;
   }
 
+  let deleteAccepted = false;
   if (beforeDelete === "present") {
     if (input.revalidateBeforeDelete) {
       diagnostic('PRE_DELETE_REVALIDATION_STARTED');
@@ -338,6 +340,7 @@ export async function processRepairImageDeletionClaim(input: {
       timeoutMs: input.storageTimeoutMs,
     });
     diagnostic(deletion === 'accepted' ? 'STORAGE_DELETE_ACCEPTED' : deletion === 'confirmed-absent' ? 'STORAGE_DELETE_ABSENT' : deletion === 'rejected' ? 'STORAGE_DELETE_REJECTED' : 'STORAGE_DELETE_AMBIGUOUS');
+    deleteAccepted = deletion === "accepted";
     // A local 401/403 response does not prove that the remote deletion did not
     // take effect. Preserve the claim for explicit recovery in every rejected
     // or otherwise ambiguous deletion outcome.
@@ -346,12 +349,30 @@ export async function processRepairImageDeletionClaim(input: {
   } else { diagnostic('STORAGE_DELETE_SKIPPED'); }
 
   diagnostic('POST_DELETE_GET_STARTED');
-  const afterDelete = await checkObjectPresence({
+  let afterDelete = await checkObjectPresence({
     objectPath: input.claim.object_path,
     getObject: input.getObject,
     timeoutMs: input.storageTimeoutMs,
   });
   diagnostic(afterDelete === 'absent' ? 'POST_DELETE_GET_ABSENT' : afterDelete === 'present' ? 'POST_DELETE_GET_PRESENT' : 'POST_DELETE_GET_AMBIGUOUS');
+  if (afterDelete === "present" && deleteAccepted && input.recheckPresentAfterAcceptedDelete === true) {
+    diagnostic('POST_DELETE_RECHECK_STARTED');
+    const recheckClaim = await revalidateClaim({
+      client: input.client, claim: input.claim, now: input.now,
+      timeoutMs: input.rpcTimeoutMs,
+    });
+    if (!recheckClaim || recheckClaim.storage_object_exists) {
+      diagnostic('POST_DELETE_RECHECK_REVALIDATION_FAILED');
+      return false;
+    }
+    diagnostic('POST_DELETE_RECHECK_REVALIDATION_OK');
+    afterDelete = await checkObjectPresence({
+      objectPath: input.claim.object_path, getObject: input.getObject,
+      timeoutMs: input.storageTimeoutMs,
+    });
+    diagnostic(afterDelete === 'absent' ? 'POST_DELETE_RECHECK_GET_ABSENT' : afterDelete === 'present' ? 'POST_DELETE_RECHECK_GET_PRESENT' : 'POST_DELETE_RECHECK_GET_AMBIGUOUS');
+    if (afterDelete === 'absent') diagnostic('POST_DELETE_RECHECK_FINALIZATION_CONTINUING');
+  }
   if (afterDelete !== "absent") return false;
   diagnostic('FINAL_REVALIDATION_STARTED');
 

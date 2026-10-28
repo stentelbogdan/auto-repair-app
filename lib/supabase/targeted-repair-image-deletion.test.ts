@@ -283,3 +283,64 @@ test('diagnostic sink exceptions cannot change successful deletion', async () =>
   const f = fixture();
   assert.equal((await targetedDeletionProtocol(input, { ...f.deps, diagnostic: () => { throw Error('sink'); } })).status, 'deleted');
 });
+
+// @ts-expect-error TS5097: Node test source import.
+import { processRepairImageDeletionClaim } from './repair-image-cleanup-core.ts';
+// @ts-expect-error TS5097: Node test source import.
+import { IMAGE_DIAGNOSTIC_CODES } from '../repair-requests/image-deletion-diagnostics.ts';
+for (const scenario of ['absent', 'present', 'ambiguous', 'generic404', 'changed', 'expired', 'shortLease', 'invalid', 'metadataPresent', 'completeError', 'finalRevalidationError', 'defaultOff'] as const) {
+  test(`bounded post-delete recheck: ${scenario}`, async () => {
+    const f = fixture();
+    let gets = 0; let validations = 0;
+    const codes: string[] = [];
+    const originalRpc = f.deps.admin.rpc;
+    f.deps.admin.rpc = async (name, args) => {
+      const result = await originalRpc(name, args); // Enforces exact path, claim, operation and bucket.
+      if (name === 'revalidate_repair_image_deletion_claim') {
+        validations++;
+        if (validations === 3) {
+          if (scenario === 'invalid') return { data: null, error: null };
+          const row = (result.data as Record<string, unknown>[])[0];
+          if (scenario === 'changed') row.delete_claim_id = op;
+          if (scenario === 'expired') row.delete_lease_expires_at = new Date(0).toISOString();
+          if (scenario === 'shortLease') row.delete_lease_expires_at = new Date(Date.now() + 1000).toISOString();
+          if (scenario === 'metadataPresent') row.storage_object_exists = true;
+        }
+        if (validations === 4 && scenario === 'finalRevalidationError') return { data: null, error: { code: '40001' } };
+      }
+      if (name === 'complete_repair_image_deletion' && scenario === 'completeError') return { data: null, error: { code: '40001' } };
+      return result;
+    };
+    f.deps.getObject = async p => {
+      assert.equal(p, path); // No access to the other (Audi) image.
+      gets++; f.calls.push('GET');
+      if (gets <= 2 || scenario === 'present') return new Response('x', { status: 206 });
+      if (scenario === 'ambiguous') return new Response(null, { status: 302 });
+      if (scenario === 'generic404') return Response.json({ message: 'not found' }, { status: 404 });
+      return Response.json({ code: 'NoSuchKey' }, { status: 400 });
+    };
+    let success: boolean;
+    if (scenario === 'defaultOff') {
+      success = await processRepairImageDeletionClaim({ client: f.deps.admin, claim: { object_path: path, delete_claim_id: claimId }, getObject: f.deps.getObject, now: Date.now, rpcTimeoutMs: 15000, storageTimeoutMs: 20000, revalidateBeforeDelete: true, diagnostic: code => codes.push(code) });
+    } else {
+      const result = await targetedDeletionProtocol(input, { ...f.deps, diagnostic: code => codes.push(code) });
+      success = result.physicalDeletionConfirmed;
+      assert.equal(result.operationId, op);
+      assert.equal(result.status, scenario === 'absent' ? 'deleted' : 'recovery_required');
+    }
+    assert.equal(success, scenario === 'absent');
+    assert.equal(f.calls.filter(c => c === 'DELETE').length, 1);
+    const stoppedBeforeGet = ['changed', 'expired', 'shortLease', 'invalid', 'metadataPresent', 'defaultOff'].includes(scenario);
+    assert.equal(gets, stoppedBeforeGet ? 2 : 3);
+    assert.equal(f.calls.filter(c => c === 'complete_repair_image_deletion').length, ['absent', 'completeError'].includes(scenario) ? 1 : 0);
+    assert.ok(codes.every(code => (IMAGE_DIAGNOSTIC_CODES as readonly string[]).includes(code)));
+    assert.ok(!JSON.stringify(codes).includes(path));
+    assert.ok(!JSON.stringify(codes).includes(claimId));
+    if (scenario === 'absent') {
+      assert.equal(validations, 4);
+      assert.ok(codes.includes('POST_DELETE_RECHECK_FINALIZATION_CONTINUING'));
+      assert.deepEqual(f.calls.slice(-4), ['revalidate_repair_image_deletion_claim', 'GET', 'revalidate_repair_image_deletion_claim', 'complete_repair_image_deletion']);
+    }
+    if (scenario === 'defaultOff') assert.ok(!codes.includes('POST_DELETE_RECHECK_STARTED'));
+  });
+}
