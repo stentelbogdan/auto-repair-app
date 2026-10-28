@@ -1,3 +1,5 @@
+// @ts-expect-error TS5097: source extension for local Node tests.
+import { createTargetedImageDiagnostic } from './targeted-image-diagnostics.server.ts';
 // @ts-expect-error TS5097: Node's local TypeScript test runner needs source extensions.
 import { deleteTargetedRepairImage } from "./targeted-repair-image-deletion.ts";
 // @ts-expect-error TS5097: Node's local TypeScript test runner needs source extensions.
@@ -129,6 +131,7 @@ export async function handleTargetedImageDeletionRequest(request: Request): Prom
     }
     return failure(HTTP[result.status], result.status, body.operationId, result.detached);
   } catch {
+    createTargetedImageDiagnostic()('ROUTE_RECOVERY_REQUIRED');
     // The mutation may already have committed. Do not retry or leak exception text.
     return failure(503, "recovery_required", body.operationId, "unknown");
   }

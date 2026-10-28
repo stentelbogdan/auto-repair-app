@@ -147,3 +147,21 @@ test('stalled body times out before adapter invocation', async t => {
   await check(await response, 408, 'request_timeout');
   assert.equal(cancelled, true); assert.equal(calls.length, 0);
 });
+
+test('gated route failure diagnostics never enter public response or contain thrown secrets', async () => {
+  const oldInfo = console.info; const oldFlag = process.env.TARGETED_IMAGE_DIAGNOSTICS_ENABLED;
+  const lines: unknown[][] = [];
+  try {
+    process.env.TARGETED_IMAGE_DIAGNOSTICS_ENABLED = 'true';
+    console.info = (...args) => { lines.push(args); };
+    throws = true;
+    const body = await check(await handle(request()), 503, 'recovery_required');
+    assert.deepEqual(lines, [['ROUTE_RECOVERY_REQUIRED']]);
+    assert.ok(!JSON.stringify(body).includes('ROUTE_RECOVERY_REQUIRED'));
+    assert.ok(!JSON.stringify(lines).includes('SECRET'));
+  } finally {
+    console.info = oldInfo;
+    if (oldFlag === undefined) delete process.env.TARGETED_IMAGE_DIAGNOSTICS_ENABLED;
+    else process.env.TARGETED_IMAGE_DIAGNOSTICS_ENABLED = oldFlag;
+  }
+});

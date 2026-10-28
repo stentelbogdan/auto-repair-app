@@ -165,10 +165,14 @@ test('existing batch core retains its original sequence (mock only)', async () =
 for (const mode of ['empty204', 'empty200', 'null', 'http-null', 'http-empty', 'transport', 'object', 'array', 'invalid-json', 'ambiguous-get', 'failed-revalidation', 'empty-claim'] as const) {
   test(`absent object recovery transport: ${mode}`, async () => {
     const oldEnv = { ...process.env }; const oldFetch = globalThis.fetch;
+    const oldInfo = console.info; const logs: unknown[][] = [];
     const calls: string[] = []; let completions = 0;
     const recoveredClaim = '44444444-4444-4444-8444-444444444444';
     try {
+      console.info = (...args) => { logs.push(args); };
       Object.assign(process.env, {
+        TARGETED_IMAGE_DIAGNOSTICS_ENABLED: 'true', NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: 'bstjobvvxxfqqwyjoimx',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://bstjobvvxxfqqwyjoimx.supabase.co',
         VERCEL_ENV: 'preview', SUPABASE_URL: 'https://bstjobvvxxfqqwyjoimx.supabase.co',
         NEXT_PUBLIC_SUPABASE_ANON_KEY: 'mock-anon', SUPABASE_SERVICE_ROLE_KEY: 'mock-service',
       });
@@ -218,7 +222,16 @@ for (const mode of ['empty204', 'empty200', 'null', 'http-null', 'http-empty', '
       assert.equal(result.physicalDeletionConfirmed, success);
       assert.equal(completions, ['ambiguous-get', 'failed-revalidation', 'empty-claim'].includes(mode) ? 0 : 1);
       if (success) assert.equal(calls.filter(u => u.endsWith('/revalidate_repair_image_deletion_claim')).length, 2);
-    } finally { globalThis.fetch = oldFetch; process.env = oldEnv; }
+      const codes = logs.map(line => line[0]);
+      const expected = success ? 'COMPLETE_OK' : mode === 'transport' ? 'COMPLETE_TRANSPORT_FAILED'
+        : mode.startsWith('http-') ? 'COMPLETE_HTTP_FAILED'
+        : ['object', 'array', 'invalid-json'].includes(mode) ? 'COMPLETE_BODY_INVALID' : null;
+      if (expected) assert.ok(codes.includes(expected));
+      for (const line of logs) {
+        assert.match(String(line[0]), /^[A-Z_]+$/);
+        assert.ok(line.length === 1 || (line.length === 2 && typeof line[1] === 'number'));
+      }
+    } finally { console.info = oldInfo; globalThis.fetch = oldFetch; process.env = oldEnv; }
   });
 }
 
@@ -233,4 +246,40 @@ test('expired claim fails closed; manual same-operation recovery confirms absenc
   assert.equal(result.status, 'deleted');
   assert.ok(!recovered.calls.includes('DELETE'));
   assert.equal(recovered.calls.at(-1), 'complete_repair_image_deletion');
+});
+
+for (const [options, expected] of [
+  [{}, 'COMPLETE_OK'], [{ deleteError: true }, 'STORAGE_DELETE_REJECTED'],
+  [{ network: true }, 'STORAGE_DELETE_AMBIGUOUS'], [{ missingInitially: true }, 'STORAGE_DELETE_SKIPPED'],
+  [{ finalError: true }, 'COMPLETE_FAILED'], [{ preDeleteExpired: true }, 'PRE_DELETE_REVALIDATION_FAILED'],
+] as const) test(`diagnostic outcome ${expected} preserves protocol`, async () => {
+  const f = fixture(options); const codes: string[] = [];
+  const result = await targetedDeletionProtocol(input, { ...f.deps, diagnostic: code => { codes.push(code); } });
+  assert.ok(codes.includes(expected));
+  assert.ok(codes.includes('AUTH_OK')); assert.ok(codes.includes('DETACH_OK')); assert.ok(codes.includes('CLAIM_OK'));
+  if (result.status === 'deleted') {
+    for (const code of ['INITIAL_REVALIDATION_OK', 'POST_DELETE_GET_ABSENT', 'FINAL_REVALIDATION_OK', 'TARGETED_DELETION_DELETED']) assert.ok(codes.includes(code));
+    assert.ok(codes.indexOf('FINAL_REVALIDATION_OK') < codes.indexOf('COMPLETE_OK'));
+  }
+  assert.ok(codes.every(code => /^[A-Z_]+$/.test(code)));
+});
+test('post-delete GET ambiguity and final revalidation failure are distinguishable', async () => {
+  for (const fail of ['get', 'revalidate']) {
+    const f = fixture(); const codes: string[] = []; const rpc = f.deps.admin.rpc;
+    let gets = 0; let validations = 0;
+    if (fail === 'get') f.deps.getObject = async () => ++gets === 1 ? new Response('x', { status: 206 }) : Response.json({ message: 'sensitive raw message' }, { status: 404 });
+    else f.deps.admin.rpc = async (name, args) => {
+      if (name === 'revalidate_repair_image_deletion_claim' && ++validations === 3) throw Error('sensitive SQL');
+      return rpc(name, args);
+    };
+    const result = await targetedDeletionProtocol(input, { ...f.deps, diagnostic: code => { codes.push(code); } });
+    assert.equal(result.status, 'recovery_required');
+    assert.ok(codes.includes(fail === 'get' ? 'POST_DELETE_GET_AMBIGUOUS' : 'FINAL_REVALIDATION_FAILED'));
+    assert.ok(!codes.includes('COMPLETE_STARTED'));
+    assert.ok(!codes.join().includes('sensitive'));
+  }
+});
+test('diagnostic sink exceptions cannot change successful deletion', async () => {
+  const f = fixture();
+  assert.equal((await targetedDeletionProtocol(input, { ...f.deps, diagnostic: () => { throw Error('sink'); } })).status, 'deleted');
 });

@@ -1,3 +1,4 @@
+import type { ImageDiagnostic } from './image-deletion-diagnostics';
 /** Browser-only orchestration: no privileged imports or Storage client. */
 export type EditorImage = { name?: string; path?: string; url?: string; thumbUrl?: string; dataUrl?: string; fingerprint?: string; fingerprintVersion?: string };
 type Operation = { requestId: string; operationId: string; image: EditorImage; confirmed?: 'deleted' | 'retained'; refused?: boolean };
@@ -14,6 +15,7 @@ export function removeLocalImage<T>(files: T[], previews: string[], index: numbe
   return { files: files.filter((_, i) => i !== index), previews: previews.filter((_, i) => i !== index) };
 }
 export function createImageDeletionEditor(requestId: string, deps: {
+  diagnostic?: ImageDiagnostic;
   token(): Promise<string | null>;
   send(body: { requestId: string; operationId: string; image: EditorImage }, token: string): Promise<{ ok: boolean; body: unknown }>;
   readImages(): Promise<EditorImage[]>;
@@ -22,6 +24,12 @@ export function createImageDeletionEditor(requestId: string, deps: {
   uuid(): string;
   storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 }) {
+  const diagnostic: ImageDiagnostic = (code, status) => { try { deps.diagnostic?.(code, status); } catch { /* Diagnostic only. */ } };
+  const storage: typeof deps.storage = {
+    getItem: key => { try { return deps.storage.getItem(key); } catch (error) { diagnostic('PENDING_STORAGE_FAILED'); throw error; } },
+    setItem: (key, value) => { try { deps.storage.setItem(key, value); } catch (error) { diagnostic('PENDING_STORAGE_FAILED'); throw error; } },
+    removeItem: key => { try { deps.storage.removeItem(key); } catch (error) { diagnostic('PENDING_STORAGE_FAILED'); throw error; } },
+  };
   const key = `repair-image-operation:${requestId}`;
   let pending: Operation | null = null;
   let busy = false;
@@ -35,7 +43,8 @@ export function createImageDeletionEditor(requestId: string, deps: {
   const readImages = (): Promise<EditorImage[]> => {
     const invoke = () => {
       if (disposed) throw new Error('Disposed editor');
-      return deps.readImages();
+      diagnostic('IMAGE_SYNC_STARTED');
+      return deps.readImages().catch(error => { diagnostic('IMAGE_SYNC_FAILED'); throw error; });
     };
     const read = readQueue ? readQueue.then(invoke) : invoke();
     const settled = read.catch(() => {}).finally(() => { if (readQueue === settled) readQueue = null; });
@@ -63,6 +72,7 @@ export function createImageDeletionEditor(requestId: string, deps: {
         if (!Array.isArray(images)) throw new Error('Invalid images');
         // A notification is never a physical deletion receipt or recovery approval.
         deps.applyImages(images);
+        diagnostic('IMAGE_SYNC_OK');
       }
     } catch {
       // No polling/retry loop. A later event or foreground transition can retry.
@@ -77,32 +87,35 @@ export function createImageDeletionEditor(requestId: string, deps: {
     if (!disposed) deps.publish({ phase, message, path: pending?.image.path, operationId: pending?.operationId });
   };
   try {
-    const saved = deps.storage.getItem(key);
+    const saved = storage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (parsed.requestId !== requestId || !UUID.test(parsed.operationId) || !parsed.image || !hasDeletableImagePath(parsed.image)) throw new Error('Invalid saved operation');
       // Do not trust persisted success/refusal flags; reconcile the server again.
       pending = { requestId, operationId: parsed.operationId, image: parsed.image };
+      diagnostic('PENDING_RESTORED');
       publish('recovery', 'Există o operațiune neconfirmată. Verifică lista sau reia aceeași operațiune.');
     }
   } catch { storageBroken = true; publish('recovery', 'Nu putem păstra în siguranță operațiunea. Ștergerea și salvarea sunt blocate în această filă.'); }
-  const persist = () => { if (pending) deps.storage.setItem(key, JSON.stringify(pending)); };
+  const persist = () => { if (pending) storage.setItem(key, JSON.stringify(pending)); };
   const finish = (message: string) => {
-    deps.storage.removeItem(key);
+    storage.removeItem(key);
     pending = null;
     publish('idle', message);
+    diagnostic('EDITOR_UNLOCKED');
   };
   async function synchronize() {
     const images = await readFreshImages();
     if (disposed) return;
     if (!Array.isArray(images)) throw new Error('Invalid images');
     if (pending && images.some(image => image.path === pending!.image.path)) {
-      if (!pending.refused) throw new Error('Image still associated');
+      if (!pending.refused) { diagnostic('IMAGE_STILL_ASSOCIATED'); throw new Error('Image still associated'); }
       deps.applyImages(images);
       finish('Ștergerea a fost refuzată. Fotografia rămâne în cerere.');
       return;
     }
     deps.applyImages(images);
+    diagnostic('IMAGE_SYNC_OK');
     const confirmed = pending?.confirmed;
     finish(confirmed === 'deleted' ? 'Fotografia a fost ștearsă, iar absența din Storage a fost confirmată.' : confirmed === 'retained' ? 'Fotografia a fost detașată din cerere. Fișierul este păstrat deoarece mai este referențiat.' : 'Lista este sincronizată: fotografia nu mai este asociată cererii. Ștergerea fizică nu este confirmată.');
   }
@@ -116,16 +129,18 @@ export function createImageDeletionEditor(requestId: string, deps: {
       const token = await deps.token();
       if (disposed) return;
       if (!token) { publish('recovery', 'Sesiunea lipsește sau a expirat. Autentifică-te și reia aceeași operațiune.'); return; }
-      const reply = await deps.send({ requestId, operationId: pending.operationId, image: pending.image }, token);
+      const reply = await deps.send({ requestId, operationId: pending.operationId, image: pending.image }, token).catch(error => { diagnostic('API_RESPONSE_AMBIGUOUS'); throw error; });
       if (disposed) return;
       const value = reply.body as Record<string, unknown> | null;
-      if (!value || value.operationId !== pending.operationId) throw new Error('Ambiguous response');
+      if (!value || value.operationId !== pending.operationId) { diagnostic('API_RESPONSE_AMBIGUOUS'); throw new Error('Ambiguous response'); }
       if (reply.ok && value.detached === true && ((value.status === 'deleted' && value.physicalDeletionConfirmed === true) || (value.status === 'retained' && value.physicalDeletionConfirmed === false))) {
+        diagnostic(value.status === 'deleted' ? 'API_DELETED_CONFIRMED' : 'API_RETAINED');
         pending.confirmed = value.status as 'deleted' | 'retained'; persist(); await synchronize(); return;
       }
       if (value.status === 'forbidden' && value.detached === false && value.physicalDeletionConfirmed === false) {
         pending.refused = true; persist(); await synchronize(); return;
       }
+      diagnostic(value.status === 'recovery_required' ? 'API_RECOVERY_REQUIRED' : 'API_RESPONSE_AMBIGUOUS');
       publish('recovery', value.status === 'already_completed_unverified'
         ? 'Operațiunea este înregistrată ca finalizată, dar ștergerea fizică nu este reverificată. Verifică lista cererii.'
         : value.status === 'unauthenticated' ? 'Sesiunea nu este validă. Autentifică-te și reia aceeași operațiune.'
@@ -162,6 +177,7 @@ export function createImageDeletionEditor(requestId: string, deps: {
         const images = await readFreshImages();
         if (disposed || !Array.isArray(images)) throw new Error('Stale editor');
         deps.applyImages(images);
+        diagnostic('IMAGE_SYNC_OK');
         return images;
       } finally { busy = false; void refresh(); }
     },

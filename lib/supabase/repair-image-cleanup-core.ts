@@ -1,3 +1,4 @@
+import type { ImageDiagnostic } from '../repair-requests/image-deletion-diagnostics';
 /** Internal protocol engine. No environment, credentials, endpoint or client factory.
  * Production callers must use the guarded worker, never this injectable module.
  */
@@ -283,6 +284,7 @@ async function deleteObject(input: {
 
 export async function processRepairImageDeletionClaim(input: {
   revalidateBeforeDelete?: boolean;
+  diagnostic?: ImageDiagnostic;
   client: RepairImageCleanupClient;
   claim: DeleteClaim;
   getObject: RepairImageCleanupDependencies["getObject"];
@@ -290,13 +292,19 @@ export async function processRepairImageDeletionClaim(input: {
   rpcTimeoutMs: number;
   storageTimeoutMs: number;
 }): Promise<boolean> {
+  const diagnostic: ImageDiagnostic = (code, status) => {
+    try { input.diagnostic?.(code, status); } catch { /* No functional effect. */ }
+  };
+  diagnostic('INITIAL_REVALIDATION_STARTED');
   const revalidated = await revalidateClaim({
     client: input.client,
     claim: input.claim,
     now: input.now,
     timeoutMs: input.rpcTimeoutMs,
   });
-  if (!revalidated) return false;
+  if (!revalidated) { diagnostic('INITIAL_REVALIDATION_FAILED'); return false; }
+  diagnostic('INITIAL_REVALIDATION_OK');
+  diagnostic('INITIAL_GET_STARTED');
 
   const beforeDelete = await checkObjectPresence({
     objectPath: input.claim.object_path,
@@ -304,39 +312,48 @@ export async function processRepairImageDeletionClaim(input: {
     timeoutMs: input.storageTimeoutMs,
   });
 
+  diagnostic(beforeDelete === 'absent' ? 'INITIAL_GET_ABSENT' : beforeDelete === 'present' ? 'INITIAL_GET_PRESENT' : 'INITIAL_GET_AMBIGUOUS');
   if (
     (revalidated.storage_object_exists && beforeDelete !== "present") ||
     (!revalidated.storage_object_exists && beforeDelete !== "absent")
   ) {
+    diagnostic('INITIAL_STORAGE_MISMATCH');
     return false;
   }
 
   if (beforeDelete === "present") {
     if (input.revalidateBeforeDelete) {
+      diagnostic('PRE_DELETE_REVALIDATION_STARTED');
       const immediatelyBeforeDelete = await revalidateClaim({
         client: input.client, claim: input.claim, now: input.now,
         timeoutMs: input.rpcTimeoutMs,
       });
-      if (!immediatelyBeforeDelete?.storage_object_exists) return false;
+      if (!immediatelyBeforeDelete?.storage_object_exists) { diagnostic('PRE_DELETE_REVALIDATION_FAILED'); return false; }
+      diagnostic('PRE_DELETE_REVALIDATION_OK');
     }
+    diagnostic('STORAGE_DELETE_STARTED');
     const deletion = await deleteObject({
       client: input.client,
       claim: input.claim,
       timeoutMs: input.storageTimeoutMs,
     });
+    diagnostic(deletion === 'accepted' ? 'STORAGE_DELETE_ACCEPTED' : deletion === 'confirmed-absent' ? 'STORAGE_DELETE_ABSENT' : deletion === 'rejected' ? 'STORAGE_DELETE_REJECTED' : 'STORAGE_DELETE_AMBIGUOUS');
     // A local 401/403 response does not prove that the remote deletion did not
     // take effect. Preserve the claim for explicit recovery in every rejected
     // or otherwise ambiguous deletion outcome.
     if (deletion === "rejected") return false;
     if (deletion === "ambiguous") return false;
-  }
+  } else { diagnostic('STORAGE_DELETE_SKIPPED'); }
 
+  diagnostic('POST_DELETE_GET_STARTED');
   const afterDelete = await checkObjectPresence({
     objectPath: input.claim.object_path,
     getObject: input.getObject,
     timeoutMs: input.storageTimeoutMs,
   });
+  diagnostic(afterDelete === 'absent' ? 'POST_DELETE_GET_ABSENT' : afterDelete === 'present' ? 'POST_DELETE_GET_PRESENT' : 'POST_DELETE_GET_AMBIGUOUS');
   if (afterDelete !== "absent") return false;
+  diagnostic('FINAL_REVALIDATION_STARTED');
 
   const finalRevalidation = await revalidateClaim({
     client: input.client,
@@ -344,14 +361,19 @@ export async function processRepairImageDeletionClaim(input: {
     now: input.now,
     timeoutMs: input.rpcTimeoutMs,
   });
-  if (!finalRevalidation || finalRevalidation.storage_object_exists) return false;
+  if (!finalRevalidation) { diagnostic('FINAL_REVALIDATION_FAILED'); return false; }
+  if (finalRevalidation.storage_object_exists) { diagnostic('FINAL_REVALIDATION_STORAGE_PRESENT'); return false; }
+  diagnostic('FINAL_REVALIDATION_OK');
+  diagnostic('COMPLETE_STARTED');
 
-  return completeClaim({
+  const completed = await completeClaim({
     client: input.client,
     claim: input.claim,
     deleted: true,
     timeoutMs: input.rpcTimeoutMs,
   });
+  diagnostic(completed ? 'COMPLETE_OK' : 'COMPLETE_FAILED');
+  return completed;
 }
 
 type CleanupCoreInput = {

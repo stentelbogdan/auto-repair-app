@@ -1,5 +1,6 @@
 "use client";
 
+import { useImageDiagnostic } from "@/lib/repair-requests/ImageDiagnosticsProvider";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -173,6 +174,9 @@ function getTowingFormInitialValues(
 }
 
 export default function EditMyRequestPage() {
+  const imageDiagnostic = useImageDiagnostic();
+  const imageDiagnosticRef = useRef(imageDiagnostic);
+  useEffect(() => { imageDiagnosticRef.current = imageDiagnostic; }, [imageDiagnostic]);
   /*
    * Routerul rămâne numai pentru redirecturile automate:
    * autentificare și cerere inexistentă.
@@ -316,6 +320,7 @@ export default function EditMyRequestPage() {
     let eligibility: Awaited<ReturnType<typeof getEditableRepairRequest>> = null;
     setImageDeletion({ phase: "idle", message: "" });
     const editor = createImageDeletionEditor(requestId, {
+      diagnostic: (code, status) => imageDiagnosticRef.current(code, status),
       token: async () => {
         const { data, error } = await supabase.auth.getSession();
         const session = data.session;

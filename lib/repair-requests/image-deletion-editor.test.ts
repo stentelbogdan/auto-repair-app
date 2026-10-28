@@ -183,3 +183,38 @@ test('page wiring isolates drafts, scopes subscription and cleans foreground lis
   assert.ok(effect.includes('document.visibilityState === "visible"'));
   assert.doesNotMatch(effect, /setDescription|setNewFiles|revokeObjectURL|loadRequest\(/);
 });
+
+test('client diagnostics distinguish restored pending and never unlock via Realtime', async () => {
+  const f = fixture('recovery_required'); await f.editor.remove(image); f.editor.dispose();
+  const codes: string[] = [];
+  const editor = createImageDeletionEditor(id, { ...f.deps, diagnostic: code => { codes.push(code); } });
+  assert.deepEqual(codes, ['PENDING_RESTORED']);
+  editor.requestRefresh(); await settle();
+  assert.ok(codes.includes('IMAGE_SYNC_OK')); assert.ok(!codes.includes('EDITOR_UNLOCKED'));
+  assert.equal(editor.blocked(), true); assert.equal(f.sent.length, 1);
+  await editor.retry(); assert.ok(codes.includes('API_RECOVERY_REQUIRED'));
+  assert.equal(editor.blocked(), true);
+});
+test('confirmed result diagnostics separate synchronization failure from deletion outcome', async () => {
+  const f = fixture('deleted', { readFailure: true }); const codes: string[] = [];
+  const editor = createImageDeletionEditor(id, { ...f.deps, diagnostic: code => { codes.push(code); } });
+  await editor.remove(image);
+  assert.ok(codes.includes('API_DELETED_CONFIRMED')); assert.ok(codes.includes('IMAGE_SYNC_FAILED'));
+  assert.equal(editor.blocked(), true); assert.ok(!codes.includes('EDITOR_UNLOCKED'));
+  f.setRead(); await editor.retry();
+  assert.equal(f.sent.length, 1); assert.ok(codes.includes('EDITOR_UNLOCKED')); assert.equal(editor.blocked(), false);
+});
+test('storage failure and still-associated image use fixed diagnostics', async () => {
+  const f = fixture('deleted', { present: true }); const codes: string[] = [];
+  const editor = createImageDeletionEditor(id, { ...f.deps, diagnostic: code => { codes.push(code); } });
+  await editor.remove(image); assert.ok(codes.includes('IMAGE_STILL_ASSOCIATED')); assert.equal(editor.blocked(), true);
+  const broken = fixture(); broken.deps.storage.setItem = () => { throw Error('private path token'); };
+  const e = createImageDeletionEditor(id, { ...broken.deps, diagnostic: code => { codes.push(code); } });
+  await e.remove(image); assert.ok(codes.includes('PENDING_STORAGE_FAILED')); assert.equal(broken.sent.length, 0);
+  assert.ok(codes.every(code => /^[A-Z_]+$/.test(code)));
+});
+test('client diagnostics cannot change behavior when sink throws', async () => {
+  const f = fixture();
+  const editor = createImageDeletionEditor(id, { ...f.deps, diagnostic: () => { throw Error('logger'); } });
+  await editor.remove(image); assert.equal(editor.blocked(), false);
+});
