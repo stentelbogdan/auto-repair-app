@@ -123,7 +123,7 @@ test('full server transport uses exactly one scoped DELETE and verifies absence'
         assert.equal(u, `${process.env.SUPABASE_URL}/storage/v1/object/repair-images`);
         assert.deepEqual(JSON.parse(String(init.body)), { prefixes: [path] }); deletes++; exists = false; return Response.json([]);
       }
-      assert.equal(u, `${process.env.SUPABASE_URL}/storage/v1/object/authenticated/repair-images/${path}`);
+      assert.equal(u.split('?')[0], `${process.env.SUPABASE_URL}/storage/v1/object/authenticated/repair-images/${path}`);
       return exists ? new Response('x', { status: 206 }) : Response.json({ code: 'NoSuchKey' }, { status: 404 });
     };
     assert.equal((await deleteTargetedRepairImage(input, 'user-token')).physicalDeletionConfirmed, true);
@@ -342,5 +342,77 @@ for (const scenario of ['absent', 'present', 'ambiguous', 'generic404', 'changed
       assert.deepEqual(f.calls.slice(-4), ['revalidate_repair_image_deletion_claim', 'GET', 'revalidate_repair_image_deletion_claim', 'complete_repair_image_deletion']);
     }
     if (scenario === 'defaultOff') assert.ok(!codes.includes('POST_DELETE_RECHECK_STARTED'));
+  });
+}
+
+for (const mode of ['absent', 'present200', 'present206', 'ambiguous', 'recheck', 'revalidate-fails', 'empty-list', 'minimal-row', 'wrong-object', 'wrong-bucket', 'invalid-json', 'null-body', 'empty-body', 'multiple-rows', 'http-error'] as const) {
+  test(`nonce and DELETE transport contract: ${mode}`, async () => {
+    const oldEnv = { ...process.env }; const oldFetch = globalThis.fetch; const oldInfo = console.info;
+    const logs: unknown[][] = []; const nonces: string[] = [];
+    let deletes = 0; let gets = 0; let validations = 0; let completions = 0;
+    try {
+      Object.assign(process.env, {
+        VERCEL_ENV: 'preview', TARGETED_IMAGE_DIAGNOSTICS_ENABLED: 'true',
+        SUPABASE_URL: 'https://bstjobvvxxfqqwyjoimx.supabase.co',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://bstjobvvxxfqqwyjoimx.supabase.co',
+        NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: 'bstjobvvxxfqqwyjoimx',
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: 'mock-anon-secret', SUPABASE_SERVICE_ROLE_KEY: 'mock-service-secret',
+      });
+      console.info = (...args) => { logs.push(args); };
+      globalThis.fetch = async (url, init) => {
+        const u = new URL(String(url));
+        assert.equal(u.origin, process.env.SUPABASE_URL);
+        assert.equal(init?.redirect, 'manual'); assert.equal(init?.cache, 'no-store');
+        if (u.pathname.endsWith('/auth/v1/user')) return Response.json({ id: user });
+        if (u.pathname.endsWith('/detach_own_repair_request_image')) return Response.json([{ operation_id: op, outcome: 'detached' }]);
+        assert.equal(new Headers(init?.headers).get('Authorization'), 'Bearer mock-service-secret');
+        if (u.pathname.endsWith('/claim_authorized_repair_image_deletion')) return Response.json([{ outcome: 'claimed', object_path: path, delete_claim_id: claimId }]);
+        if (u.pathname.endsWith('/revalidate_repair_image_deletion_claim')) {
+          const args = JSON.parse(String(init?.body));
+          assert.equal(args.p_object_path, path); assert.equal(args.p_delete_claim_id, claimId);
+          validations++;
+          if (mode === 'revalidate-fails' && deletes) return Response.json({ code: '40001' }, { status: 409 });
+          return Response.json([{ object_path: path, delete_claim_id: claimId, storage_object_exists: deletes === 0, delete_lease_expires_at: new Date(Date.now() + 300000).toISOString() }]);
+        }
+        if (u.pathname.endsWith('/complete_repair_image_deletion')) {
+          completions++; assert.ok(validations >= 3); assert.equal(JSON.parse(String(init?.body)).p_delete_claim_id, claimId);
+          return new Response(null, { status: 204 });
+        }
+        if (init?.method === 'DELETE') {
+          deletes++; assert.equal(u.pathname, '/storage/v1/object/repair-images'); assert.equal(u.search, '');
+          assert.deepEqual(JSON.parse(String(init.body)), { prefixes: [path] });
+          if (mode === 'http-error') return Response.json([{ name: path }], { status: 500 });
+          if (mode === 'invalid-json') return new Response('invalid');
+          if (mode === 'empty-body') return new Response(null, { status: 204 });
+          if (mode === 'null-body') return Response.json(null);
+          if (mode === 'empty-list') return Response.json([]);
+          if (mode === 'minimal-row') return Response.json([{ name: path }]);
+          if (mode === 'wrong-object') return Response.json([{ name: `${user}/audi.jpg` }]);
+          if (mode === 'wrong-bucket') return Response.json([{ name: path, bucket_id: 'other' }]);
+          if (mode === 'multiple-rows') return Response.json([{ name: path }, { name: path }]);
+          return Response.json([{ name: path, bucket_id: 'repair-images', id: null, metadata: null, created_at: null }]);
+        }
+        assert.equal(init?.method, 'GET');
+        assert.equal(u.pathname, `/storage/v1/object/authenticated/repair-images/${path}`);
+        assert.equal(new Headers(init.headers).get('Range'), 'bytes=0-0'); gets++;
+        if (!deletes) { assert.equal(u.search, ''); return new Response('x', { status: 206 }); }
+        assert.deepEqual([...u.searchParams.keys()], ['cacheNonce']);
+        const nonce = u.searchParams.get('cacheNonce')!;
+        assert.match(nonce, /^[0-9a-f-]{36}$/); assert.ok(!nonces.includes(nonce)); nonces.push(nonce);
+        if (mode === 'present200') return new Response('x', { status: 200 });
+        if (mode === 'present206' || (mode === 'recheck' && nonces.length === 1)) return new Response('x', { status: 206 });
+        if (mode === 'ambiguous') return Response.json({ message: 'not found' }, { status: 404 });
+        return Response.json({ code: 'NoSuchKey' }, { status: 400 });
+      };
+      const result = await deleteTargetedRepairImage(input, 'mock-user-secret');
+      const success = ['absent', 'recheck', 'empty-list', 'minimal-row'].includes(mode);
+      const invalidDelete = ['wrong-object', 'wrong-bucket', 'invalid-json', 'null-body', 'empty-body', 'multiple-rows', 'http-error'].includes(mode);
+      assert.equal(result.status, success ? 'deleted' : 'recovery_required');
+      assert.equal(result.physicalDeletionConfirmed, success);
+      assert.equal(deletes, 1); assert.equal(completions, success ? 1 : 0);
+      assert.equal(gets, invalidDelete ? 1 : ['recheck', 'present200', 'present206'].includes(mode) ? 3 : 2);
+      for (const line of logs) assert.ok((IMAGE_DIAGNOSTIC_CODES as readonly unknown[]).includes(line[0]));
+      for (const secret of [path, claimId, op, 'mock-service-secret', 'mock-user-secret', ...nonces]) assert.ok(!JSON.stringify(logs).includes(secret));
+    } finally { process.env = oldEnv; globalThis.fetch = oldFetch; console.info = oldInfo; }
   });
 }

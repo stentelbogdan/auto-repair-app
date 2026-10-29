@@ -140,14 +140,29 @@ export async function deleteTargetedRepairImage(input: Input, accessToken: strin
     const data = await response.json();
     return response.ok ? { data, error: null } : { data: null, error: data };
   };
+  let deleteRequested = false;
   const admin: RepairImageCleanupClient = {
     rpc: rpc(service, service),
     storage: { from: bucket => ({ remove: async paths => {
       if (bucket !== "repair-images" || paths.length !== 1 || paths[0] !== input.image.path) throw new Error("Storage scope mismatch");
+      deleteRequested = true;
       const response = await request('/storage/v1/object/repair-images', service, service, {
         method: "DELETE", body: JSON.stringify({ prefixes: paths }), signal: AbortSignal.timeout(20000),
       });
-      return { data: null, error: response.ok ? null : { status: response.status } };
+      if (!response.ok) return { data: null, error: { status: response.status } };
+      // Storage deleteObjects returns an array; only name is required by its
+      // object schema. An empty result is valid, but never proves absence.
+      // GET and final claim revalidation remain mandatory in every case.
+      let deletedObjects: unknown;
+      try { deletedObjects = await response.json(); }
+      catch { return { data: null, error: { code: "INVALID_DELETE_RESPONSE" } }; }
+      if (!Array.isArray(deletedObjects) || deletedObjects.length > 1 ||
+          !deletedObjects.every(item => item !== null && typeof item === "object" &&
+            !Array.isArray(item) && item.name === paths[0] &&
+            (item.bucket_id === undefined || item.bucket_id === bucket))) {
+        return { data: null, error: { code: "INVALID_DELETE_RESPONSE" } };
+      }
+      return { data: null, error: null };
     } }) },
   };
   return targetedDeletionProtocol(input, {
@@ -161,7 +176,9 @@ export async function deleteTargetedRepairImage(input: Input, accessToken: strin
     userRpc: rpc(anon, accessToken), admin,
     getObject: (path, signal) => {
       if (path !== input.image.path) throw new Error("Storage scope mismatch");
-      return request(`/storage/v1/object/authenticated/repair-images/${path.split('/').map(encodeURIComponent).join('/')}`, service, service, { method: "GET", headers: { Range: "bytes=0-0" }, signal });
+      // A fresh server-side nonce changes only the query, never object identity.
+      const query = deleteRequested ? `?cacheNonce=${randomUUID()}` : "";
+      return request(`/storage/v1/object/authenticated/repair-images/${path.split('/').map(encodeURIComponent).join('/')}${query}`, service, service, { method: "GET", headers: { Range: "bytes=0-0" }, signal });
     },
   });
 }

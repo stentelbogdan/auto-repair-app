@@ -218,3 +218,15 @@ test('client diagnostics cannot change behavior when sink throws', async () => {
   const editor = createImageDeletionEditor(id, { ...f.deps, diagnostic: () => { throw Error('logger'); } });
   await editor.remove(image); assert.equal(editor.blocked(), false);
 });
+
+test('confirmed deletion clears pending and permits the next image deletion', async () => {
+  const f = fixture();
+  await f.editor.remove(image);
+  assert.equal(f.editor.blocked(), false); assert.equal(f.storage.size, 0);
+  assert.deepEqual(await f.editor.imagesForSave(), [other]);
+  f.deps.readImages = async () => [];
+  await f.editor.remove(other);
+  assert.equal(f.sent.length, 2);
+  assert.equal(f.editor.blocked(), false); assert.equal(f.storage.size, 0);
+  assert.deepEqual(f.applied, [[other], [other], []]);
+});

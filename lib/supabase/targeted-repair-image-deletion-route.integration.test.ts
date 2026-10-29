@@ -45,7 +45,12 @@ for (const scenario of ['invalid-token','forbidden','deleted','still-present','d
           if (scenario !== 'still-present') exists = false;
           return Response.json([]);
         }
-        assert.equal(endpoint, `${url}/storage/v1/object/authenticated/repair-images/${path}`);
+        const objectUrl = new URL(endpoint);
+        assert.equal(objectUrl.origin + objectUrl.pathname, `${url}/storage/v1/object/authenticated/repair-images/${path}`);
+        if (calls.includes(`${url}/storage/v1/object/repair-images`)) {
+          assert.deepEqual([...objectUrl.searchParams.keys()], ['cacheNonce']);
+          assert.match(objectUrl.searchParams.get('cacheNonce')!, /^[0-9a-f-]{36}$/);
+        } else assert.equal(objectUrl.search, '');
         return exists ? new Response('x', { status: 206 }) : Response.json({ code: 'NoSuchKey' }, { status: 404 });
       };
       const response = await handleTargetedImageDeletionRequest(new Request('https://preview.invalid/api/repair-requests/images/delete', {
