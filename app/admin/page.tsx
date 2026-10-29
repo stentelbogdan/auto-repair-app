@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import AdminPhotoMonitor from "./AdminPhotoMonitor";
 
 type AdminOverview = {
   total_users: number;
@@ -249,6 +250,7 @@ export default function AdminPage() {
             />
           ))}
         </div>
+        <AdminPhotoMonitor />
       </div>
     </main>
   );
