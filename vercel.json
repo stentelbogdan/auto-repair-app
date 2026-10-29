@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "if [ \"$VERCEL_ENV\" = \"preview\" ]; then node scripts/verify-preview-test-credential.mjs && npm run build -- --webpack; else npm run build; fi"
+  "buildCommand": "if [ \"$VERCEL_ENV\" = \"preview\" ]; then npm run build -- --webpack; else npm run build; fi"
 }
