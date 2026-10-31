@@ -4,8 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import {
   createPhotoMonitor, formatPhotoCount, initialPhotoState, isPhotoMonitorTestUrl,
-  type PhotoMonitorState,
+  type PhotoMonitorState, PHOTO_TOPIC, PHOTO_EVENT, createPhotoBroadcastConnector,
 } from "@/lib/admin/photo-overview";
+
+// Shared lifecycle queue prevents same-topic reuse while an old channel leaves.
+const connectPhotoBroadcast = createPhotoBroadcastConnector({
+  open: events => {
+    if (supabase.getChannels().some(channel => channel.topic === `realtime:${PHOTO_TOPIC}`)) {
+      throw new Error("PHOTO_CHANNEL_STILL_CLOSING");
+    }
+    return supabase.channel(PHOTO_TOPIC, { config: { private: true } })
+      .on("broadcast", { event: PHOTO_EVENT }, message => events.message(message.payload))
+      .subscribe(events.status);
+  },
+  close: channel => supabase.removeChannel(channel),
+});
 
 export default function AdminPhotoMonitor() {
   const [state, setState] = useState<PhotoMonitorState>(initialPhotoState);
@@ -15,7 +28,8 @@ export default function AdminPhotoMonitor() {
   useEffect(() => {
     if (!allowed) return;
     const monitor = createPhotoMonitor({
-      read: () => supabase.rpc("get_admin_photo_overview").single(),
+      read: signal => supabase.rpc("get_admin_photo_overview").abortSignal(signal).single(),
+      connect: process.env.NEXT_PUBLIC_ADMIN_PHOTO_BROADCAST_ENABLED === "true" ? connectPhotoBroadcast : undefined,
       publish: setState,
     });
     controller.current = monitor;
@@ -31,17 +45,19 @@ export default function AdminPhotoMonitor() {
     }).catch(() => {
       if (active && revision === authRevision) monitor.sessionChanged(null);
     });
-    const stale = () => monitor.markStale();
-    // Mark snapshots stale on leaving/returning; no polling or automatic refetch.
-    document.addEventListener("visibilitychange", stale);
-    window.addEventListener("pageshow", stale);
+    const visibility = () => {
+      if (document.visibilityState === "visible") monitor.foreground(); else monitor.markStale();
+    };
+    const foreground = () => monitor.foreground();
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pageshow", foreground);
     return () => {
       active = false;
       monitor.dispose();
       controller.current = null;
       subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", stale);
-      window.removeEventListener("pageshow", stale);
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pageshow", foreground);
     };
   }, [allowed]);
 
@@ -54,7 +70,11 @@ export default function AdminPhotoMonitor() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 id="photo-monitor-title" className="text-xl font-semibold">Fotografii</h2>
-          <p className="mt-1 text-sm text-white/60">Situație la ultima citire. Actualizarea este manuală.</p>
+          <p className="mt-1 text-sm text-white/60">{state.connection === "subscribed" ? "LIVE conectat · contoare la ultima citire confirmată."
+              : state.connection === "connecting" ? "Se conectează actualizarea LIVE…"
+              : state.connection === "reconnecting" ? "Conexiune întreruptă · reconectare…"
+              : state.connection === "denied" ? "Acces Admin indisponibil."
+              : "Actualizarea LIVE nu este activă."}</p>
         </div>
         {allowed && <button type="button" disabled={state.loading || state.error === "session"}
           onClick={() => void controller.current?.refresh()}
@@ -66,7 +86,7 @@ export default function AdminPhotoMonitor() {
         {state.loading && !data && <p role="status" className="mt-4 text-white/60">Se încarcă statisticile fotografiilor…</p>}
         {state.error && <p role="alert" className="mt-4 text-sm text-orange-200">{error}</p>}
         {data && <>
-          {state.stale && <p role="status" className="mt-4 text-sm text-amber-200">Date posibil neactualizate. Folosește „Actualizează”.</p>}
+          {state.stale && <p role="status" className="mt-4 text-sm text-amber-200">Date posibil neactualizate. Resincronizare la revenire sau reconectare; poți folosi și „Actualizează”.</p>}
           <dl className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <PhotoMetric label="Fotografii asociate cererilor"
               value={data.associations_complete ? formatPhotoCount(data.total_photo_associations!) : `Cel puțin ${formatPhotoCount(data.valid_photo_associations)}`}

@@ -8,6 +8,8 @@ import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { formatLicensePlateForDb } from "@/lib/utils/licensePlate";
 import type { WheelsServiceDetails } from "@/lib/wheels/wheels-service-details";
 import type { RepairRequestDiscoveryLocation } from "@/lib/geo/geo-location";
+// @ts-expect-error TS5097: source extension for offline Node tests.
+import { createRequestPhotoNotifications, type PreparedRequestPhotoNotification } from "../admin/photo-notification-client.ts";
 
 export type StructuredServiceDetails = {
   version: 1;
@@ -136,6 +138,23 @@ export async function createRepairRequest(input: {
   images: RepairRequestImage[];
   discoveryLocation: RepairRequestDiscoveryLocation;
 }) {
+  let notification: PreparedRequestPhotoNotification | null = null;
+  // One ticket for the new association list, distinct from per-object uploads.
+  // Await preparation BEFORE the create transaction; failure never blocks it.
+  if (input.images.length > 0) {
+    try {
+      notification = await createRequestPhotoNotifications({
+        enabled: typeof window !== "undefined" && process.env.NEXT_PUBLIC_ADMIN_PHOTO_BROADCAST_ENABLED === "true",
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        projectRef: process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF,
+        session: async () => {
+          const { data, error } = await supabase.auth.getSession();
+          return error ? null : data.session;
+        },
+        fetch: (url, init) => globalThis.fetch(url, init),
+      }).prepareCreation(input.userId);
+    } catch { /* Auxiliary notification cannot fail request creation. */ }
+  }
   const { data, error } = await supabase.rpc(
     "create_repair_request_with_discovery_location",
     {
@@ -179,6 +198,9 @@ export async function createRepairRequest(input: {
     throw error;
   }
 
+  // Preserve the RPC result verbatim, including unexpected results. Only the
+  // notification helper validates the returned ID before attempting confirm.
+  try { await notification?.confirm(data); } catch { /* No retry or false failure. */ }
   return data as string;
 }
 

@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 // @ts-expect-error TS5097: Node source import.
-import { createPhotoMonitor, parsePhotoOverview, isPhotoMonitorTestUrl, formatPhotoCount, type PhotoMonitorState } from "./photo-overview.ts";
+import { createPhotoMonitor, parsePhotoOverview, isPhotoMonitorTestUrl, formatPhotoCount, type PhotoMonitorState, createPhotoBroadcastConnector } from "./photo-overview.ts";
 const row = {
   valid_photo_associations: 4, total_photo_associations: 4, associations_complete: true,
   unclassifiable_entries: 0, storage_objects_count: 6, unfinished_targeted_operations: 2,
   expired_delete_claims: 1, observed_at: "2026-10-29T12:00:00.123456+00:00",
 };
-const tick = () => new Promise<void>(resolve => queueMicrotask(resolve));
+const tick = () => new Promise<void>(resolve => setImmediate(resolve));
 function fixture() {
   const states: PhotoMonitorState[] = [];
   const reads: Array<{ resolve: (value: { data: unknown; error: { code?: string } | null }) => void; reject: (reason: unknown) => void }> = [];
@@ -67,11 +67,13 @@ test("unmount discards pending and queued work",async()=>{
   f.reads[0].resolve({data:row,error:null}); await tick(); assert.equal(f.states.length,n);
   const g=fixture(); g.monitor.sessionChanged("session"); g.monitor.dispose(); await tick(); assert.equal(g.reads.length,0);
 });
-test("out-of-order refresh cannot overwrite newer response",async()=>{
+test("overlapping refreshes serialize and preserve trailing invalidation",async()=>{
   const f=fixture(); f.monitor.sessionChanged("session"); await tick(); const second=f.monitor.refresh();
-  f.reads[1].resolve({data:row,error:null}); await second;
+  assert.equal(f.reads.length,1);
   f.reads[0].resolve({data:{...row,storage_objects_count:99},error:null}); await tick();
-  assert.equal(f.state().data?.storage_objects_count,"6");
+  assert.equal(f.reads.length,2);
+  f.reads[1].resolve({data:row,error:null}); await second;
+  assert.equal(f.state().data?.storage_objects_count,"6"); f.monitor.dispose();
 });
 test("stale lifecycle signal and duplicate session do not refetch",async()=>{
   const f=fixture(); f.monitor.sessionChanged("session"); await tick(); f.reads[0].resolve({data:row,error:null}); await tick();
@@ -82,12 +84,130 @@ test("TEST-only boundary refuses LIVE, unknown hosts and URL tricks",()=>{
   assert.equal(isPhotoMonitorTestUrl("https://bstjobvvxxfqqwyjoimx.supabase.co"),true);
   for (const url of [undefined,"https://ouoiykudvcoqbkybkqvs.supabase.co","https://example.invalid","https://bstjobvvxxfqqwyjoimx.supabase.co@evil.invalid","https://bstjobvvxxfqqwyjoimx.supabase.co?x=1"]) assert.equal(isPhotoMonitorTestUrl(url),false);
 });
-test("component wiring: responsive grid, manual refresh, auth cleanup and no new data subscriptions",()=>{
+test("component wiring: responsive grid, manual refresh, auth cleanup and private Broadcast only",()=>{
   const source=readFileSync(new URL("../../app/admin/AdminPhotoMonitor.tsx",import.meta.url),"utf8");
   assert.match(source,/grid-cols-1.*sm:grid-cols-2.*xl:grid-cols-4/);
   assert.match(source,/min-w-0/); assert.match(source,/break-words/); assert.match(source,/min-h-11/);
   assert.match(source,/subscription.unsubscribe\(\)/); assert.match(source,/monitor.dispose\(\)/);
   assert.match(source,/revision === authRevision/); assert.match(source,/removeEventListener/);
   assert.match(source,/rpc\("get_admin_photo_overview"\)/);
-  assert.doesNotMatch(source,/service.role|\.from\(|\.channel\(|setInterval|setTimeout/i);
+  assert.doesNotMatch(source,/service.role|\.from\(|setInterval|setTimeout/i);
+});
+
+function connectedFixture() {
+  const channels: Array<{message:(p:unknown)=>void;status:(s:string)=>void}> = [];
+  const reads: Array<(v:{data:unknown;error:{code?:string}|null})=>void> = [];
+  const states: PhotoMonitorState[]=[]; let removed=0;
+  const monitor=createPhotoMonitor({read:()=>new Promise(resolve=>reads.push(resolve)),publish:s=>states.push(s),
+    connect:events=>{channels.push(events);return ()=>{removed++;};}});
+  return {monitor,channels,reads,state:()=>states.at(-1)!,removed:()=>removed};
+}
+test("Admin connects only after authorized RPC; LIVE only after SUBSCRIBED",async()=>{
+ const f=connectedFixture(); f.monitor.sessionChanged("admin"); await tick(); assert.equal(f.channels.length,0);
+ f.reads[0]({data:row,error:null}); await tick(); assert.equal(f.state().connection,"connecting");
+ f.channels[0].status("SUBSCRIBED"); await tick(); assert.equal(f.state().connection,"subscribed");
+ assert.equal(f.reads.length,2); assert.equal(f.state().data?.storage_objects_count,"6");
+ f.reads[1]({data:row,error:null}); await tick(); f.monitor.dispose(); assert.equal(f.removed(),1);
+});
+for(const role of ["anon","customer"]) test(`${role} cannot subscribe without Admin RPC authorization`,async()=>{
+ const f=connectedFixture(); if(role==="customer") {f.monitor.sessionChanged("customer"); await tick();f.reads[0]({data:null,error:{code:"42501"}});}
+ else f.monitor.sessionChanged(null);
+ await tick(); assert.equal(f.channels.length,0); f.monitor.dispose();
+});
+test("duplicates coalesce, invalid payload ignored, in-flight events cause one trailing read",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ const c=f.channels[0];for(const p of [null,{v:2},{v:1,path:"private"}]) c.message(p);
+ await tick(); assert.equal(f.reads.length,1);
+ c.message({v:1});c.message({v:1});await tick();assert.equal(f.reads.length,2);
+ c.message({v:1});c.message({v:1});await tick();assert.equal(f.reads.length,2);
+ f.reads[1]({data:row,error:null});await tick();assert.equal(f.reads.length,3);
+ f.reads[2]({data:{...row,storage_objects_count:7},error:null});await tick();assert.equal(f.state().data?.storage_objects_count,"7");f.monitor.dispose();
+});
+test("reconnect and foreground refetch without discarding numbers",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ f.channels[0].status("CHANNEL_ERROR");assert.equal(f.state().stale,true);assert.equal(f.state().connection,"reconnecting");
+ f.channels[0].status("SUBSCRIBED");await tick();f.reads[1]({data:row,error:null});await tick();
+ f.monitor.foreground();f.monitor.foreground();await tick();assert.equal(f.reads.length,3);assert.ok(f.state().data);
+ f.reads[2]({data:row,error:null});await tick();f.monitor.dispose();
+});
+test("session replacement and unmount invalidate channel callbacks and late reads",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("first");await tick();f.reads[0]({data:row,error:null});await tick();
+ const old=f.channels[0];old.message({v:1});await tick();f.monitor.sessionChanged("second");await tick();
+ assert.equal(f.removed(),1);assert.equal(f.state().data,null);
+ f.reads[2]({data:{...row,storage_objects_count:8},error:null});await tick();
+ f.reads[1]({data:row,error:null});old.status("SUBSCRIBED");old.message({v:1});await tick();
+ assert.equal(f.state().data?.storage_objects_count,"8");const n=f.reads.length;
+ f.monitor.dispose();f.channels[1].message({v:1});await tick();assert.equal(f.reads.length,n);
+});
+
+test("channel replacement waits for asynchronous teardown; old events ignored",async()=>{
+ const opened:Array<{message:(p:unknown)=>void;status:(s:string)=>void}>=[];
+ let release:()=>void=()=>{};let seen=0;
+ const connect=createPhotoBroadcastConnector({open:events=>{opened.push(events);return opened.length;},close:()=>new Promise<void>(resolve=>{release=resolve;})});
+ const events={message:()=>{seen++;},status:()=>{seen++;}};
+ const leave=connect(events);await tick();assert.equal(opened.length,1);leave();connect(events);await tick();
+ assert.equal(opened.length,1);opened[0].message({v:1});opened[0].status("SUBSCRIBED");assert.equal(seen,0);
+ release();await tick();assert.equal(opened.length,2);opened[1].message({v:1});assert.equal(seen,1);
+});
+test("unmount before channel creation does not subscribe",async()=>{
+ let opened=0;const connect=createPhotoBroadcastConnector({open:()=>++opened,close:async()=>{}});
+ connect({message:()=>{},status:()=>{}})();await tick();assert.equal(opened,0);
+});
+
+test("CLOSED reauthorizes, replaces once, and resyncs after actual SUBSCRIBED",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ const old=f.channels[0];old.status("CLOSED");old.status("CLOSED");old.message({v:1});old.status("SUBSCRIBED");await tick();
+ assert.equal(f.removed(),1);assert.equal(f.channels.length,1);assert.equal(f.reads.length,2);
+ assert.equal(f.state().connection,"reconnecting");assert.equal(f.state().data?.storage_objects_count,"6");
+ f.reads[1]({data:row,error:null});await tick();assert.equal(f.channels.length,2);assert.equal(f.state().connection,"connecting");
+ f.channels[1].status("SUBSCRIBED");await tick();assert.equal(f.reads.length,3);
+ f.reads[2]({data:{...row,storage_objects_count:5},error:null});await tick();
+ assert.equal(f.state().connection,"subscribed");assert.equal(f.state().stale,false);assert.equal(f.state().data?.storage_objects_count,"5");
+ f.monitor.dispose();assert.equal(f.removed(),2);
+});
+test("CLOSED invalidates an in-flight snapshot before reauthorization",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ f.channels[0].message({v:1});await tick();f.channels[0].status("CLOSED");await tick();
+ assert.equal(f.reads.length,3);f.reads[1]({data:{...row,storage_objects_count:99},error:null});await tick();
+ assert.equal(f.channels.length,1);assert.equal(f.state().data?.storage_objects_count,"6");
+ f.reads[2]({data:{...row,storage_objects_count:4},error:null});await tick();
+ assert.equal(f.channels.length,2);assert.equal(f.state().data?.storage_objects_count,"4");f.monitor.dispose();
+});
+for(const code of ["42501","PGRST301"]) test(`CLOSED reauthorization ${code} does not open a replacement`,async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ f.channels[0].status("CLOSED");await tick();f.reads[1]({data:null,error:{code}});await tick();
+ assert.equal(f.channels.length,1);assert.equal(f.state().connection,"denied");assert.equal(f.state().data,null);f.monitor.dispose();
+});
+test("replacement CLOSED before SUBSCRIBED stops automatic loops; foreground retries",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ f.channels[0].status("CLOSED");await tick();f.reads[1]({data:row,error:null});await tick();
+ f.channels[1].status("CLOSED");await tick();assert.equal(f.reads.length,2);assert.equal(f.removed(),2);
+ f.monitor.markStale();assert.equal(f.state().stale,true);f.monitor.foreground();f.monitor.foreground();await tick();
+ assert.equal(f.reads.length,3);f.reads[2]({data:row,error:null});await tick();assert.equal(f.channels.length,3);f.monitor.dispose();
+});
+test("manual refresh can recover a failed CLOSED reauthorization",async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ f.channels[0].status("CLOSED");await tick();f.reads[1]({data:null,error:{code:"UNAVAILABLE"}});await tick();
+ assert.equal(f.channels.length,1);assert.equal(f.state().error,"unavailable");
+ const refresh=f.monitor.refresh();f.reads[2]({data:row,error:null});await refresh;await tick();
+ assert.equal(f.channels.length,2);f.monitor.dispose();
+});
+for(const action of ["session","unmount"]) test(`CLOSED recovery discarded on ${action}`,async()=>{
+ const f=connectedFixture();f.monitor.sessionChanged("admin");await tick();f.reads[0]({data:row,error:null});await tick();
+ const old=f.channels[0];old.status("CLOSED");await tick();
+ if(action==="session")f.monitor.sessionChanged("other");else f.monitor.dispose();
+ await tick();f.reads[1]({data:row,error:null});old.status("SUBSCRIBED");old.message({v:1});await tick();
+ assert.equal(f.channels.length,1);
+ if(action==="session"){assert.equal(f.state().data,null);f.reads[2]({data:row,error:null});await tick();assert.equal(f.channels.length,2);f.monitor.dispose();}
+});
+test("CLOSED replacement waits for real connector teardown and ignores delayed old events",async()=>{
+ const opened:Array<{message:(p:unknown)=>void;status:(s:string)=>void}>=[];
+ let release:()=>void=()=>{};let closes=0,reads=0;
+ const connect=createPhotoBroadcastConnector({open:e=>{opened.push(e);return opened.length;},close:async()=>{closes++;if(closes===1)await new Promise<void>(r=>{release=r;});}});
+ const monitor=createPhotoMonitor({read:async()=>{reads++;return {data:row,error:null};},publish:()=>{},connect});
+ monitor.sessionChanged("admin");await tick();opened[0].status("CLOSED");await tick();
+ assert.equal(reads,2);assert.equal(closes,1);assert.equal(opened.length,1);
+ opened[0].status("SUBSCRIBED");opened[0].message({v:1});await tick();assert.equal(reads,2);
+ release();await tick();assert.equal(opened.length,2);opened[1].status("SUBSCRIBED");await tick();assert.equal(reads,3);
+ monitor.dispose();await tick();assert.equal(closes,2);
 });

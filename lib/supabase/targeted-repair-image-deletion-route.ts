@@ -4,6 +4,8 @@ import { createTargetedImageDiagnostic } from './targeted-image-diagnostics.serv
 import { deleteTargetedRepairImage } from "./targeted-repair-image-deletion.ts";
 // @ts-expect-error TS5097: Node's local TypeScript test runner needs source extensions.
 import { assertSupabaseProjectUrl, TEST_SUPABASE_PROJECT_REF } from "./project-boundary.ts";
+// @ts-expect-error TS5097: source extension for offline Node tests.
+import { createDeletedPhotoInvalidation } from "../admin/photo-notification.ts";
 
 type AdapterInput = Parameters<typeof deleteTargetedRepairImage>[0];
 type AdapterResult = Awaited<ReturnType<typeof deleteTargetedRepairImage>>;
@@ -87,7 +89,10 @@ async function readBody(request: Request): Promise<unknown> {
 /** Only this fixed adapter is reachable from the route; no injected runner or
  * request-provided environment, credentials, identity, bucket or endpoint.
  */
-export async function handleTargetedImageDeletionRequest(request: Request): Promise<Response> {
+export async function handleTargetedImageDeletionRequest(
+  request: Request,
+  afterResponse?: (task: () => Promise<void>) => void,
+): Promise<Response> {
   const head = request.method === "HEAD";
   if (typeof window !== "undefined" || process.env.VERCEL_ENV !== "preview") return failure(404, "unavailable", null, false, head);
   try {
@@ -115,6 +120,12 @@ export async function handleTargetedImageDeletionRequest(request: Request): Prom
   }
   const operationId = record(body) && validId(body.operationId) ? body.operationId : null;
   if (!validInput(body)) return failure(400, "invalid_input", operationId);
+  // Issue the physical-completion ticket before the adapter can mutate the registry.
+  // No ticket or notification failure may stop the principal operation.
+  let notification: { confirm(): Promise<void> } | null = null;
+  try {
+    notification = await createDeletedPhotoInvalidation({ env: process.env, fetch: globalThis.fetch })(body.requestId, body.operationId, token);
+  } catch { /* Best effort only. */ }
   // Keep the caller's ID verbatim: a lost response must not create a new operation.
   try {
     const result = await deleteTargetedRepairImage(body, token);
@@ -122,6 +133,12 @@ export async function handleTargetedImageDeletionRequest(request: Request): Prom
       ![true, false, "unknown"].includes(result.detached)) throw new Error("Invalid adapter result");
     if (result.status === "deleted") {
       if (result.physicalDeletionConfirmed !== true || result.detached !== true) throw new Error("Unconfirmed deletion");
+      if (notification && afterResponse) {
+        const confirmedNotification = notification;
+        try { afterResponse(async () => {
+          try { await confirmedNotification.confirm(); } catch { /* Isolated after-response failure. */ }
+        }); } catch { /* Scheduling failure must preserve the deletion response. No retry. */ }
+      }
       return reply(200, { operationId: body.operationId, status: "deleted", detached: true, physicalDeletionConfirmed: true });
     }
     if (result.physicalDeletionConfirmed !== false) throw new Error("Contradictory result");

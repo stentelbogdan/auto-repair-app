@@ -1,11 +1,12 @@
 import { handleTargetedImageDeletionRequest } from "@/lib/supabase/targeted-repair-image-deletion-route";
+import { after } from "next/server";
 
 export const runtime = "nodejs";
 // Platform ceiling only; interrupted requests still require same-operation recovery.
 export const maxDuration = 180;
 
 export async function POST(request: Request) {
-  return handleTargetedImageDeletionRequest(request);
+  return handleTargetedImageDeletionRequest(request, after);
 }
 // Explicit rejection also prevents implicit HEAD/OPTIONS behavior from bypassing
 // the TEST Preview guard or the common no-store response policy.

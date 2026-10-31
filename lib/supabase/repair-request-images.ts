@@ -1,5 +1,7 @@
 import type { PreparedImage } from "@/lib/images/prepare-image-for-upload";
 import type { RepairRequestImage } from "@/lib/supabase/repair-requests";
+// @ts-expect-error TS5097: source extension for offline Node tests.
+import { createUploadPhotoNotifications, type PreparedUploadNotification } from "../admin/photo-notification-client.ts";
 
 export const REPAIR_IMAGE_FINGERPRINT_VERSION = "sha256-prepared-v1";
 
@@ -31,6 +33,7 @@ export type RepairImageUploadDependencies = {
   publicUrl(objectPath: string): string;
   fingerprint(file: File): Promise<string>;
   now(): number;
+  notifications?: ReturnType<typeof createUploadPhotoNotifications>;
 };
 
 async function fingerprintPreparedImage(file: File): Promise<string> {
@@ -91,6 +94,16 @@ async function defaultDependencies(): Promise<RepairImageUploadDependencies> {
         .publicUrl,
     fingerprint: fingerprintPreparedImage,
     now: Date.now,
+    notifications: createUploadPhotoNotifications({
+      enabled: typeof window !== "undefined" && process.env.NEXT_PUBLIC_ADMIN_PHOTO_BROADCAST_ENABLED === "true",
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      projectRef: process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF,
+      session: async () => {
+        const { data, error } = await supabase.auth.getSession();
+        return error ? null : data.session;
+      },
+      fetch: (input, init) => globalThis.fetch(input, init),
+    }),
   };
 }
 
@@ -163,6 +176,10 @@ export async function uploadPreparedRepairImages(
     }
 
     const path = reservation.object_path;
+    let notification: PreparedUploadNotification | null = null;
+    try {
+      notification = await dependencies.notifications?.prepareUpload(path, userId) ?? null;
+    } catch { /* Notification preparation cannot fail the upload. */ }
     try {
       const uploadResult = await dependencies.upload(
         path,
@@ -189,6 +206,10 @@ export async function uploadPreparedRepairImages(
       }
       throw error;
     }
+
+    // Outside the upload/abandonment catch: notification failure is never an
+    // upload failure. Both Storage and the confirmation RPC have succeeded.
+    try { await notification?.confirm(); } catch { /* Best effort, no retry. */ }
 
     uploadedImages.push({
       name: originalName,

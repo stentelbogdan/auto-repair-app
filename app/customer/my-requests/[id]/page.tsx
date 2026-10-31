@@ -4,6 +4,7 @@ import { useImageDiagnostic } from "@/lib/repair-requests/ImageDiagnosticsProvid
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { createEditedRequestPhotoNotifications, type PreparedUploadNotification } from "@/lib/admin/photo-notification-client";
 import { createImageDeletionEditor, hasDeletableImagePath, removeLocalImage, type ImageDeletionState } from "@/lib/repair-requests/image-deletion-editor";
 import LicensePlate from "@/app/components/LicensePlate";
 import ImageGallery from "@/app/components/ImageGallery";
@@ -719,6 +720,21 @@ export default function EditMyRequestPage() {
         request.user_id,
         currentImages,
       );
+      let photoNotification: PreparedUploadNotification | null = null;
+      try {
+        photoNotification = await createEditedRequestPhotoNotifications({
+          enabled: typeof window !== "undefined" && process.env.NEXT_PUBLIC_ADMIN_PHOTO_BROADCAST_ENABLED === "true",
+          supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+          projectRef: process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF,
+          session: async () => {
+            const { data, error } = await supabase.auth.getSession();
+            return error ? null : data.session;
+          },
+          fetch: (url, init) => globalThis.fetch(url, init),
+        }).prepareUpdate(request.user_id, request.id, currentImages, [...currentImages, ...uploadedImages]);
+      } catch { /* Notification preparation cannot fail the save. */ }
+      // X detaches through its own server operation, not this save. No ticket
+      // for description-only saves or files eliminated by upload deduplication.
       // Upload may take time; refresh again before writing the image list.
       const latestImages = await imageDeletionRef.current!.imagesForSave();
       const nextImages = [...latestImages, ...uploadedImages];
@@ -858,6 +874,8 @@ export default function EditMyRequestPage() {
         savedServiceDetails = nextBodyworkServiceDetails;
       }
 
+      // All save branches (including direct UPDATE) have confirmed success.
+      try { await photoNotification?.confirm(); } catch { /* Keep the real save result. */ }
       setImages(nextImages);
       newFilesRef.current = [];
       setNewFiles([]);

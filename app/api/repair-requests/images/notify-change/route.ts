@@ -1,0 +1,10 @@
+import { handlePhotoNotification } from "@/lib/admin/photo-notification.server";
+export const runtime = "nodejs";
+export const maxDuration = 20;
+export const POST = handlePhotoNotification;
+export const GET = handlePhotoNotification;
+export const HEAD = handlePhotoNotification;
+export const PUT = handlePhotoNotification;
+export const PATCH = handlePhotoNotification;
+export const DELETE = handlePhotoNotification;
+export const OPTIONS = handlePhotoNotification;

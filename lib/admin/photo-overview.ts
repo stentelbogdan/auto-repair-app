@@ -49,52 +49,156 @@ export function isPhotoMonitorTestUrl(url: string | undefined): boolean {
     || url === "https://bstjobvvxxfqqwyjoimx.supabase.co/";
 }
 
+export const PHOTO_TOPIC = "admin:photo-overview:v1";
+export const PHOTO_EVENT = "invalidate";
+export type PhotoConnection = "disabled" | "connecting" | "subscribed" | "reconnecting" | "signed_out" | "denied";
 export type PhotoMonitorState = {
   data: PhotoOverview | null;
   loading: boolean;
   stale: boolean;
   error: "session" | "authorization" | "unavailable" | null;
+  connection: PhotoConnection;
 };
-export const initialPhotoState: PhotoMonitorState = { data: null, loading: true, stale: false, error: null };
+export const initialPhotoState: PhotoMonitorState = { data: null, loading: true, stale: false, error: null, connection: "disabled" };
+
+export function isPhotoInvalidation(value: unknown): boolean {
+  return !!value && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value).length === 1 && (value as { v?: unknown }).v === 1;
+}
 
 export function createPhotoMonitor(deps: {
-  read: () => PromiseLike<{ data: unknown; error: { code?: string } | null }>;
+  read: (signal: AbortSignal) => PromiseLike<{ data: unknown; error: { code?: string } | null }>;
   publish: (state: PhotoMonitorState) => void;
+  connect?: (events: { message: (payload: unknown) => void; status: (status: string) => void }) => () => void;
 }) {
   let state = initialPhotoState;
-  let active = true;
-  let generation = 0;
+  let active = true, generation = 0, queued = false, pending = false;
   let session: string | null = null;
+  let running: Promise<void> | null = null;
+  let abort: AbortController | null = null;
+  let disconnect: (() => void) | null = null;
+  let channelGeneration = 0;
+  let closedRecoveryUsed = false;
   const publish = (next: PhotoMonitorState) => { state = next; if (active) deps.publish(next); };
-  async function refresh() {
-    if (!active || !session) return;
-    const ticket = ++generation;
-    publish({ ...state, loading: true, error: null });
+  function leave() {
+    ++channelGeneration;
+    try { disconnect?.(); } catch { /* Channel cleanup must not affect the snapshot. */ }
+    disconnect = null;
+  }
+  function invalidate() {
+    if (!active || !session || state.error === "authorization") return;
+    pending = true;
+    if (queued) return;
+    queued = true;
+    queueMicrotask(() => { queued = false; if (active && session && pending) void drain(); });
+  }
+  function join() {
+    if (!deps.connect || disconnect || !active || !session) return;
+    const ticket = ++channelGeneration;
+    const current = () => active && ticket === channelGeneration;
+    publish({ ...state, connection: "connecting" });
     try {
-      const result = await deps.read();
-      if (!active || ticket !== generation) return;
-      if (result.error?.code === "42501" || result.error?.code === "PGRST301" || result.error?.code === "PGRST303") {
-        publish({ data: null, loading: false, stale: false, error: "authorization" });
-        return;
-      }
-      if (result.error) throw new Error("RPC_FAILED");
-      publish({ data: parsePhotoOverview(result.data), loading: false, stale: false, error: null });
+      const cleanup = deps.connect({
+        message: payload => { if (current() && isPhotoInvalidation(payload)) invalidate(); },
+        status: status => {
+          if (!current()) return;
+          if (status === "SUBSCRIBED") {
+            closedRecoveryUsed = false;
+            publish({ ...state, connection: "subscribed" });
+            invalidate(); // Also closes the initial read / subscribe race.
+          } else if (status === "CLOSED") {
+            // CLOSED is terminal in the SDK; it does not rejoin this channel.
+            // Invalidate old callbacks/reads and let the connector serialize
+            // teardown before a replacement, after a fresh authorized RPC.
+            leave(); ++generation; pending = false; abort?.abort();
+            publish({ ...state, connection: "reconnecting", stale: !!state.data });
+            // Do not spin if the replacement also closes before SUBSCRIBED.
+            if (!closedRecoveryUsed) { closedRecoveryUsed = true; invalidate(); }
+          } else if (["CHANNEL_ERROR", "TIMED_OUT"].includes(status)) {
+            publish({ ...state, connection: "reconnecting", stale: !!state.data });
+          }
+        },
+      });
+      if (current()) disconnect = cleanup; else cleanup();
     } catch {
-      if (active && ticket === generation) publish({ ...state, loading: false, stale: !!state.data, error: "unavailable" });
+      publish({ ...state, connection: "reconnecting", stale: !!state.data });
     }
   }
+  function drain(): Promise<void> {
+    if (running) return running;
+    if (!active || !session || !pending) return Promise.resolve();
+    running = (async () => {
+      while (active && session && pending) {
+        pending = false;
+        const ticket = generation;
+        const controller = new AbortController(); abort = controller;
+        publish({ ...state, loading: true, error: null });
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const cancelled = new Promise<never>((_, reject) => {
+          controller.signal.addEventListener("abort", () => reject(new Error("READ_CANCELLED")), { once: true });
+          timer = setTimeout(() => controller.abort(), 10000);
+        });
+        try {
+          const result = await Promise.race([Promise.resolve(deps.read(controller.signal)), cancelled]);
+          if (!active || ticket !== generation) continue;
+          if (["42501", "PGRST301", "PGRST303"].includes(result.error?.code ?? "")) {
+            pending = false; leave();
+            publish({ data: null, loading: false, stale: false, error: "authorization", connection: "denied" });
+            continue;
+          }
+          if (result.error) throw new Error("RPC_FAILED");
+          publish({ ...state, data: parsePhotoOverview(result.data), loading: false,
+            stale: pending || state.connection === "reconnecting", error: null });
+          join(); // Subscribe only after the Admin RPC has authorized a read.
+        } catch {
+          if (active && ticket === generation) publish({ ...state, loading: false, stale: !!state.data, error: "unavailable" });
+        } finally {
+          clearTimeout(timer);
+          if (abort === controller) abort = null;
+        }
+      }
+    })().finally(() => {
+      running = null;
+      if (active && session && pending) void drain();
+    });
+    return running;
+  }
   return {
-    refresh,
+    refresh() { if (!active || !session) return Promise.resolve(); closedRecoveryUsed = false; pending = true; return drain(); },
+    invalidate,
+    foreground() { closedRecoveryUsed = false; if (state.connection === "reconnecting") leave(); invalidate(); },
     sessionChanged(key: string | null) {
-      if (!active || (key !== null && key === session)) return;
-      session = key;
-      ++generation;
-      publish({ data: null, loading: !!key, stale: false, error: key ? null : "session" });
-      // Do not call Supabase asynchronously inside its auth-change callback.
-      const ticket = generation;
-      if (key) queueMicrotask(() => { if (active && ticket === generation) void refresh(); });
+      if (!active || (key === session && !(key === null && state.loading))) return;
+      session = key; closedRecoveryUsed = false; ++generation; leave(); abort?.abort();
+      pending = !!key;
+      publish({ data: null, loading: !!key, stale: false, error: key ? null : "session",
+        connection: key ? "disabled" : "signed_out" });
+      // Supabase calls must start outside onAuthStateChange's callback.
+      if (key) invalidate();
     },
     markStale() { if (active && state.data) publish({ ...state, stale: true }); },
-    dispose() { active = false; session = null; ++generation; },
+    dispose() { active = false; session = null; pending = false; ++generation; leave(); abort?.abort(); },
+  };
+}
+
+// Supabase reuses an existing channel with the same topic. Serialize teardown
+// before opening a replacement, including React StrictMode and token changes.
+export function createPhotoBroadcastConnector<C>(deps: {
+  open: (events: { message: (payload: unknown) => void; status: (status: string) => void }) => C;
+  close: (channel: C) => Promise<unknown>;
+}) {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (events: { message: (payload: unknown) => void; status: (status: string) => void }) => {
+    let active = true;
+    let channel: C | undefined;
+    tail = tail.catch(() => {}).then(() => {
+      if (!active) return;
+      try { channel = deps.open({message: p => { if (active) events.message(p); }, status: s => { if (active) events.status(s); }}); }
+      catch { if (active) events.status("CHANNEL_ERROR"); }
+    });
+    return () => {
+      active = false;
+      tail = tail.catch(() => {}).then(async () => { if (channel !== undefined) await deps.close(channel); }).catch(() => {});
+    };
   };
 }

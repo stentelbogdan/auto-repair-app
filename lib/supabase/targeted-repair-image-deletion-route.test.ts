@@ -22,7 +22,8 @@ mock.module(new URL('./targeted-repair-image-deletion.ts', import.meta.url).href
 const { handleTargetedImageDeletionRequest: handle } = await import('./targeted-repair-image-deletion-route.ts');
 // Exercise actual route exports without installing Next.js or resolving its alias.
 const routeSource = readFileSync(new URL('../../app/api/repair-requests/images/delete/route.ts', import.meta.url), 'utf8');
-const routeJs = ts.transpileModule(routeSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace('"@/lib/supabase/targeted-repair-image-deletion-route"', JSON.stringify(new URL('./targeted-repair-image-deletion-route.ts', import.meta.url).href));
+const routeJs = ts.transpileModule(routeSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace('"@/lib/supabase/targeted-repair-image-deletion-route"', JSON.stringify(new URL('./targeted-repair-image-deletion-route.ts', import.meta.url).href))
+  .replace('import { after } from "next/server";', 'const after = () => { throw new Error("No task expected with notifications disabled"); };');
 const route = await import(`data:text/javascript;base64,${Buffer.from(routeJs).toString('base64')}`);
 beforeEach(() => {
   calls.length = 0; throws = false;
@@ -30,6 +31,7 @@ beforeEach(() => {
   process.env.VERCEL_ENV = 'preview'; process.env.SUPABASE_URL = TEST;
   process.env.NEXT_PUBLIC_SUPABASE_URL = TEST;
   process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF = 'bstjobvvxxfqqwyjoimx';
+  delete process.env.ADMIN_PHOTO_NOTIFICATION_ENABLED;
   globalThis.fetch = async () => { throw new Error('Real network prohibited'); };
 });
 after(() => { process.env = originalEnv; globalThis.fetch = originalFetch; mock.restoreAll(); });
