@@ -17,10 +17,14 @@ import {
 } from "@/lib/supabase/repair-offers";
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import { getTowingRequestedDateTime } from "@/lib/towing/towing-schedule-display";
+import {
+  getWorkshopRequestDetail,
+  type WorkshopRequestDetail,
+} from "@/lib/supabase/workshop-request-detail";
 
 type HandoverMethod = "customer_dropoff" | "workshop_pickup";
 
-type RepairRequest = RepairRequestRow;
+type RepairRequest = RepairRequestRow | WorkshopRequestDetail;
 type RepairOffer = RepairOfferRow;
 
 const timeSlots = [
@@ -81,13 +85,7 @@ export default function ScheduleDamagePage() {
 
       // MOD SERVICE
       if (isWorkshopMode) {
-        const { data: requestRow, error: requestError } = await supabase
-          .from("repair_requests")
-          .select("*")
-          .eq("id", requestId)
-          .maybeSingle();
-
-        if (requestError) throw requestError;
+        const requestRow = await getWorkshopRequestDetail(requestId);
 
         if (!requestRow) {
           alert("Lucrarea nu a fost găsită.");
@@ -95,7 +93,7 @@ export default function ScheduleDamagePage() {
           return;
         }
 
-        setRequest(requestRow as RepairRequest);
+        setRequest(requestRow);
 
         // Oferta inițială încă nu există în baza de date.
         // Folosim temporar datele salvate în sessionStorage.
