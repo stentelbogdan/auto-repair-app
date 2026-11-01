@@ -67,7 +67,7 @@ function createPhotoNotificationProtocol(deps: Dependencies) {
     // A late getSession result must never start a request after the deadline.
     if (signal.aborted || session?.user.id !== ownerId || !session.access_token) return null;
     const response = await deps.fetch(ENDPOINT, {
-      method: "POST", redirect: "error", cache: "no-store", credentials: "omit", signal,
+      method: "POST", redirect: "error", cache: "no-store", credentials: "same-origin", signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify(body),
     });

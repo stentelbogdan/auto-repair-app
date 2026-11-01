@@ -122,9 +122,13 @@ test("failed/partial upload stops before association ticket, preserving stage 1 
   assert.equal(f.bodies.length, 0); assert.equal(f.saved.length, 0);
   assert.deepEqual(f.messages, ["Nu am putut salva modificările."]);
 });
-for (const phase of ["prepare", "confirm"]) for (const failure of ["throw", "timeout", "403", "429", "503", "200"]) {
+for (const phase of ["prepare", "confirm"]) for (const failure of ["throw", "timeout", "401", "403", "429", "503", "200"]) {
   test(`${phase} ${failure}: save success, no retry and unchanged cleanup`, async () => {
     const f = fixture({ timeoutMs: 5, fetch: async (_url, init) => {
+      assert.equal(_url, "/api/repair-requests/images/notify-change");
+      assert.equal(init!.credentials, "same-origin");
+      assert.equal(init!.redirect, "error");
+      assert.equal(new Headers(init!.headers).get("Authorization"), "Bearer synthetic");
       const action = JSON.parse(String(init!.body)).action;
       if (action !== phase) return action === "prepare" ? Response.json({ status: "prepared", ticket }) : new Response(null, { status: 202 });
       if (failure === "throw") throw new Error("notification error");

@@ -41,10 +41,60 @@ test("prepare/confirm use only fixed same-origin endpoint and session header, on
   for (const { url, init } of f.calls) {
     assert.equal(url, "/api/repair-requests/images/notify-change");
     assert.equal(init.method, "POST"); assert.equal(init.redirect, "error");
-    assert.equal(init.cache, "no-store"); assert.equal(init.credentials, "omit");
+    assert.equal(init.cache, "no-store"); assert.equal(init.credentials, "same-origin");
     assert.equal(new Headers(init.headers).get("Authorization"), `Bearer ${session.access_token}`);
     assert.ok(!url.includes(session.access_token)); assert.ok(!String(init.body).includes(session.access_token));
   }
+});
+for (const kind of ["upload", "creation", "edit"] as const) {
+  test(`${kind}: prepare and confirm retain cookies only for the fixed same-origin destination and require Bearer`, async () => {
+    const f = fixture();
+    const n = kind === "upload"
+      ? await createUploadPhotoNotifications(f.deps).prepareUpload(path, owner)
+      : kind === "creation"
+        ? await createRequestPhotoNotifications(f.deps).prepareCreation(owner)
+        : await createEditedRequestPhotoNotifications(f.deps).prepareUpdate(owner, owner, [], [{ path }]);
+    assert.ok(n);
+    await n.confirm(owner);
+    assert.equal(f.calls.length, 2);
+    for (const { url, init } of f.calls) {
+      // Resolve as a browser would; no caller-supplied URL or protocol-relative host.
+      const origin = "https://preview.example.invalid";
+      assert.equal(url, "/api/repair-requests/images/notify-change");
+      const request = new Request(new URL(url, origin), init);
+      assert.equal(new URL(request.url).origin, origin);
+      assert.equal(request.credentials, "same-origin");
+      assert.equal(request.redirect, "error");
+      assert.equal(request.headers.get("Authorization"), `Bearer ${session.access_token}`);
+    }
+  });
+}
+for (const phase of ["prepare", "confirm"] as const) {
+  test(`${phase}: browser redirect rejection never follows an external Location or retries`, async () => {
+    const f = fixture();
+    const calls: string[] = [];
+    const client = createUploadPhotoNotifications({ ...f.deps, fetch: async (url, init) => {
+      calls.push(String(url));
+      assert.equal(url, "/api/repair-requests/images/notify-change");
+      assert.equal(init!.redirect, "error");
+      assert.equal(init!.credentials, "same-origin");
+      if (JSON.parse(String(init!.body)).action === phase) {
+        // Native fetch rejects redirects with this mode; no redirect destination is fetched.
+        throw new TypeError("Failed to fetch");
+      }
+      return prepared();
+    } });
+    const n = await client.prepareUpload(path, owner);
+    if (phase === "prepare") assert.equal(n, null);
+    else { assert.ok(n); await n.confirm(); await n.confirm(); }
+    assert.equal(calls.length, phase === "prepare" ? 1 : 2);
+  });
+}
+test("same-origin cookies cannot replace a missing access token", async () => {
+  const f = fixture();
+  f.change({ ...session, access_token: "" });
+  assert.equal(await createUploadPhotoNotifications(f.deps).prepareUpload(path, owner), null);
+  assert.equal(f.calls.length, 0);
 });
 for (const patch of [{ enabled: false }, { supabaseUrl: undefined }, { projectRef: "other" },
   { supabaseUrl: "https://ouoiykudvcoqbkybkqvs.supabase.co" }, { supabaseUrl: config.supabaseUrl + "@example.invalid" }]) {
@@ -54,7 +104,8 @@ for (const patch of [{ enabled: false }, { supabaseUrl: undefined }, { projectRe
     assert.equal(await client.prepareUpload(path, owner), null); assert.equal(f.calls.length, 0);
   });
 }
-for (const value of ["../x.jpg", `${owner}/nested/x.jpg`, "other/x.jpg", `${owner}/x?secret=1`]) {
+for (const value of ["../x.jpg", `${owner}/nested/x.jpg`, "other/x.jpg", `${owner}/x?secret=1`,
+  "https://external.example.invalid/photo.jpg", "//external.example.invalid/photo.jpg"]) {
   test(`invalid reservation path never sent: ${value}`, async () => {
     const f = fixture(); assert.equal(await createUploadPhotoNotifications(f.deps).prepareUpload(value, owner), null);
     assert.equal(f.calls.length, 0);
