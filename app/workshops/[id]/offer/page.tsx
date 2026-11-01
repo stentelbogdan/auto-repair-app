@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
+import { getWorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
 
 type RepairRequestRow = {
   id: string;
@@ -51,13 +52,9 @@ export default function MakeOfferPage() {
           return;
         }
 
-        const { data, error } = await supabase
-          .from("repair_requests")
-          .select("id, status, car_brand, car_model, car_year, city")
-          .eq("id", id)
-          .single<RepairRequestRow>();
+        const data = await getWorkshopRequestDetail(id);
 
-        if (error || !data) {
+        if (!data) {
           router.push("/workshops");
           return;
         }

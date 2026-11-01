@@ -9,10 +9,7 @@ import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
-import type {
-  RepairServiceDetails,
-  TowingScheduleType,
-} from "@/lib/supabase/repair-requests";
+import { getWorkshopRequestDetail, type WorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
 import { getRequestTypeBadgeLabel } from "@/lib/displayLabels";
 import { getMechanicalServiceDetailGroups } from "@/lib/mechanical/mechanical-service-details";
@@ -24,46 +21,12 @@ import {
   getWorkshopRequestMetrics,
   type RepairRequestMetrics as RepairRequestMetricsValue,
 } from "@/lib/supabase/repair-request-metrics";
-import type { RepairServiceType } from "@/lib/repair-requests/service-types";
 import {
   formatTowingRouteDuration,
   getTowingDisplaySummary,
 } from "@/lib/towing/towing-display";
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
-import type { TowingRoutePaths } from "@/lib/towing/towing-route";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
-
-type RepairImage = {
-  name?: string;
-  url?: string;
-  dataUrl?: string;
-  thumbUrl?: string;
-};
-
-type RepairRequestRow = {
-  id: string;
-  car_brand: string;
-  car_model: string;
-  car_year: string;
-  city: string;
-  license_plate: string | null;
-  damage_type: string;
-  service_details: RepairServiceDetails | null;
-  service_type: RepairServiceType | null;
-  pickup_lat: number | null;
-  pickup_lng: number | null;
-  destination_lat: number | null;
-  destination_lng: number | null;
-  route_distance_meters: number | null;
-  route_duration_seconds: number | null;
-  route_paths: TowingRoutePaths | null;
-  towing_schedule_type: TowingScheduleType | null;
-  towing_requested_at: string | null;
-  towing_requested_timezone: string | null;
-  description: string | null;
-  images: RepairImage[];
-  status: string;
-};
 
 export default function WorkshopRequestDetailsPage() {
   const router = useRouter();
@@ -74,7 +37,7 @@ export default function WorkshopRequestDetailsPage() {
   const dateFromUrl = searchParams.get("date");
   const timeFromUrl = searchParams.get("time");
 
-  const [request, setRequest] = useState<RepairRequestRow | null>(null);
+  const [request, setRequest] = useState<WorkshopRequestDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [price, setPrice] = useState("");
   const [days, setDays] = useState("");
@@ -112,20 +75,10 @@ export default function WorkshopRequestDetailsPage() {
           return;
         }
 
-        const { data, error } = await supabase
-          .from("repair_requests")
-          .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, service_details, service_type, pickup_lat, pickup_lng, destination_lat, destination_lng, route_distance_meters, route_duration_seconds, route_paths, towing_schedule_type, towing_requested_at, towing_requested_timezone, description, images, status",
-          )
-          .eq("id", id)
-          .single<RepairRequestRow>();
+        const data = await getWorkshopRequestDetail(id);
 
-        if (error || !data) {
-          if (!silent) {
-            setRequest(null);
-          } else if (process.env.NODE_ENV === "development") {
-            console.error("Silent repair request refresh failed.", error);
-          }
+        if (!data) {
+          setRequest(null);
           return;
         }
 

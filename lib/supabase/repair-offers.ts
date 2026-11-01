@@ -25,92 +25,32 @@ export async function createRepairOffer(input: {
   availableTime?: string;
   handoverMethod?: "customer_dropoff" | "workshop_pickup";
   pickupAddress?: string;
-}) {
-  // 1. Luăm clientul căruia îi aparține cererea
-  const { data: request, error: requestError } = await supabase
-    .from("repair_requests")
-    .select("user_id")
-    .eq("id", input.requestId)
-    .single();
+}): Promise<string> {
+  // Keep workshopUserId in the caller contract, but only the authenticated
+  // identity inside the RPC may determine the workshop owning the offer.
+  const { data, error } = await supabase.rpc("create_repair_offer_with_appointment", {
+    p_request_id: input.requestId,
+    p_price: input.price,
+    p_days: input.days,
+    p_message: input.message,
+    p_workshop_name: input.workshopName,
+    p_available_date: input.availableDate || null,
+    p_available_time: input.availableTime || null,
+    p_handover_method: input.handoverMethod || "customer_dropoff",
+    p_pickup_address: input.handoverMethod === "workshop_pickup"
+      ? input.pickupAddress?.trim() || null
+      : null,
+  });
 
-  if (requestError) {
-    throw requestError;
+  if (error) throw error;
+
+  if (typeof data !== "string" || data.length !== 36 ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) {
+    // A malformed response does not prove rollback. Never retry or compensate.
+    throw new Error("Răspunsul creării ofertei nu conține un ID valid. Verifică lista ofertelor înainte de a reîncerca.");
   }
 
-  if (!request?.user_id) {
-    throw new Error("Nu am putut identifica clientul cererii.");
-  }
-
-  // 2. Creăm oferta
-  const { data: offer, error: offerError } = await supabase
-    .from("repair_offers")
-    .insert({
-      request_id: input.requestId,
-      workshop_user_id: input.workshopUserId,
-      price: input.price,
-      days: input.days,
-      message: input.message,
-      workshop_name: input.workshopName,
-      available_date: input.availableDate || null,
-      available_time: input.availableTime || null,
-      status: "pending",
-    })
-    .select()
-    .single();
-
-  if (offerError) {
-    throw offerError;
-  }
-
-  if (!offer?.id) {
-    throw new Error("Oferta a fost creată fără un ID valid.");
-  }
-
-  // 3. Creăm programarea inițială propusă de service
-  const { error: appointmentError } = await supabase
-    .from("repair_appointments")
-    .insert({
-      request_id: input.requestId,
-      offer_id: offer.id,
-      customer_id: request.user_id,
-      workshop_id: input.workshopUserId,
-
-      appointment_date: input.availableDate || null,
-      appointment_time: input.availableTime || null,
-
-      original_date: input.availableDate || null,
-      original_time: input.availableTime || null,
-
-      proposed_date: input.availableDate || null,
-      proposed_time: input.availableTime || null,
-
-      handover_method: input.handoverMethod || "customer_dropoff",
-
-      pickup_address:
-        input.handoverMethod === "workshop_pickup"
-          ? input.pickupAddress?.trim() || null
-          : null,
-
-      status: "requested",
-    });
-
-  if (appointmentError) {
-    const { error: rollbackError } = await supabase
-      .from("repair_offers")
-      .delete()
-      .eq("id", offer.id);
-
-    if (rollbackError) {
-      console.error(
-        "Programarea nu a fost creată, iar oferta nu a putut fi ștearsă:",
-        rollbackError,
-      );
-    }
-
-    throw appointmentError;
-  }
-
-  return offer as RepairOfferRow;
+  return data;
 }
 
 export async function getOffersForCustomerRequests(userId: string) {
