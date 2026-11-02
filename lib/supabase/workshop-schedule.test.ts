@@ -118,6 +118,11 @@ function fixture(path = calendarPath, options: Options = {}) {
           : key === "mode" && options.initial !== false ? "initial-offer" : null }),
     };
     if (name === "@/lib/supabase/client") return { supabase };
+    if (name === "@/lib/supabase/repair-appointments") return {
+      customerProposeRepairAppointment: () => { throw new Error("Initial calendar must not mutate appointments"); },
+      workshopProposeRepairAppointment: () => { throw new Error("Initial calendar must not mutate appointments"); },
+      appointmentMutationErrorMessage: () => "Synthetic mutation error",
+    };
     if (name === "@/lib/supabase/workshop-request-detail") return reader.exports;
     if (name === "@/lib/supabase/repair-requests") return {
       getOwnRepairRequests: async (owner: string) => { ownReads.push(owner); return options.ownMissing ? [] : [{ ...value, user_id: owner }]; },

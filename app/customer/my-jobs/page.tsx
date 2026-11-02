@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
+  customerAcceptWorkshopAppointment,
+  appointmentMutationErrorMessage,
+} from "@/lib/supabase/repair-appointments";
+
+import {
   getPublicWorkshopSummaries,
   type PublicWorkshopSummary,
 } from "@/lib/supabase/profiles";
@@ -937,22 +942,21 @@ export default function MyJobsPage() {
     };
   }, []);
 
-  const acceptAppointmentProposal = async (appointmentId: string) => {
+  const acceptAppointmentProposal = async (appointment: RepairAppointment) => {
     try {
-      const { error } = await supabase
-        .from("repair_appointments")
-        .update({
-          status: "confirmed",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", appointmentId);
+      if (!appointment.updated_at) {
+        throw new Error("Programarea nu are versiunea necesară actualizării.");
+      }
 
-      if (error) throw error;
+      await customerAcceptWorkshopAppointment({
+        appointmentId: appointment.id,
+        expectedUpdatedAt: appointment.updated_at,
+      });
 
       scheduleJobsRefreshRef.current("appointment-accepted");
     } catch (error) {
       console.error("Failed to accept appointment:", error);
-      alert("Nu am putut confirma programarea.");
+      alert(appointmentMutationErrorMessage(error));
     }
   };
 
@@ -1320,7 +1324,7 @@ export default function MyJobsPage() {
                               return;
                             }
 
-                            acceptAppointmentProposal(appointment.id);
+                            acceptAppointmentProposal(appointment);
                           }}
                           className={`${interactiveButton} w-full rounded-[20px] bg-orange-500 px-4 py-5 text-center text-sm font-black text-white`}
                         >

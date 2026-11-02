@@ -4,6 +4,11 @@ import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import {
+  getAppointmentProposalDestination,
+  isAppointmentProposal,
+  type AppointmentProposalNotification,
+} from "@/lib/supabase/appointment-navigation";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import {
   MessageCircle,
@@ -193,6 +198,7 @@ export default function AppNavbar() {
     targetUrl: string | null;
     type: string | null;
     icon: "calendar" | "review";
+    proposal?: AppointmentProposalNotification;
   } | null>(null);
   const [fromParam, setFromParam] = useState<string | null>(null);
   const perfStartRef = useRef(0);
@@ -1120,6 +1126,9 @@ export default function AppNavbar() {
             title?: string | null;
             message?: string | null;
             target_url?: string | null;
+            request_id?: string | null;
+            offer_id?: string | null;
+            appointment_id?: string | null;
           };
 
           if (
@@ -1160,6 +1169,7 @@ export default function AppNavbar() {
                   ) ?? "/workshops/won-jobs?tab=completed"
                 : notification.target_url || null,
             type: notification.type || null,
+            proposal: { type: notification.type, request_id: notification.request_id, offer_id: notification.offer_id, appointment_id: notification.appointment_id },
             icon:
               notification.type ===
               CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
@@ -1491,29 +1501,31 @@ export default function AppNavbar() {
     void runLocked(async ({ navigate }) => {
       let customerOffersUrl = "/offers";
       let workshopOffersUrl = "/workshops/my-offers";
+      let proposalDestination: string | null = null;
+      if (userId && appointmentProposalUnreadCount > 0) {
+        try {
+          const { data, error } = await supabase.from("notifications")
+            .select("type, request_id, offer_id, appointment_id")
+            .eq("recipient_id", userId).is("read_at", null)
+            .eq("type", isWorkshopMode ? "customer_proposed_appointment" : "workshop_proposed_appointment")
+            .order("created_at", { ascending: false }).limit(1).maybeSingle();
+          if (error) throw error;
+          if (data) proposalDestination = await getAppointmentProposalDestination(data, isWorkshopMode ? "workshop" : "customer", userId);
+          if (!proposalDestination) {
+            alert("Programarea nu este disponibilă momentan. Reîncarcă notificările.");
+            return;
+          }
+        } catch {
+          alert("Nu am putut verifica destinația programării. Reîncearcă după reîncărcare.");
+          return;
+        }
+      }
 
-      if (!isWorkshopMode && userId) {
+      if (!isWorkshopMode && userId && !proposalDestination) {
         try {
           let requestId: string | null = null;
 
-          if (appointmentProposalUnreadCount > 0) {
-            const { data: notification, error: notificationError } =
-              await supabase
-                .from("notifications")
-                .select("request_id")
-                .eq("recipient_id", userId)
-                .is("read_at", null)
-                .in("type", [
-                  "customer_proposed_appointment",
-                  "workshop_proposed_appointment",
-                ])
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle<{ request_id: string | null }>();
-
-            if (notificationError) throw notificationError;
-            requestId = notification?.request_id ?? null;
-          } else if (offerUnreadCount > 0) {
+          if (offerUnreadCount > 0) {
             const { data: requests, error: requestsError } = await supabase
               .from("repair_requests")
               .select("id")
@@ -1558,43 +1570,6 @@ export default function AppNavbar() {
           }
         } catch (error) {
           console.error("Failed to resolve customer offers category:", error);
-        }
-      }
-
-      if (isWorkshopMode && userId && appointmentProposalUnreadCount > 0) {
-        try {
-          const { data: notification, error: notificationError } =
-            await supabase
-              .from("notifications")
-              .select("request_id")
-              .eq("recipient_id", userId)
-              .is("read_at", null)
-              .eq("type", "customer_proposed_appointment")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle<{ request_id: string | null }>();
-
-          if (notificationError) throw notificationError;
-
-          if (notification?.request_id) {
-            const { data: request, error: requestError } = await supabase
-              .from("repair_requests")
-              .select("service_type")
-              .eq("id", notification.request_id)
-              .maybeSingle<{ service_type: string | null }>();
-
-            if (requestError) throw requestError;
-
-            const serviceType = resolveRepairServiceType(
-              request?.service_type,
-            );
-
-            if (serviceType) {
-              workshopOffersUrl += `?category=${serviceType}`;
-            }
-          }
-        } catch (error) {
-          console.error("Failed to resolve workshop offers category:", error);
         }
       }
 
@@ -1657,6 +1632,12 @@ export default function AppNavbar() {
         } else {
           setAppointmentProposalUnreadCount(0);
         }
+      }
+
+      if (proposalDestination) {
+        localStorage.setItem("activeRole", isWorkshopMode ? "workshop" : "customer");
+        navigate(proposalDestination);
+        return;
       }
 
       if (isWorkshopMode) {
@@ -1959,6 +1940,21 @@ export default function AppNavbar() {
           types: [CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE],
         });
         navigate(await getWorkshopReviewDestination());
+      });
+      return;
+    }
+
+    if (isAppointmentProposal(toast.type)) {
+      void runLocked(async ({ navigate }) => {
+        try {
+          const destination = userId && toast.proposal
+            ? await getAppointmentProposalDestination(toast.proposal, isWorkshopMode ? "workshop" : "customer", userId)
+            : null;
+          if (destination) navigate(destination);
+          else alert("Programarea nu este disponibilă momentan.");
+        } catch {
+          alert("Nu am putut verifica destinația programării. Reîncarcă notificările.");
+        }
       });
       return;
     }

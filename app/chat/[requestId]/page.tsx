@@ -5,6 +5,10 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import {
+  observeMessageConversationContext,
+  type MessageConversationContext,
+} from "@/lib/supabase/message-conversation-context";
+import {
   getConversationPeerKey,
   loadConversationPeers,
   loadPublicWorkshopSummaries,
@@ -34,22 +38,6 @@ type Message = {
   created_at: string;
   delivered_at?: string | null;
   read_at?: string | null;
-};
-
-type RepairImage = {
-  name?: string;
-  url?: string;
-  dataUrl?: string;
-};
-
-type RequestData = {
-  car_brand: string | null;
-  car_model: string | null;
-  city: string | null;
-  status: string | null;
-  images: RepairImage[] | null;
-  request_type: string | null;
-  target_workshop_id: string | null;
 };
 
 type PendingInboxMutation = {
@@ -141,7 +129,23 @@ export default function ChatPage() {
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [newMessage, setNewMessage] = useState("");
   const [userId, setUserId] = useState("");
-  const [requestData, setRequestData] = useState<RequestData | null>(null);
+  const [requestContext, setRequestContext] = useState<{
+    requestId: string;
+    offerId: string | null;
+    data: MessageConversationContext | null;
+  } | null>(null);
+  // Scope the rendered value as well as async work: never render the previous
+  // conversation while the new effect is waiting to run.
+  const requestData = isDirectDraft ? {
+    car_brand: "Mesaj direct",
+    car_model: "Service",
+    city: "-",
+    status: "open",
+    images: [],
+    request_type: "direct_message",
+    target_workshop_id: directWorkshopId,
+  } : requestContext?.requestId === requestId && requestContext.offerId === offerId
+    ? requestContext.data : null;
   const [sendingQuickMessage, setSendingQuickMessage] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [activeRole, setActiveRole] = useState<string>("customer");
@@ -483,29 +487,11 @@ export default function ChatPage() {
     setMessagesLoading(false);
   };
 
-  const loadRequest = useCallback(async () => {
-    if (isDirectDraft) return;
-
-    const { data, error } = await supabase
-      .from("repair_requests")
-      .select(
-        `
-  car_brand,
-  car_model,
-  city,
-  status,
-  images,
-  request_type,
-  target_workshop_id
-`,
-      )
-      .eq("id", requestId)
-      .single<RequestData>();
-
-    if (!error && data) {
-      setRequestData(data);
-    }
-  }, [isDirectDraft, requestId]);
+  useEffect(() => {
+    return observeMessageConversationContext(requestId, offerId, data => {
+      setRequestContext({ requestId, offerId, data });
+    });
+  }, [requestId, offerId]);
 
   const loadPeerProfile = useCallback(async () => {
     const generation = peerProfileLoadGenerationRef.current + 1;
@@ -582,15 +568,6 @@ export default function ChatPage() {
     if (isDirectDraft) {
       setMessages([]);
       setMessagesLoading(false);
-      setRequestData({
-        car_brand: "Mesaj direct",
-        car_model: "Service",
-        city: "-",
-        status: "open",
-        images: [],
-        request_type: "direct_message",
-        target_workshop_id: directWorkshopId,
-      });
       void getUser();
       void loadPeerProfile();
 
@@ -615,7 +592,6 @@ export default function ChatPage() {
     }
 
     void loadMessages();
-    void loadRequest();
     void loadPeerProfile();
 
     const channel = supabase
@@ -726,7 +702,6 @@ export default function ChatPage() {
     invalidateMarkReadGeneration,
     isDirectDraft,
     loadMessages,
-    loadRequest,
     loadPeerProfile,
     logPerf,
     requestId,

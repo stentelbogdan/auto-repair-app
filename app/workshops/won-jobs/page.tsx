@@ -1,9 +1,16 @@
 "use client";
 
+import { loadWorkshopOfferRequests } from "@/lib/supabase/workshop-offer-requests";
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import {
+  workshopProposeRepairAppointment,
+  workshopResolveCustomerAppointment,
+  appointmentMutationErrorMessage,
+} from "@/lib/supabase/repair-appointments";
+
 import CarHeader from "@/app/components/CarHeader";
 import OfferSummaryCard from "@/app/components/OfferSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
@@ -115,37 +122,6 @@ type JobImage = {
   name: string;
   dataUrl: string;
   url?: string;
-};
-
-type WonJobRequestRow = {
-  id: string;
-  car_brand: string | null;
-  car_model: string | null;
-  car_year: string | null;
-  city: string | null;
-  license_plate: string | null;
-  damage_type: string | null;
-  service_type: RepairServiceType | null;
-  service_details: RepairServiceDetails | null;
-  pickup_lat: number | null;
-  pickup_lng: number | null;
-  destination_lat: number | null;
-  destination_lng: number | null;
-  route_distance_meters: number | null;
-  route_duration_seconds: number | null;
-  route_paths: TowingRoutePaths | null;
-  towing_schedule_type: TowingScheduleType | null;
-  towing_requested_at: string | null;
-  towing_requested_timezone: string | null;
-  description: string | null;
-  images: Array<{
-    name?: string | null;
-    dataUrl?: string | null;
-    url?: string | null;
-  }> | null;
-  status: string | null;
-  accepted_offer_id: string | null;
-  created_at: string | null;
 };
 
 type RepairAppointment = {
@@ -270,10 +246,12 @@ function getTowingRouteData(request: WonJob["request"]) {
 export default function WorkshopWonJobsPage() {
   const router = useRouter();
   const startingJobIdsRef = useRef(new Set<string>());
+  const jobsLoadVersion = useRef(0);
 
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingJobs, setLoadingJobs] = useState(false);
+  const [jobsLoadError, setJobsLoadError] = useState(false);
   const [jobs, setJobs] = useState<WonJob[]>([]);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<JobFilter>("appointments");
@@ -402,7 +380,10 @@ export default function WorkshopWonJobsPage() {
   }, []);
 
   const loadWonJobs = async (userId: string) => {
+    const version = ++jobsLoadVersion.current;
+    const isStale = () => version !== jobsLoadVersion.current;
     setLoadingJobs(true);
+    setJobsLoadError(false);
 
     try {
       const { data: offersData, error: offersError } = await supabase
@@ -479,8 +460,6 @@ export default function WorkshopWonJobsPage() {
         });
       }
 
-      let requestsMap = new Map<string, WonJobRequestRow>();
-
       let latestProgressMap = new Map<string, string>();
       let completionTimestampMap = new Map<string, string>();
 
@@ -508,51 +487,12 @@ export default function WorkshopWonJobsPage() {
         });
       }
 
-      if (requestIds.length > 0) {
-        const { data: requestsData, error: requestsError } = await supabase
-          .from("repair_requests")
-          .select(
-            `
-            id,
-            car_brand,
-            car_model,
-            car_year,
-            city,
-            license_plate,
-            damage_type,
-            service_type,
-            service_details,
-            pickup_lat,
-            pickup_lng,
-            destination_lat,
-            destination_lng,
-            route_distance_meters,
-            route_duration_seconds,
-            route_paths,
-            towing_schedule_type,
-            towing_requested_at,
-            towing_requested_timezone,
-            description,
-            images,
-            status,
-            accepted_offer_id,
-            created_at
-          `,
-          )
-          .in("id", requestIds);
-
-        if (requestsError) throw requestsError;
-
-        requestsMap = new Map(
-          (requestsData || []).map((request) => [
-            request.id,
-            request as WonJobRequestRow,
-          ]),
-        );
-      }
+      const requestsMap = await loadWorkshopOfferRequests(requestIds, isStale);
+      if (isStale()) return;
 
       const mapped: WonJob[] = (offersData || []).map((row) => {
         const request = requestsMap.get(row.request_id);
+        if (!request) throw new Error("WON_JOB_CONTEXT_UNAVAILABLE");
 
         return {
           offerId: row.id,
@@ -618,11 +558,12 @@ export default function WorkshopWonJobsPage() {
       const sortedJobs = sortJobsByLatestActivity(mapped);
 
       setJobs(sortedJobs);
-    } catch (error) {
-      console.error("Failed to load won jobs:", error);
+    } catch {
+      if (isStale()) return;
       setJobs([]);
+      setJobsLoadError(true);
     } finally {
-      setLoadingJobs(false);
+      if (!isStale()) setLoadingJobs(false);
     }
   };
 
@@ -854,68 +795,30 @@ export default function WorkshopWonJobsPage() {
     if (!job.appointment) return;
 
     try {
-      const { error } = await supabase
-        .from("repair_appointments")
-        .update({
-          status,
-          appointment_date:
-            status === "confirmed" && job.appointment.proposed_date
-              ? job.appointment.proposed_date
-              : job.appointment.appointment_date,
-          appointment_time:
-            status === "confirmed" && job.appointment.proposed_time
-              ? job.appointment.proposed_time
-              : job.appointment.appointment_time,
-          proposed_date:
-            status === "confirmed" ? null : job.appointment.proposed_date,
-          proposed_time:
-            status === "confirmed" ? null : job.appointment.proposed_time,
-          workshop_note:
-            status === "confirmed" ? null : job.appointment.workshop_note,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", job.appointment.id);
+      if (!job.appointment.updated_at) {
+        throw new Error("Programarea nu are versiunea necesară actualizării.");
+      }
 
-      if (error) throw error;
+      const updatedAppointment = await workshopResolveCustomerAppointment({
+        appointmentId: job.appointment.id,
+        expectedUpdatedAt: job.appointment.updated_at,
+        decision: status,
+      });
 
       setJobs((prev) =>
         prev.map((item) =>
-          item.requestId === job.requestId
+          item.offerId === job.offerId && item.appointment?.id === job.appointment?.id
+            && item.appointment?.updated_at === job.appointment?.updated_at
             ? {
                 ...item,
-                appointment: item.appointment
-                  ? {
-                      ...item.appointment,
-                      status,
-                      appointment_date:
-                        status === "confirmed" && item.appointment.proposed_date
-                          ? item.appointment.proposed_date
-                          : item.appointment.appointment_date,
-                      appointment_time:
-                        status === "confirmed" && item.appointment.proposed_time
-                          ? item.appointment.proposed_time
-                          : item.appointment.appointment_time,
-                      proposed_date:
-                        status === "confirmed"
-                          ? null
-                          : item.appointment.proposed_date,
-                      proposed_time:
-                        status === "confirmed"
-                          ? null
-                          : item.appointment.proposed_time,
-                      workshop_note:
-                        status === "confirmed"
-                          ? null
-                          : item.appointment.workshop_note,
-                    }
-                  : item.appointment,
+                appointment: updatedAppointment,
               }
             : item,
         ),
       );
     } catch (error) {
       console.error("Failed to update appointment:", error);
-      alert("Nu am putut actualiza programarea.");
+      alert(appointmentMutationErrorMessage(error));
     }
   };
 
@@ -928,29 +831,25 @@ export default function WorkshopWonJobsPage() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("repair_appointments")
-        .update({
-          proposed_date: newAppointmentDate,
-          proposed_time: newAppointmentTime,
-          status: "workshop_proposed",
-          workshop_note: "Service-ul a propus o altă dată.",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", job.appointment.id)
-        .select(
-          "id, request_id, appointment_date, appointment_time, proposed_date, proposed_time, handover_method, pickup_address, customer_note, workshop_note, status, updated_at",
-        )
-        .single();
+      if (!job.appointment.updated_at) {
+        throw new Error("Programarea nu are versiunea necesară actualizării.");
+      }
 
-      if (error) throw error;
+      const data = await workshopProposeRepairAppointment({
+        appointmentId: job.appointment.id,
+        expectedUpdatedAt: job.appointment.updated_at,
+        proposedDate: newAppointmentDate,
+        proposedTime: newAppointmentTime,
+        workshopNote: "Service-ul a propus o altă dată.",
+      });
 
       setJobs((prev) =>
         prev.map((item) =>
-          item.requestId === job.requestId
+          item.offerId === job.offerId && item.appointment?.id === job.appointment?.id
+            && item.appointment?.updated_at === job.appointment?.updated_at
             ? {
                 ...item,
-                appointment: data as RepairAppointment,
+                appointment: data,
               }
             : item,
         ),
@@ -963,7 +862,7 @@ export default function WorkshopWonJobsPage() {
       alert("Noua dată a fost propusă clientului.");
     } catch (error) {
       console.error("Failed to propose another appointment:", error);
-      alert("Nu am putut propune altă dată.");
+      alert(appointmentMutationErrorMessage(error));
     }
   };
 
@@ -1062,6 +961,12 @@ export default function WorkshopWonJobsPage() {
         {loadingJobs ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
             <p className="text-white/70">Se încarcă lucrările...</p>
+          </div>
+        ) : jobsLoadError ? (
+          <div role="alert" className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
+            <p className="text-white/70">
+              Lucrările nu pot fi afișate momentan. Reîncarcă pagina pentru a verifica accesul și datele disponibile.
+            </p>
           </div>
         ) : filteredJobs.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
