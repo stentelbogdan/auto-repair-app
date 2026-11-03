@@ -19,7 +19,6 @@ import {
 import { BadgeEuro } from "lucide-react";
 import {
   CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
-  markNotificationsAsRead,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
   WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
   WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
@@ -842,7 +841,6 @@ export default function AppNavbar() {
 
       if (requestsError) {
         console.error("Failed to load customer requests:", requestsError);
-        setOfferUnreadCount(0);
         return;
       }
 
@@ -865,11 +863,10 @@ export default function AppNavbar() {
 
       if (error) {
         console.error("Failed to load unread offers:", error);
-        setOfferUnreadCount(0);
         return;
       }
 
-      setOfferUnreadCount(count || 0);
+      if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) setOfferUnreadCount(count);
     };
 
     const loadUnreadAppointmentNotifications = async () => {
@@ -896,6 +893,7 @@ export default function AppNavbar() {
         .from("notifications")
         .select("type, recipient_role")
         .eq("recipient_id", userId)
+        .eq("recipient_role", isWorkshopMode ? "workshop" : "customer")
         .is("read_at", null)
         .in("type", notificationTypes);
 
@@ -907,11 +905,6 @@ export default function AppNavbar() {
           error,
         );
 
-        setAppointmentProposalUnreadCount(0);
-        setAppointmentConfirmedUnreadCount(0);
-        setJobStartedUnreadCount(0);
-        setRejectedOfferUnreadCount(0);
-        setReviewSubmittedUnreadCount(0);
         return;
       }
 
@@ -968,11 +961,10 @@ export default function AppNavbar() {
 
       if (error) {
         console.error("Failed to load unread won jobs:", error);
-        setWonJobsUnreadCount(0);
         return;
       }
 
-      setWonJobsUnreadCount(count || 0);
+      if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) setWonJobsUnreadCount(count);
     };
 
     const progressScheduler = createRefreshScheduler(
@@ -1150,6 +1142,8 @@ export default function AppNavbar() {
       Protecție suplimentară:
       nu afișăm notificări produse de utilizatorul curent.
     */
+          if (notification.recipient_role !== (isWorkshopMode ? "workshop" : "customer")) return;
+
           if (notification.actor_id === userId) {
             return;
           }
@@ -1219,6 +1213,9 @@ export default function AppNavbar() {
         }
 
         if (status === "SUBSCRIBED") {
+          if (isClientMode) { offersScheduler.schedule(); progressScheduler.schedule(); }
+          if (isWorkshopMode) wonJobsScheduler.schedule();
+          notificationsScheduler.schedule();
           if (unreadMessagesRealtimeDegradedRef.current) {
             unreadMessagesRealtimeDegradedRef.current = false;
             scheduleUnreadMessagesRefresh("realtime-recovered");
@@ -1506,7 +1503,7 @@ export default function AppNavbar() {
         try {
           const { data, error } = await supabase.from("notifications")
             .select("type, request_id, offer_id, appointment_id")
-            .eq("recipient_id", userId).is("read_at", null)
+            .eq("recipient_id", userId).eq("recipient_role", isWorkshopMode ? "workshop" : "customer").is("read_at", null)
             .eq("type", isWorkshopMode ? "customer_proposed_appointment" : "workshop_proposed_appointment")
             .order("created_at", { ascending: false }).limit(1).maybeSingle();
           if (error) throw error;
@@ -1538,15 +1535,16 @@ export default function AppNavbar() {
             if (requestIds.length > 0) {
               const { data: offer, error: offerError } = await supabase
                 .from("repair_offers")
-                .select("request_id")
+                .select("id,request_id")
                 .in("request_id", requestIds)
                 .is("customer_read_at", null)
                 .order("created_at", { ascending: false })
                 .limit(1)
-                .maybeSingle<{ request_id: string | null }>();
+                .maybeSingle<{ id: string; request_id: string | null }>();
 
               if (offerError) throw offerError;
               requestId = offer?.request_id ?? null;
+              if (offer?.id) customerOffersUrl += `?focusOffer=${encodeURIComponent(offer.id)}`;
             }
           }
 
@@ -1565,7 +1563,7 @@ export default function AppNavbar() {
             );
 
             if (serviceType) {
-              customerOffersUrl += `?category=${serviceType}`;
+              customerOffersUrl += `${customerOffersUrl.includes("?") ? "&" : "?"}category=${serviceType}`;
             }
           }
         } catch (error) {
@@ -1608,29 +1606,6 @@ export default function AppNavbar() {
           }
         } catch (error) {
           console.error("Failed to resolve rejected offer target:", error);
-        }
-      }
-
-      if (userId && appointmentProposalUnreadCount > 0) {
-        const { error } = await supabase
-          .from("notifications")
-          .update({
-            read_at: new Date().toISOString(),
-          })
-          .eq("recipient_id", userId)
-          .is("read_at", null)
-          .in("type", [
-            "customer_proposed_appointment",
-            "workshop_proposed_appointment",
-          ]);
-
-        if (error) {
-          console.error(
-            "Failed to mark appointment notifications as read:",
-            error,
-          );
-        } else {
-          setAppointmentProposalUnreadCount(0);
         }
       }
 
@@ -1712,27 +1687,9 @@ export default function AppNavbar() {
             notification?.type ===
             CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
           ) {
-            await markNotificationsAsRead({
-              recipientRole: "workshop",
-              types: [CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE],
-            });
             workshopJobsUrl = await getWorkshopReviewDestination();
           } else if (notification?.request_id) {
-            const { data: request, error: requestError } = await supabase
-              .from("repair_requests")
-              .select("service_type")
-              .eq("id", notification.request_id)
-              .maybeSingle<{ service_type: string | null }>();
-
-            if (requestError) throw requestError;
-
-            const serviceType = resolveRepairServiceType(
-              request?.service_type,
-            );
-
-            if (serviceType) {
-              workshopJobsUrl += `&category=${serviceType}`;
-            }
+            workshopJobsUrl += `&focusRequest=${encodeURIComponent(notification.request_id)}`;
           }
         } catch (error) {
           console.error(
@@ -1753,6 +1710,7 @@ export default function AppNavbar() {
               .from("notifications")
               .select("target_url")
               .eq("recipient_id", userId)
+              .eq("recipient_role", "customer")
               .eq("recipient_role", "customer")
               .is("read_at", null)
               .in("type", [
@@ -1785,6 +1743,7 @@ export default function AppNavbar() {
               .from("notifications")
               .select("request_id")
               .eq("recipient_id", userId)
+              .eq("recipient_role", "customer")
               .is("read_at", null)
               .eq("type", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE)
               .order("created_at", { ascending: false })
@@ -1811,34 +1770,6 @@ export default function AppNavbar() {
             "Failed to resolve started job category:",
             error,
           );
-        }
-      }
-
-      if (
-        userId &&
-        (appointmentConfirmedUnreadCount > 0 || hasUnreadJobStarted)
-      ) {
-        const { error } = await supabase
-          .from("notifications")
-          .update({
-            read_at: new Date().toISOString(),
-          })
-          .eq("recipient_id", userId)
-          .is("read_at", null)
-          .in("type", [
-            "customer_confirmed_appointment",
-            "workshop_confirmed_appointment",
-            WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
-          ]);
-
-        if (error) {
-          console.error(
-            "Failed to mark confirmed appointments as read:",
-            error,
-          );
-        } else {
-          setAppointmentConfirmedUnreadCount(0);
-          setJobStartedUnreadCount(0);
         }
       }
 
@@ -1935,10 +1866,6 @@ export default function AppNavbar() {
 
     if (toast.type === CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE) {
       void runLocked(async ({ navigate }) => {
-        await markNotificationsAsRead({
-          recipientRole: "workshop",
-          types: [CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE],
-        });
         navigate(await getWorkshopReviewDestination());
       });
       return;

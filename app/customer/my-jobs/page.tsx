@@ -1,5 +1,7 @@
 "use client";
 
+import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
@@ -160,6 +162,7 @@ function normalizeSearchValue(value: string | number | null | undefined) {
 }
 
 export default function MyJobsPage() {
+  const { capture, complete, observe } = useVisibleNotificationRead("customer", ["workshop_proposed_appointment", "workshop_confirmed_appointment", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE]);
   const router = useRouter();
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
@@ -282,29 +285,8 @@ export default function MyJobsPage() {
         }
         jobsUserIdRef.current = userId;
 
-        const { error: notificationsReadError } = await supabase
-          .from("notifications")
-          .update({
-            read_at: new Date().toISOString(),
-          })
-          .eq("recipient_id", userId)
-          .eq("recipient_role", "customer")
-          .is("read_at", null)
-          .in("type", [
-            "workshop_confirmed_appointment",
-            WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
-          ]);
-
+        await capture(userId);
         if (!isCurrentLoad(userId)) return;
-
-        if (notificationsReadError) {
-          console.error(
-            "Failed to mark notifications as read:",
-            notificationsReadError,
-          );
-        } else {
-          window.dispatchEvent(new Event("notifications-read-updated"));
-        }
 
         const { data: reviewsData } = await supabase
           .from("reviews")
@@ -550,6 +532,7 @@ export default function MyJobsPage() {
           (reviewsData || []).map((review) => review.request_id).filter(Boolean),
         );
         setRequests(requestRows);
+        complete(userId);
         setOffers(offerRows);
         setWorkshopSlugs(slugMap);
         setAppointments((appointmentsData || []) as RepairAppointment[]);
@@ -711,7 +694,7 @@ export default function MyJobsPage() {
       void supabase.removeChannel(appointmentsChannel);
       void supabase.removeChannel(progressChannel);
     };
-  }, [router]);
+  }, [router, capture, complete]);
 
   const jobs = useMemo(() => {
     return requests
@@ -1112,11 +1095,10 @@ export default function MyJobsPage() {
               return (
                 <div
                   key={request.id}
-                  ref={
-                    request.id === focusRequestId
-                      ? focusedRequestCardRef
-                      : undefined
-                  }
+                  ref={(element) => {
+                    if (request.id === focusRequestId) focusedRequestCardRef.current = element;
+                    return observe({ requestId: request.id, offerId: acceptedOffer?.id, appointmentId: appointment?.id })(element);
+                  }}
                   onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
                   className={`cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition ${
                     highlightedRequestId === request.id

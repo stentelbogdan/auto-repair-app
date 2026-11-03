@@ -1,3 +1,4 @@
+import { loadWithOfferVersion, offerReadObservation } from "@/lib/offer-read-version";
 import { supabase } from "@/lib/supabase/client";
 import { getOwnRepairRequests } from "@/lib/supabase/repair-requests";
 import {
@@ -12,6 +13,7 @@ import type {
 } from "@/lib/services/offers/customer-offers.types";
 
 type CustomerOfferRow = {
+  read_state_version?: unknown;
   id: string;
   request_id: string;
   workshop_user_id: string;
@@ -58,7 +60,7 @@ async function loadPendingOfferRows(
     return [];
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await loadWithOfferVersion(projection => supabase
     .from("repair_offers")
     .select(
       `
@@ -73,12 +75,12 @@ async function loadPendingOfferRows(
         status,
         customer_read_at,
         available_date,
-        available_time
+        available_time${projection}
       `,
     )
     .in("request_id", requestIds)
     .eq("status", "pending")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }).overrideTypes<CustomerOfferRow[], { merge: false }>());
 
   if (error) {
     throw error;
@@ -190,37 +192,6 @@ async function loadWorkshopProfileMap(
   );
 }
 
-async function markOfferRowsAsRead(
-  offerRows: CustomerOfferRow[],
-): Promise<boolean> {
-  const unreadOfferIds = offerRows
-    .filter((offer) => !offer.customer_read_at)
-    .map((offer) => offer.id);
-
-  if (unreadOfferIds.length === 0) {
-    return false;
-  }
-
-  const { error } = await supabase
-    .from("repair_offers")
-    .update({
-      customer_read_at: new Date().toISOString(),
-    })
-    .in("id", unreadOfferIds);
-
-  /*
-   * Marcarea drept citit nu trebuie să împiedice
-   * afișarea ofertelor.
-   */
-  if (error) {
-    console.error("Failed to mark customer offers as read:", error);
-
-    return false;
-  }
-
-  return true;
-}
-
 function createRequestMap(
   requests: Awaited<ReturnType<typeof getOwnRepairRequests>>,
 ): Map<string, CustomerOfferRepairRequest> {
@@ -260,6 +231,7 @@ function createRequestMap(
 }
 
 function buildCustomerOfferItems(input: {
+  userId: string;
   offerRows: CustomerOfferRow[];
   requestMap: Map<string, CustomerOfferRepairRequest>;
   appointmentMap: Map<string, CustomerRepairAppointment>;
@@ -278,6 +250,7 @@ function buildCustomerOfferItems(input: {
 
     const item: CustomerOfferItem = {
       offer: {
+        readObservation: offerReadObservation(input.userId, "customer", offer.id, offer.read_state_version),
         id: offer.id,
         requestId: offer.request_id,
         workshopUserId: offer.workshop_user_id,
@@ -346,22 +319,21 @@ export async function loadCustomerOffers(
   );
 
   /*
-   * Aceste trei operații sunt independente,
+   * Aceste două operații sunt independente,
    * deci le rulăm în paralel.
    */
-  const [appointmentMap, workshopProfileMap, markedOffersAsRead] =
+  const [appointmentMap, workshopProfileMap] =
     await Promise.all([
       loadAppointmentMap(offerIds),
 
       loadWorkshopProfileMap(workshopUserIds),
 
-      markOfferRowsAsRead(offerRows),
     ]);
 
   const requestMap = createRequestMap(activeRequests);
 
   const items = buildCustomerOfferItems({
-    offerRows,
+    userId,    offerRows,
     requestMap,
     appointmentMap,
     workshopProfileMap,
@@ -369,6 +341,6 @@ export async function loadCustomerOffers(
 
   return {
     items,
-    markedOffersAsRead,
+    markedOffersAsRead: false,
   };
 }

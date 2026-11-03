@@ -4,12 +4,12 @@ import { readFileSync } from "node:fs";
 import ts from "typescript";
 
 const page = readFileSync(new URL("../../app/workshops/won-jobs/page.tsx", import.meta.url), "utf8");
-const loadSource = page.slice(page.indexOf("  const loadWonJobs ="), page.indexOf("  const activeCategory ="));
+const loadSource = page.slice(page.indexOf("  const loadWonJobs ="), page.indexOf("  useEffect", page.indexOf("  const loadWonJobs =")));
 const requestId = "10000000-0000-4000-8000-000000000001";
 const owner = "20000000-0000-4000-8000-000000000001";
 const offer = { id: "30000000-0000-4000-8000-000000000001", request_id: requestId,
   workshop_user_id: owner, status: "accepted", price: 150, days: "2 zile", message: "Synthetic",
-  workshop_name: "Service", created_at: "2026-11-01T10:00:00Z", workshop_read_at: "2026-11-01T10:00:00Z" };
+  workshop_name: "Service", created_at: "2026-11-01T10:00:00Z", workshop_read_at: "2026-11-01T10:00:00Z", read_state_version: "9007199254740993" };
 const appointment = { id: "40000000-0000-4000-8000-000000000001", request_id: requestId,
   appointment_date: "2026-12-01", appointment_time: "09:00", status: "confirmed", updated_at: "2026-11-02T10:00:00Z" };
 function detail(category = "bodywork", status = "matched") {
@@ -31,7 +31,7 @@ function moduleAt(path: string, requireMock: (name: string) => unknown) {
   new Function("require", "exports", compile(readFileSync(new URL(path, import.meta.url), "utf8")))(requireMock, exports);
   return exports;
 }
-type Job = { offerId: string; requestId: string; price: string; appointment: typeof appointment;
+type Job = { readObservation: { userId: string; role: string; offerId: string; version: string } | null; offerId: string; requestId: string; price: string; appointment: typeof appointment;
   latestProgressStatus: string; completionTimestamp: string; clientName: string; request: Record<string, unknown> };
 function fixture(read: () => Promise<Reply> = async () => ({ data: [{ request_data: detail() }], error: null }), offers = [offer]) {
   const reads: string[] = [], rpcCalls: string[] = [], filters: unknown[][] = [];
@@ -46,14 +46,14 @@ function fixture(read: () => Promise<Reply> = async () => ({ data: [{ request_da
       reads.push(table);
       const query = { select: () => query, eq: (key: string, value: unknown) => { filters.push([key, value]); return query; },
         in: (key: string, value: unknown) => { filters.push([key, value]); return query; },
-        order: async () => ({ error: null, data: table === "repair_offers" ? offers : table === "repair_appointments" ? [appointment] :
-          [{ request_id: requestId, status: "Ready", created_at: "2026-11-02T12:00:00Z" }] }) };
+        order: () => { const result = { error: null, data: table === "repair_offers" ? offers : table === "repair_appointments" ? [appointment] :
+          [{ request_id: requestId, status: "Ready", created_at: "2026-11-02T12:00:00Z" }] }; return { ...result, overrideTypes: () => result }; } };
       return query;
     },
   };
   const reader = moduleAt("./workshop-request-detail.ts", () => ({ supabase }));
   const batch = moduleAt("./workshop-offer-requests.ts", () => reader);
-  const dependencies = { supabase, jobsLoadVersion: { current: 0 },
+  const dependencies = { ...moduleAt("../offer-read-version.ts", () => { throw new Error("Unexpected dependency"); }), supabase, useCallback: (fn: unknown) => fn, capture: async () => {}, allowOffers: () => {}, complete: () => {}, jobsLoadVersion: { current: 0 },
     setLoadingJobs: (value: boolean) => { state.loading = value; }, setJobsLoadError: (value: boolean) => { state.error = value; },
     setJobs: (value: Job[]) => { state.jobs = value; }, loadWorkshopOfferRequests: batch.loadWorkshopOfferRequests,
     getWorkshopRequestClientNames: async () => new Map([[requestId, "Client"]]),
@@ -74,6 +74,7 @@ for (const category of ["bodywork", "mechanical", "wheels", "towing"]) {
     assert.equal(job.request.routeDistanceMeters, 1000); assert.equal(job.request.towingRequestedAt, data.towing_requested_at);
     assert.deepEqual(job.appointment, appointment); assert.equal(job.latestProgressStatus, "Ready");
     assert.equal(job.completionTimestamp, "2026-11-02T12:00:00Z"); assert.equal(job.clientName, "Client");
+    assert.deepEqual(job.readObservation, { userId: owner, role: "workshop", offerId: offer.id, version: "9007199254740993" });
     assert.equal(job.price, "150"); assert.deepEqual(f.filters.slice(0, 2), [["workshop_user_id", owner], ["status", "accepted"]]);
     assert.deepEqual(f.reads, ["repair_offers", "repair_appointments", "work_progress_updates"]);
   });

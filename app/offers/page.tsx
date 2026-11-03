@@ -1,5 +1,7 @@
 "use client";
 
+import { useNotificationFocus } from "@/lib/hooks/useNotificationFocus";
+
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -11,7 +13,7 @@ import WorkshopSummaryCard from "@/app/components/WorkshopSummaryCard";
 import AppointmentActions from "@/app/components/AppointmentActions";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
-import { markNotificationsAsRead } from "@/lib/notifications";
+import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import type {
   CustomerOfferItem,
@@ -50,6 +52,7 @@ const OFFER_PAGE_TITLES: Record<RequestCategory, string> = {
 };
 
 export default function OffersPage() {
+  useNotificationFocus();
   /*
    * Routerul rămâne doar pentru redirecturile automate:
    * login și acces pe rolul greșit.
@@ -63,6 +66,7 @@ export default function OffersPage() {
     timeoutMs: 2500,
   });
 
+  const { capture, complete, observe, offerReadUnavailable } = useVisibleNotificationRead("customer", ["workshop_proposed_appointment", "offer_received", "appointment_confirmed"]);
   const [items, setItems] = useState<CustomerOfferItem[]>([]);
   const [activeCategory, setActiveCategory] =
     useState<RequestCategory>("all");
@@ -80,6 +84,8 @@ export default function OffersPage() {
       "category",
     );
 
+    const focus = new URLSearchParams(window.location.search);
+    if (focus.has("focusOffer") || focus.has("focusRequest")) return;
     if (isRepairServiceType(category)) {
       setActiveCategory(category);
     }
@@ -138,6 +144,8 @@ export default function OffersPage() {
 
   useEffect(() => {
     const resetScroll = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("focusOffer") || params.has("focusRequest")) return;
       window.scrollTo(0, 0);
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
@@ -153,21 +161,6 @@ export default function OffersPage() {
       window.clearTimeout(timeout);
     };
   }, []);
-
-  useEffect(() => {
-    if (!authorized) {
-      return;
-    }
-
-    void markNotificationsAsRead({
-      recipientRole: "customer",
-      types: [
-        "workshop_proposed_appointment",
-        "offer_received",
-        "appointment_confirmed",
-      ],
-    });
-  }, [authorized]);
 
   useEffect(() => {
     let cancelled = false;
@@ -210,6 +203,7 @@ export default function OffersPage() {
         setAuthorized(true);
         setLoadingOffers(true);
 
+        await capture(authData.user.id);
         const result = await loadCustomerOffers(authData.user.id);
 
         if (cancelled) {
@@ -217,6 +211,7 @@ export default function OffersPage() {
         }
 
         setItems(result.items);
+        complete(authData.user.id);
 
         if (result.markedOffersAsRead) {
           window.dispatchEvent(new Event("offers-read-updated"));
@@ -246,7 +241,7 @@ export default function OffersPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, capture, complete]);
 
   const openWorkshopProfile = (workshopSlug: string | null) => {
     if (!workshopSlug) {
@@ -385,6 +380,7 @@ export default function OffersPage() {
             onChange={setActiveCategory}
           />
 
+        {offerReadUnavailable && <p role="status" className="mb-3 text-sm text-amber-300">Confirmarea citirii ofertelor nu este disponibilă momentan. Poți consulta ofertele în continuare.</p>}
         {loadingOffers ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
             Se încarcă ofertele...
@@ -579,6 +575,9 @@ export default function OffersPage() {
                       return (
                         <div
                           key={offer.id}
+                          data-focus-offer={offer.id}
+                          data-focus-request={request.id}
+                          ref={observe({ requestId: request.id, offerId: offer.id, appointmentId: appointment?.id }, offer.readObservation)}
                           className="min-w-full shrink-0 snap-start px-px"
                         >
                           <div className="mt-4 flex justify-start">

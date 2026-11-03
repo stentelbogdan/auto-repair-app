@@ -1,8 +1,13 @@
 "use client";
 
+import { loadWithOfferVersion, offerReadObservation, type OfferReadObservation } from "@/lib/offer-read-version";
+
+import { useNotificationFocus } from "@/lib/hooks/useNotificationFocus";
+
 import { loadWorkshopOfferRequests } from "@/lib/supabase/workshop-offer-requests";
+import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
 import { getOwnProfile } from "@/lib/supabase/profiles";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -17,10 +22,6 @@ import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimate
 import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import { Wrench } from "lucide-react";
 import JobAppointmentCard from "@/app/components/JobAppointmentCard";
-import {
-  CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
-  markNotificationsAsRead,
-} from "@/lib/notifications";
 import { sortJobsByLatestActivity } from "@/lib/services/jobs/sort-jobs";
 import {
   getAffectedPartLabels,
@@ -144,7 +145,14 @@ type RepairAppointment = {
     | "cancelled";
 };
 
+type WonOfferRow = {
+  id: string; request_id: string; workshop_user_id: string; workshop_name: string | null;
+  price: string | number; days: string | number; message: string | null; status: string | null;
+  created_at: string; workshop_read_at: string | null; read_state_version?: unknown;
+};
+
 type WonJob = {
+  readObservation: OfferReadObservation | null;
   offerId: string;
   requestId: string;
   workshopName: string;
@@ -244,7 +252,9 @@ function getTowingRouteData(request: WonJob["request"]) {
 }
 
 export default function WorkshopWonJobsPage() {
+  useNotificationFocus();
   const router = useRouter();
+  const { capture, complete, observe, offerReadUnavailable } = useVisibleNotificationRead("workshop", ["customer_proposed_appointment", "customer_confirmed_appointment"]);
   const startingJobIdsRef = useRef(new Set<string>());
   const jobsLoadVersion = useRef(0);
 
@@ -267,7 +277,7 @@ export default function WorkshopWonJobsPage() {
     if (tab === "appointments" || tab === "workshop" || tab === "completed") {
       setActiveTab(tab);
 
-      if (isRepairServiceType(category)) {
+      if (!params.has("focusRequest") && !params.has("focusOffer") && isRepairServiceType(category)) {
         setActiveCategoryByTab((current) => ({
           ...current,
           [tab]: category,
@@ -282,111 +292,16 @@ export default function WorkshopWonJobsPage() {
   const [newAppointmentDate, setNewAppointmentDate] = useState("");
   const [newAppointmentTime, setNewAppointmentTime] = useState("");
 
-  useEffect(() => {
-    localStorage.setItem("activeRole", "workshop");
-    const checkUserAndLoad = async () => {
-      try {
-        const { data: authData } = await supabase.auth.getUser();
-
-        if (!authData.user) {
-          router.push("/login");
-          return;
-        }
-
-        const { data: profile, error: profileError } = await getOwnProfile(supabase);
-
-        if (profileError) {
-          console.error("Failed to load profile:", profileError);
-          router.push("/");
-          return;
-        }
-
-        const roles = Array.isArray(profile?.role) ? profile.role : [];
-
-        if (!roles.includes("workshop")) {
-          router.push("/");
-          return;
-        }
-
-        setAuthorized(true);
-
-        const effectiveTab = new URLSearchParams(
-          window.location.search,
-        ).get("tab");
-
-        await markNotificationsAsRead({
-          recipientRole: "workshop",
-          types:
-            effectiveTab === "completed"
-              ? [
-                  "customer_confirmed_appointment",
-                  CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
-                ]
-              : ["customer_confirmed_appointment"],
-        });
-
-        const { error: readError } = await supabase
-          .from("repair_offers")
-          .update({
-            workshop_read_at: new Date().toISOString(),
-          })
-          .eq("workshop_user_id", authData.user.id)
-          .eq("status", "accepted")
-          .is("workshop_read_at", null);
-
-        if (readError) {
-          console.error("Failed to mark won jobs as read:", readError);
-        }
-
-        await loadWonJobs(authData.user.id);
-
-        setTimeout(() => {
-          window.dispatchEvent(new Event("offers-read-updated"));
-        }, 300);
-      } catch (error) {
-        console.error("Access check failed:", error);
-        router.push("/login");
-      } finally {
-        setCheckingAccess(false);
-      }
-    };
-
-    checkUserAndLoad();
-  }, [router]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("workshop-appointments-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "repair_appointments",
-        },
-        async () => {
-          const { data: authData } = await supabase.auth.getUser();
-
-          if (authData.user) {
-            await loadWonJobs(authData.user.id);
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const loadWonJobs = async (userId: string) => {
+  const loadWonJobs = useCallback(async (userId: string) => {
     const version = ++jobsLoadVersion.current;
     const isStale = () => version !== jobsLoadVersion.current;
     setLoadingJobs(true);
     setJobsLoadError(false);
 
     try {
-      const { data: offersData, error: offersError } = await supabase
+      await capture(userId);
+      if (isStale()) return;
+      const { data: offersData, error: offersError } = await loadWithOfferVersion(projection => supabase
         .from("repair_offers")
         .select(
           `
@@ -399,33 +314,15 @@ export default function WorkshopWonJobsPage() {
   message,
   status,
   created_at,
-  workshop_read_at
+  workshop_read_at${projection}
 `,
         )
         .eq("workshop_user_id", userId)
         .eq("status", "accepted")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }).overrideTypes<WonOfferRow[], { merge: false }>());
 
       if (offersError) throw offersError;
 
-      const unreadAcceptedOfferIds = (offersData || [])
-        .filter((offer) => !offer.workshop_read_at)
-        .map((offer) => offer.id);
-
-      if (unreadAcceptedOfferIds.length > 0) {
-        const { error: markReadError } = await supabase
-          .from("repair_offers")
-          .update({ workshop_read_at: new Date().toISOString() })
-          .in("id", unreadAcceptedOfferIds);
-
-        if (markReadError) {
-          console.error("Failed to mark won jobs as read:", markReadError);
-        } else {
-          setTimeout(() => {
-            window.dispatchEvent(new Event("offers-read-updated"));
-          }, 300);
-        }
-      }
 
       const requestIds = (offersData || []).map((offer) => offer.request_id);
       const clientNamesByRequestId = await getWorkshopRequestClientNames(
@@ -495,6 +392,7 @@ export default function WorkshopWonJobsPage() {
         if (!request) throw new Error("WON_JOB_CONTEXT_UNAVAILABLE");
 
         return {
+          readObservation: offerReadObservation(userId, "workshop", row.id, row.read_state_version),
           offerId: row.id,
           requestId: row.request_id,
           workshopName: row.workshop_name || "Service",
@@ -558,6 +456,7 @@ export default function WorkshopWonJobsPage() {
       const sortedJobs = sortJobsByLatestActivity(mapped);
 
       setJobs(sortedJobs);
+      complete(userId);
     } catch {
       if (isStale()) return;
       setJobs([]);
@@ -565,7 +464,74 @@ export default function WorkshopWonJobsPage() {
     } finally {
       if (!isStale()) setLoadingJobs(false);
     }
-  };
+  }, [capture, complete]);
+
+  useEffect(() => {
+    localStorage.setItem("activeRole", "workshop");
+    const checkUserAndLoad = async () => {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!authData.user) {
+          router.push("/login");
+          return;
+        }
+
+        const { data: profile, error: profileError } = await getOwnProfile(supabase);
+
+        if (profileError) {
+          console.error("Failed to load profile:", profileError);
+          router.push("/");
+          return;
+        }
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+        if (!roles.includes("workshop")) {
+          router.push("/");
+          return;
+        }
+
+        setAuthorized(true);
+
+        await loadWonJobs(authData.user.id);
+
+      } catch (error) {
+        console.error("Access check failed:", error);
+        router.push("/login");
+      } finally {
+        setCheckingAccess(false);
+      }
+    };
+
+    checkUserAndLoad();
+  }, [router, loadWonJobs]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("workshop-appointments-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_appointments",
+        },
+        async () => {
+          const { data: authData } = await supabase.auth.getUser();
+
+          if (authData.user) {
+            await loadWonJobs(authData.user.id);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadWonJobs]);
+
 
   const activeCategory = activeCategoryByTab[activeTab];
 
@@ -958,6 +924,7 @@ export default function WorkshopWonJobsPage() {
           />
         </div>
 
+        {offerReadUnavailable && <p role="status" className="mb-3 text-sm text-amber-300">Confirmarea citirii ofertelor nu este disponibilă momentan. Poți consulta ofertele în continuare.</p>}
         {loadingJobs ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
             <p className="text-white/70">Se încarcă lucrările...</p>
@@ -1042,6 +1009,9 @@ export default function WorkshopWonJobsPage() {
               return (
                 <article
                   key={job.offerId}
+                  data-focus-request={job.requestId}
+                  data-focus-offer={job.offerId}
+                  ref={observe({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id }, job.readObservation)}
                   className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
                   <CarHeader
@@ -1214,8 +1184,10 @@ export default function WorkshopWonJobsPage() {
                   : "Predare: Clientul aduce mașina";
 
               return (
+                <div key={job.offerId} data-focus-request={job.requestId}
+                  data-focus-offer={job.offerId}
+                  ref={observe({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id }, job.readObservation)}>
                 <JobAppointmentCard
-                  key={job.offerId}
                   requestId={job.requestId}
                   offerId={job.offerId}
                   images={job.request.images}
@@ -1295,6 +1267,7 @@ export default function WorkshopWonJobsPage() {
                     }
                   }}
                 />
+                </div>
               );
             })}
           </div>
@@ -1323,6 +1296,9 @@ export default function WorkshopWonJobsPage() {
               return (
                 <article
                   key={job.offerId}
+                  data-focus-request={job.requestId}
+                  data-focus-offer={job.offerId}
+                  ref={observe({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id }, job.readObservation)}
                   className="group cursor-pointer overflow-hidden rounded-[28px] bg-white p-5 text-black shadow-lg transition"
                 >
                   <CarHeader

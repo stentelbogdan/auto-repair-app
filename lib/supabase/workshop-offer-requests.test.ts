@@ -21,7 +21,7 @@ function detail(id = requestId(), category = "bodywork") {
 function offer(i = 1, extra: Record<string, unknown> = {}) {
   return { id: offerId(i), request_id: requestId(i), workshop_user_id: owner, workshop_name: "Service",
     price: "150", days: "2 zile", message: "Synthetic message", status: "pending", created_at: "2026-11-01T10:00:00Z",
-    available_date: "2099-11-02", available_time: "10:00", repair_appointments: [], ...extra };
+    read_state_version: "9007199254740993", available_date: "2099-11-02", available_time: "10:00", repair_appointments: [], ...extra };
 }
 function compile(path: string) {
   return ts.transpileModule(readFileSync(new URL(path, import.meta.url), "utf8"), { compilerOptions: {
@@ -114,7 +114,7 @@ function text(tree: unknown): string {
 type PageOptions = {
   offers?: ReturnType<typeof offer>[]; focus?: ReturnType<typeof offer>;
   read?: (id: string) => Promise<Reply>; offersRead?: () => Promise<Reply>;
-  user?: boolean; workshop?: boolean;
+  user?: boolean; workshop?: boolean; versionMissing?: boolean;
 };
 function pageFixture(options: PageOptions = {}) {
   const f = fixture(options.read);
@@ -123,13 +123,14 @@ function pageFixture(options: PageOptions = {}) {
   let cursor = 0, offerReads = 0, removed = 0;
   const query = { select: (s: string) => { assert.ok(!/repair_requests\s*\(/.test(s)); selects.push(s); return query; },
     eq: (k: string, v: unknown) => { filters.push([k, v]); return query; },
-    order: async () => { offerReads++; return options.offersRead ? options.offersRead() : { data: options.offers ?? [offer()], error: null }; },
-    maybeSingle: async () => ({ data: options.focus ?? null, error: null }) };
+    order: () => ({ overrideTypes: async () => { offerReads++; if (options.versionMissing && selects.at(-1)?.includes("read_state_version")) return { data: null, error: { code: "42703", message: "read_state_version absent" } }; return options.offersRead ? options.offersRead() : { data: options.offers ?? [offer(1, options.versionMissing ? { read_state_version: undefined } : {})], error: null }; } }),
+    maybeSingle: () => ({ overrideTypes: async () => ({ data: options.focus ?? null, error: null }) }) };
   const channel = { on: (_kind: string, _filter: unknown, callback: () => void) => { events.push(callback); return channel; },
     subscribe: () => channel };
   const router = { push: (url: string) => navigation.push(url), replace: (url: string) => navigation.push(url) };
   const serviceTypes = moduleAt("../repair-requests/service-types.ts", () => { throw new Error("Unexpected dependency"); });
   const requireMock = (name: string): unknown => {
+    if (name === "@/lib/offer-read-version") return moduleAt("../offer-read-version.ts", () => { throw new Error("Unexpected dependency"); });
     if (name === "react/jsx-runtime") return { jsx: (type: unknown, props: Element["props"]) => ({ type, props }), jsxs: (type: unknown, props: Element["props"]) => ({ type, props }) };
     if (name === "react") return { useState: (initial: unknown) => { const i = cursor++; if (!(i in state)) state[i] = initial;
       return [state[i], (v: unknown) => { state[i] = v; }]; }, useEffect: (fn: () => unknown) => effects.push(fn), useMemo: (fn: () => unknown) => fn() };
@@ -145,6 +146,8 @@ function pageFixture(options: PageOptions = {}) {
     if (name === "@/lib/supabase/workshop-client-names") return { getWorkshopRequestClientNames: async (ids: string[]) => { names.push(ids); return new Map(ids.map(id => [id, "Client sintetic"])); } };
     if (name === "@/lib/supabase/repair-request-metrics") return { getWorkshopRequestMetrics: async (ids: string[]) => new Map(ids.map(id => [id, { viewCount: 3, offerCount: 2 }])) };
     if (name === "@/lib/repair-requests/service-types") return serviceTypes;
+    if (name === "@/lib/hooks/useNotificationFocus") return { useNotificationFocus: () => {} };
+    if (name === "@/lib/hooks/useVisibleNotificationRead") return { useVisibleNotificationRead: () => ({ capture: async () => {}, complete: () => {}, observe: () => () => {} }) };
     if (name === "@/lib/notifications") return { markNotificationsAsRead: async (arg: unknown) => notifications.push(arg), WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE: "rejected", WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE: "closed" };
     if (name === "@/lib/car-damage") return { getAffectedPartLabels: () => [], getDamageTypeLabels: () => [] };
     if (name === "@/lib/displayLabels") return { getDamageTypeLabel: () => "", getRequestTypeBadgeLabel: (v: string) => v };
@@ -200,7 +203,7 @@ test("rejected notification uses same reader, reuses list result and preserves o
   const f = pageFixture({ offers: [offer(1, { status: "rejected" })], focus: offer(1, { status: "rejected" }) });
   const tree = await f.mount(); assert.deepEqual(f.calls, [requestId()]); assert.ok(find(tree, "CarHeader"));
   assert.ok(f.filters.some(([k, v]) => k === "status" && v === "rejected"));
-  assert.ok(f.notifications.length > 0); assert.equal(nodes(tree).filter(n => n.type === "AppointmentActions").length, 0);
+  assert.equal(f.notifications.length, 0, "loading a rejected offer does not acknowledge it before display"); assert.equal(nodes(tree).filter(n => n.type === "AppointmentActions").length, 0);
   assert.equal(find(tree, "OfferSummaryCard").props.statusText, "Ofertă refuzată");
 });
 test("focused offer missing from main list is hydrated by its real request ID", async () => {
@@ -256,4 +259,14 @@ test("refresh that loses request access removes previously visible details and a
 for (const guard of ["user", "workshop"] as const) test(`${guard} authorization guard prevents all request reads`, async () => {
   const f = pageFixture({ [guard]: false }); await f.mount(); assert.deepEqual(f.calls, []);
   assert.equal(f.offerReads(), 0); assert.deepEqual(f.navigation, [guard === "user" ? "/login" : "/"]);
+});
+
+test("missing version column preserves own Service offers, details and navigation before SQL", async () => {
+  const f = pageFixture({ versionMissing: true }); const tree = await f.mount();
+  assert.equal(f.offerReads(), 2);
+  assert.ok(f.selects[0].includes("read_state_version::text"));
+  assert.ok(!f.selects[1].includes("read_state_version"));
+  assert.ok(find(tree, "CarHeader"));
+  call(find(tree, "AppointmentActions"), "onChat");
+  assert.deepEqual(f.navigation, [`/chat/${requestId()}?offerId=${offerId()}`]);
 });

@@ -1,3 +1,4 @@
+import type { OfferReadObservation } from "@/lib/offer-read-version";
 import type {
   RepairServiceDetails,
   TowingScheduleType,
@@ -38,6 +39,7 @@ export type CustomerOfferRepairRequest = {
 };
 
 export type CustomerRepairOffer = {
+  readObservation: OfferReadObservation | null;
   id: string;
   requestId: string;
   workshopUserId: string;

@@ -1,5 +1,10 @@
 "use client";
 
+import { loadWithOfferVersion, offerReadObservation, type OfferReadObservation } from "@/lib/offer-read-version";
+
+import { useNotificationFocus } from "@/lib/hooks/useNotificationFocus";
+
+import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -13,7 +18,6 @@ import AppointmentActions from "@/app/components/AppointmentActions";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
 import {
-  markNotificationsAsRead,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
   WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
 } from "@/lib/notifications";
@@ -68,6 +72,7 @@ type RepairAppointment = {
 };
 
 type RepairOffer = {
+  readObservation: OfferReadObservation | null;
   id: string;
   request_id: string;
   workshop_user_id: string;
@@ -83,15 +88,19 @@ type RepairOffer = {
   repair_appointments?: RepairAppointment[] | null;
 };
 
+type OfferRow = Omit<RepairOffer, "readObservation" | "repair_requests"> & { read_state_version?: unknown };
+
 type DerivedOffer = RepairOffer & {
   derivedStatus: "pending";
 };
 
 export default function WorkshopMyOffersPage() {
+  useNotificationFocus();
   const router = useRouter();
 
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
+  const { capture, complete, observe } = useVisibleNotificationRead("workshop", ["customer_proposed_appointment", WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE, WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE]);
   const [offers, setOffers] = useState<RepairOffer[]>([]);
   const [metricsByRequestId, setMetricsByRequestId] = useState<
     Map<string, RepairRequestMetricsValue>
@@ -112,6 +121,8 @@ export default function WorkshopMyOffersPage() {
       "category",
     );
 
+    const focus = new URLSearchParams(window.location.search);
+    if (focus.has("focusOffer") || focus.has("focusRequest")) return;
     if (isRepairServiceType(category)) {
       setActiveCategory(category);
     }
@@ -124,7 +135,9 @@ export default function WorkshopMyOffersPage() {
     let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
     const loadWorkshopOffers = async (workshopUserId: string) => {
-      const { data, error } = await supabase
+      await capture(workshopUserId);
+      if (cancelled) return new Map<string, WorkshopRequestDetail | null>();
+      const { data, error } = await loadWithOfferVersion(projection => supabase
         .from("repair_offers")
         .select(
           `
@@ -138,7 +151,7 @@ export default function WorkshopMyOffersPage() {
           status,
           created_at,
           available_date,
-          available_time,
+          available_time${projection},
           repair_appointments (
             id,
             offer_id,
@@ -154,7 +167,7 @@ export default function WorkshopMyOffersPage() {
         `,
         )
         .eq("workshop_user_id", workshopUserId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }).overrideTypes<OfferRow[], { merge: false }>());
 
       if (error) {
         throw error;
@@ -186,6 +199,7 @@ export default function WorkshopMyOffersPage() {
         const request = requests.get(String(row.request_id));
 
         return {
+          readObservation: offerReadObservation(workshopUserId, "workshop", String(row.id), row.read_state_version),
           id: String(row.id),
           request_id: String(row.request_id),
           workshop_user_id: String(row.workshop_user_id),
@@ -221,6 +235,7 @@ export default function WorkshopMyOffersPage() {
 
       setMetricsByRequestId(requestMetrics);
       setOffers(mapped);
+      complete(workshopUserId);
       setLoadError(false);
       return requests;
     };
@@ -236,15 +251,7 @@ export default function WorkshopMyOffersPage() {
         return;
       }
 
-      const clearFocusOffer = () => {
-        params.delete("focusOffer");
-        const query = params.toString();
-        router.replace(`/workshops/my-offers${query ? `?${query}` : ""}`, {
-          scroll: false,
-        });
-      };
-
-      const { data, error } = await supabase
+      const { data, error } = await loadWithOfferVersion(projection => supabase
         .from("repair_offers")
         .select(
           `
@@ -258,7 +265,7 @@ export default function WorkshopMyOffersPage() {
           status,
           created_at,
           available_date,
-          available_time,
+          available_time${projection},
           repair_appointments (
             id,
             offer_id,
@@ -276,14 +283,13 @@ export default function WorkshopMyOffersPage() {
         .eq("id", focusOfferId)
         .eq("workshop_user_id", workshopUserId)
         .eq("status", "rejected")
-        .maybeSingle();
+        .maybeSingle().overrideTypes<OfferRow | null, { merge: false }>());
 
       if (cancelled) return;
       if (error || !data) {
         if (error) {
           console.error("Failed to load rejected offer:", error);
         }
-        clearFocusOffer();
         return;
       }
 
@@ -299,7 +305,9 @@ export default function WorkshopMyOffersPage() {
         return;
       }
 
+      complete(workshopUserId);
       setFocusedRejectedOffer({
+        readObservation: offerReadObservation(workshopUserId, "workshop", String(data.id), data.read_state_version),
         id: String(data.id),
         request_id: String(data.request_id),
         workshop_user_id: String(data.workshop_user_id),
@@ -330,15 +338,6 @@ export default function WorkshopMyOffersPage() {
           : [],
       });
 
-      await markNotificationsAsRead({
-        recipientRole: "workshop",
-        types: [
-          WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
-          WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
-        ],
-        offerId: String(data.id),
-      });
-      if (!cancelled) clearFocusOffer();
     };
 
     // Serialize refreshes and coalesce bursts; do not let older responses win.
@@ -482,16 +481,7 @@ export default function WorkshopMyOffersPage() {
         void supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [router]);
-
-  useEffect(() => {
-    if (!authorized) return;
-
-    markNotificationsAsRead({
-      recipientRole: "workshop",
-      types: ["customer_proposed_appointment"],
-    });
-  }, [authorized]);
+  }, [router, capture, complete]);
 
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers
@@ -611,21 +601,6 @@ export default function WorkshopMyOffersPage() {
         offerId: offer.id,
         requestId: request.id,
       });
-
-      const { error: workshopReadError } = await supabase
-        .from("repair_offers")
-        .update({
-          workshop_read_at: new Date().toISOString(),
-        })
-        .eq("id", offer.id)
-        .eq("workshop_user_id", offer.workshop_user_id);
-
-      if (workshopReadError) {
-        console.error(
-          "Failed to keep the confirmed offer marked as read:",
-          workshopReadError,
-        );
-      }
 
       window.dispatchEvent(new Event("appointments-updated"));
       window.dispatchEvent(new Event("offers-read-updated"));
@@ -836,6 +811,9 @@ export default function WorkshopMyOffersPage() {
               return (
                 <article
                   key={offer.id}
+                  data-focus-offer={offer.id}
+                  data-focus-request={request.id}
+                  ref={observe({ requestId: request.id, offerId: offer.id, appointmentId: appointment?.id })}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <CarHeader
