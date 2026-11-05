@@ -48,9 +48,12 @@ export function useVisibleNotificationRead(role: ReadRole, types: readonly strin
   }, []);
   const observe = useCallback((context: ReadContext, observation?: OfferReadObservation | null) => (element: HTMLElement | null) => {
     if (!element || !snapshot || snapshot.role !== role || snapshot.userId !== state.current.userId || !globalThis.IntersectionObserver) return;
-    const focus = new URLSearchParams(window.location.search);
-    if (focus.has("focusOffer") && focus.get("focusOffer") !== context.offerId) return;
-    if (!focus.has("focusOffer") && focus.has("focusRequest") && focus.get("focusRequest") !== context.requestId) return;
+    const matchesFocus = () => {
+      const focus = new URLSearchParams(window.location.search);
+      return (!focus.has("focusOffer") || focus.get("focusOffer") === context.offerId) &&
+        (!focus.has("focusRequest") || focus.get("focusRequest") === context.requestId) &&
+        (!focus.has("focusAppointment") || focus.get("focusAppointment") === context.appointmentId);
+    };
     const key = `${context.requestId}:${context.offerId ?? ""}:${context.appointmentId ?? ""}`;
     const offerKey = observation ? JSON.stringify([observation.userId, observation.role, observation.offerId, observation.version]) : null;
     const eligible = !!observation && observation.userId === snapshot.userId && observation.role === role && observation.offerId === context.offerId;
@@ -59,7 +62,7 @@ export function useVisibleNotificationRead(role: ReadRole, types: readonly strin
     const controller = new AbortController();
     let disposed = false;
     const visible = () => !disposed && element.isConnected && document.visibilityState === "visible";
-    const isCurrent = () => generation === state.current.generation && snapshot.userId === state.current.userId && visible();
+    const isCurrent = () => generation === state.current.generation && snapshot.userId === state.current.userId && visible() && matchesFocus();
     let intersecting = false;
     const acknowledge = () => {
       if (!intersecting || !isCurrent()) return;
@@ -67,6 +70,7 @@ export function useVisibleNotificationRead(role: ReadRole, types: readonly strin
       state.current.attempted.add(key);
       observer.disconnect();
       document.removeEventListener("visibilitychange", acknowledge);
+      document.removeEventListener("notification-context-focused", acknowledge);
       const ids = displayedNotificationIds(snapshot, context, typesRef.current);
       void (async () => {
         try {
@@ -94,12 +98,14 @@ export function useVisibleNotificationRead(role: ReadRole, types: readonly strin
       acknowledge();
     }, { threshold: 0.01 });
     document.addEventListener("visibilitychange", acknowledge);
+    document.addEventListener("notification-context-focused", acknowledge);
     observer.observe(element);
     const cleanup = () => {
       disposed = true;
       controller.abort();
       observer.disconnect();
       document.removeEventListener("visibilitychange", acknowledge);
+      document.removeEventListener("notification-context-focused", acknowledge);
       cleanups.current.delete(cleanup);
     };
     cleanups.current.add(cleanup);

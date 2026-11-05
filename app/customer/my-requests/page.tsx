@@ -3,12 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import {
-  CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE,
-  getCustomerRequestViewCount,
-  getOwnRepairRequests,
-  type RepairRequestRow,
-} from "@/lib/supabase/repair-requests";
+import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
+import { getCustomerRequestsByActivity } from "@/lib/supabase/customer-request-activity";
+import { createCustomerActivityLive, CUSTOMER_ACTIVITY_TOPIC, isCustomerActivityInvalidation } from "@/lib/customer/request-activity-live";
 import { useSafeNavigation } from "@/lib/hooks/useSafeNavigation";
 import RepairRequestCard from "@/app/components/RepairRequestCard";
 import RequestCategoryFilter, {
@@ -51,20 +48,13 @@ export default function MyRequestsPage() {
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const activeOwnerRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<MyRequestsTab>("waiting");
   const [activeCategoryByTab, setActiveCategoryByTab] = useState<
     Record<MyRequestsTab, RequestCategory>
   >(INITIAL_CATEGORY_BY_TAB);
 
-  /*
-   * Realtime poate trimite mai multe evenimente apropiate:
-   * oferta, programarea și notificarea pot fi create aproape simultan.
-   *
-   * Aceste referințe împiedică mai multe reîncărcări Supabase
-   * să ruleze în paralel.
-   */
-  const refreshInProgressRef = useRef(false);
-  const refreshQueuedRef = useRef(false);
   const closingRequestIdsRef = useRef(new Set<string>());
 
   /*
@@ -82,288 +72,78 @@ export default function MyRequestsPage() {
     }
   }, []);
 
-  /*
-   * Încărcăm cererile utilizatorului.
-   *
-   * Variabila cancelled împiedică actualizarea state-ului
-   * după ce utilizatorul a părăsit pagina.
-   */
   useEffect(() => {
     let cancelled = false;
-
-    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    let handleVisibilityChange: (() => void) | null = null;
-
-    let hasSubscribed = false;
-
-    const fetchRequests = async (userId: string): Promise<void> => {
-      const data = await getOwnRepairRequests(userId);
-
-      if (cancelled) {
-        return;
-      }
-
-      setRequests(data);
+    let authRevision = 0;
+    const live = createCustomerActivityLive<RepairRequestRow>({
+      read: getCustomerRequestsByActivity,
+      publish: (rows, busy, failed) => {
+        if (cancelled) return;
+        setRequests(rows); setLoading(busy); setLoadError(failed);
+      },
+      connect: (userId, events) => {
+        if (process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") !== "https://bstjobvvxxfqqwyjoimx.supabase.co" ||
+          process.env.NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF !== "bstjobvvxxfqqwyjoimx") throw new Error("CUSTOMER_ACTIVITY_TEST_ONLY");
+        const channels: ReturnType<typeof supabase.channel>[] = [];
+        let disposed = false;
+        const cleanup = () => { disposed = true; for (const channel of channels) void supabase.removeChannel(channel).catch(() => {}); };
+        void (async () => {
+          // Supabase reuses channels by topic. Finish leaving an old private
+          // channel before subscribing again (CLOSED, token change, Strict Mode).
+          const previous = supabase.getChannels().filter(channel => channel.topic === `realtime:${CUSTOMER_ACTIVITY_TOPIC}${userId}`);
+          await Promise.all(previous.map(channel => supabase.removeChannel(channel)));
+          if (disposed) return;
+          const changes = supabase.channel(`customer-my-requests-${userId}-${crypto.randomUUID()}`);
+          channels.push(changes);
+          changes.on("postgres_changes", {
+            event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}`,
+          }, payload => {
+            const role = payload.new.recipient_role;
+            if (!role || role === "customer") events.invalidate();
+          }).on("postgres_changes", {
+            event: "*", schema: "public", table: "repair_offers",
+          }, events.invalidate).on("postgres_changes", {
+            event: "*", schema: "public", table: "repair_requests", filter: `user_id=eq.${userId}`,
+          }, events.invalidate).subscribe(events.status);
+          const activity = supabase.channel(`${CUSTOMER_ACTIVITY_TOPIC}${userId}`, { config: { private: true } });
+          channels.push(activity);
+          activity.on("broadcast", { event: "invalidate" }, message => {
+            if (isCustomerActivityInvalidation(message.payload)) events.invalidate();
+          }).subscribe(events.status);
+        })().catch(() => { if (!disposed) { cleanup(); events.status("CLOSED"); } });
+        return cleanup;
+      },
+    });
+    const setSession = (session: { user: { id: string }; access_token: string } | null) => {
+      if (cancelled) return;
+      activeOwnerRef.current = session?.user.id ?? null;
+      live.session(session ? `${session.user.id}:${session.access_token}` : null, session?.user.id ?? null);
+      if (!session) router.replace("/login");
     };
-
-    const refreshRequests = async (userId: string): Promise<void> => {
-      if (refreshInProgressRef.current) {
-        refreshQueuedRef.current = true;
-        return;
-      }
-
-      refreshInProgressRef.current = true;
-
-      try {
-        do {
-          refreshQueuedRef.current = false;
-
-          try {
-            await fetchRequests(userId);
-          } catch (error) {
-            if (!cancelled) {
-              console.error("Failed to refresh customer requests:", error);
-            }
-          }
-        } while (refreshQueuedRef.current && !cancelled);
-      } finally {
-        refreshInProgressRef.current = false;
-      }
-    };
-
-    const loadPage = async () => {
-      try {
-        const { data: authData, error: authError } =
-          await supabase.auth.getUser();
-
-        if (cancelled) {
-          return;
-        }
-
-        if (authError) {
-          throw authError;
-        }
-
-        if (!authData.user) {
-          router.replace("/login");
-          return;
-        }
-
-        const userId = authData.user.id;
-
-        await fetchRequests(userId);
-
-        if (cancelled) {
-          return;
-        }
-
-        handleVisibilityChange = () => {
-          if (document.visibilityState === "visible") {
-            void refreshRequests(userId);
-          }
-        };
-
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-
-        realtimeChannel = supabase
-          .channel(`customer-my-requests-${userId}`)
-
-          /*
-           * Listener principal:
-           * notificarea este destinată exact clientului curent.
-           */
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "notifications",
-              filter: `recipient_id=eq.${userId}`,
-            },
-            (payload) => {
-              const notification = payload.new as {
-                type?: string | null;
-                recipient_role?: string | null;
-                request_id?: string | null;
-              };
-
-              console.log("MyRequests notification received:", notification);
-
-              if (
-                notification.type ===
-                CUSTOMER_REQUEST_VIEW_COUNT_CHANGED_NOTIFICATION_TYPE
-              ) {
-                if (
-                  (notification.recipient_role &&
-                    notification.recipient_role !== "customer") ||
-                  !notification.request_id
-                ) {
-                  return;
-                }
-
-                void getCustomerRequestViewCount(notification.request_id)
-                  .then((viewCount) => {
-                    if (viewCount === null) return;
-
-                    setRequests((currentRequests) =>
-                      currentRequests.map((request) =>
-                        request.id === notification.request_id
-                          ? {
-                              ...request,
-                              view_count: Math.max(
-                                request.view_count ?? 0,
-                                viewCount,
-                              ),
-                            }
-                          : request,
-                      ),
-                    );
-                  })
-                  .catch((error) => {
-                    console.error(
-                      "Failed to refresh customer request view count:",
-                      error,
-                    );
-                  });
-
-                return;
-              }
-
-              /*
-               * Nu presupunem momentan o singură denumire exactă,
-               * deoarece notificarea vizuală funcționează deja,
-               * dar trebuie să confirmăm tipul real salvat în DB.
-               */
-              if (
-                notification.recipient_role &&
-                notification.recipient_role !== "customer"
-              ) {
-                return;
-              }
-
-              /*
-               * Actualizare optimistă dacă notificarea conține request_id.
-               */
-              if (notification.request_id) {
-                setRequests((currentRequests) =>
-                  currentRequests.map((request) =>
-                    request.id === notification.request_id
-                      ? {
-                          ...request,
-                          offers_count: Math.max(1, request.offers_count ?? 0),
-                        }
-                      : request,
-                  ),
-                );
-              }
-
-              /*
-               * Recalculăm imediat valoarea exactă din repair_offers.
-               */
-              void refreshRequests(userId);
-            },
-          )
-
-          /*
-           * Plasă de siguranță:
-           * reacționăm direct și la modificările ofertelor.
-           *
-           * Evenimentul poate aparține și altui client, dar
-           * getOwnRepairRequests() încarcă numai cererile utilizatorului curent.
-           */
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "repair_offers",
-            },
-            () => {
-              console.log("MyRequests repair_offers change received.");
-
-              void refreshRequests(userId);
-            },
-          )
-
-          /*
-           * Păstrăm listenerul pentru acceptarea ofertei,
-           * închiderea cererii și schimbările de status.
-           */
-          .on(
-            "postgres_changes",
-            {
-              event: "*",
-              schema: "public",
-              table: "repair_requests",
-              filter: `user_id=eq.${userId}`,
-            },
-            () => {
-              console.log("MyRequests repair_requests change received.");
-
-              void refreshRequests(userId);
-            },
-          )
-
-          .subscribe((status) => {
-            console.log("MyRequests realtime status:", status);
-
-            if (status === "SUBSCRIBED") {
-              /*
-               * Important pe iOS:
-               * după o reconectare este posibil să fi ratat
-               * evenimente cât timp WebSocket-ul era căzut.
-               */
-              if (hasSubscribed) {
-                void refreshRequests(userId);
-              }
-
-              hasSubscribed = true;
-              return;
-            }
-
-            if (status === "CHANNEL_ERROR") {
-              console.error("Realtime channel failed for customer requests.");
-            }
-          });
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error("Failed to load requests:", error);
-
-        window.alert("Nu am putut încărca daunele tale.");
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void loadPage();
-
+    // The callback does not await Auth APIs; async reads start in a microtask.
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      authRevision++; setSession(session);
+    });
+    const revision = authRevision;
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (cancelled || authRevision !== revision) return;
+      if (error) { live.session(null, null); setLoadError(true); return; }
+      setSession(data.session);
+    }).catch(() => { if (!cancelled && authRevision === revision) { live.session(null, null); setLoadError(true); } });
+    const foreground = () => { if (document.visibilityState === "visible") live.foreground(); };
+    document.addEventListener("visibilitychange", foreground);
+    window.addEventListener("focus", foreground);
+    window.addEventListener("pageshow", foreground);
     return () => {
-      cancelled = true;
-      refreshQueuedRef.current = false;
-
-      if (handleVisibilityChange) {
-        document.removeEventListener(
-          "visibilitychange",
-          handleVisibilityChange,
-        );
-      }
-
-      if (realtimeChannel) {
-        void supabase.removeChannel(realtimeChannel);
-      }
+      cancelled = true; activeOwnerRef.current = null;
+      subscription.subscription.unsubscribe(); live.dispose();
+      document.removeEventListener("visibilitychange", foreground);
+      window.removeEventListener("focus", foreground);
+      window.removeEventListener("pageshow", foreground);
     };
   }, [router]);
 
-  /*
-   * getOwnRepairRequests() calculează deja offers_count.
-   * Nu mai executăm încă o interogare separată în această pagină.
-   */
+  // Filtering preserves the authoritative RPC order within every tab/category.
   const waitingRequests = requests.filter((request) => {
     const offersCount = request.offers_count ?? 0;
 
@@ -452,7 +232,7 @@ export default function MyRequestsPage() {
   };
 
   const handleCloseRequest = async (request: RepairRequestRow) => {
-    if (closingRequestIdsRef.current.has(request.id)) return;
+    if (activeOwnerRef.current !== request.user_id || closingRequestIdsRef.current.has(request.id)) return;
 
     const confirmed = confirm(
       "Această cerere are deja oferte. Vrei să o închizi? Service-urile nu o vor mai vedea.",
@@ -469,6 +249,7 @@ export default function MyRequestsPage() {
         hasOffers: true,
       });
 
+      if (activeOwnerRef.current !== request.user_id) return;
       setRequests((currentRequests) =>
         currentRequests.filter(
           (currentRequest) => currentRequest.id !== request.id,
@@ -545,8 +326,11 @@ export default function MyRequestsPage() {
           />
         </div>
 
+        {loadError && <p role="alert" className="mb-4 text-amber-300">Nu am putut actualiza cererile. Lista poate fi neactualizată.</p>}
         {loading ? (
           <p className="text-white/60">Se încarcă cererile...</p>
+        ) : loadError && requests.length === 0 ? (
+          <p className="text-white/60">Lista nu este disponibilă momentan.</p>
         ) : filteredVisibleRequests.length === 0 ? (
           <div className="rounded-[22px] bg-white p-6 text-center text-black">
             <h2 className="text-xl font-bold">

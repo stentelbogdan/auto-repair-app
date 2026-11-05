@@ -1544,7 +1544,7 @@ export default function AppNavbar() {
 
               if (offerError) throw offerError;
               requestId = offer?.request_id ?? null;
-              if (offer?.id) customerOffersUrl += `?focusOffer=${encodeURIComponent(offer.id)}`;
+              if (offer?.id) customerOffersUrl += `?focusOffer=${encodeURIComponent(offer.id)}${requestId ? `&focusRequest=${encodeURIComponent(requestId)}` : ""}`;
             }
           }
 
@@ -1653,6 +1653,7 @@ export default function AppNavbar() {
       let customerStartedJobCategory: ReturnType<
         typeof resolveRepairServiceType
       > = null;
+      let customerStartedRequestId: string | null = null;
       let customerJobsNotificationTarget: string | null = null;
 
       if (
@@ -1696,6 +1697,24 @@ export default function AppNavbar() {
             "Failed to resolve workshop appointment category:",
             error,
           );
+        }
+      }
+
+      // An accepted-offer badge can exist without a separate appointment notification.
+      // Resolve only the service's own unread offer; the destination chooses its real tab.
+      if (isWorkshopMode && userId && wonJobsUnreadCount > 0 &&
+          workshopJobsUrl === "/workshops/won-jobs?tab=appointments") {
+        try {
+          const { data: offer, error } = await supabase.from("repair_offers")
+            .select("id,request_id").eq("workshop_user_id", userId)
+            .eq("status", "accepted").is("workshop_read_at", null)
+            .order("created_at", { ascending: false }).limit(1)
+            .maybeSingle<{ id: string; request_id: string }>();
+          if (error) throw error;
+          if (offer) workshopJobsUrl += `&focusOffer=${encodeURIComponent(offer.id)}&focusRequest=${encodeURIComponent(offer.request_id)}`;
+        } catch {
+          alert("Nu am putut verifica lucrarea notificată. Reîncearcă după reîncărcare.");
+          return;
         }
       }
 
@@ -1753,6 +1772,7 @@ export default function AppNavbar() {
           if (notificationError) throw notificationError;
 
           if (notification?.request_id) {
+            customerStartedRequestId = notification.request_id;
             const { data: request, error: requestError } = await supabase
               .from("repair_requests")
               .select("service_type")
@@ -1784,6 +1804,9 @@ export default function AppNavbar() {
         ? "/customer/my-jobs?tab=in_progress"
         : "/customer/my-jobs";
 
+      if (hasUnreadJobStarted && customerStartedRequestId) {
+        customerJobsUrl += `&focusRequest=${encodeURIComponent(customerStartedRequestId)}`;
+      }
       if (hasUnreadJobStarted && customerStartedJobCategory) {
         customerJobsUrl += `&category=${customerStartedJobCategory}`;
       }
@@ -1825,6 +1848,7 @@ export default function AppNavbar() {
             }
 
             if (latestProgress?.request_id) {
+              customerJobsUrl += `&focusRequest=${encodeURIComponent(latestProgress.request_id)}`;
               const { data: request, error: requestError } = await supabase
                 .from("repair_requests")
                 .select("service_type")

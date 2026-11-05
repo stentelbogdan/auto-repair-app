@@ -1,6 +1,6 @@
 "use client";
 
-import { useNotificationFocus } from "@/lib/hooks/useNotificationFocus";
+import NotificationFocus from "@/app/components/NotificationFocus";
 
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
@@ -52,7 +52,6 @@ const OFFER_PAGE_TITLES: Record<RequestCategory, string> = {
 };
 
 export default function OffersPage() {
-  useNotificationFocus();
   /*
    * Routerul rămâne doar pentru redirecturile automate:
    * login și acces pe rolul greșit.
@@ -366,6 +365,16 @@ export default function OffersPage() {
 
   return (
     <main className="min-h-screen bg-black px-4 pb-6 pt-4 text-white md:px-6 md:py-10">
+      <NotificationFocus
+        ready={authorized && !checkingAccess && !loadingOffers}
+        targets={items.map(item => ({ requestId: item.request.id, offerId: item.offer.id,
+          appointmentId: item.appointment?.id, category: getOfferCategory(item.request.serviceType) }))}
+        select={target => {
+          if (!target.category) return false;
+          if (activeCategory !== target.category) { setActiveCategory(target.category); return false; }
+          return true;
+        }}
+      />
       <div className="mx-auto max-w-5xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
@@ -575,6 +584,7 @@ export default function OffersPage() {
                       return (
                         <div
                           key={offer.id}
+                          data-focus-appointment={appointment?.id}
                           data-focus-offer={offer.id}
                           data-focus-request={request.id}
                           ref={observe({ requestId: request.id, offerId: offer.id, appointmentId: appointment?.id }, offer.readObservation)}

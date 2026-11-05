@@ -2,7 +2,7 @@
 
 import { loadWithOfferVersion, offerReadObservation, type OfferReadObservation } from "@/lib/offer-read-version";
 
-import { useNotificationFocus } from "@/lib/hooks/useNotificationFocus";
+import NotificationFocus from "@/app/components/NotificationFocus";
 
 import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
 import { getOwnProfile } from "@/lib/supabase/profiles";
@@ -95,7 +95,6 @@ type DerivedOffer = RepairOffer & {
 };
 
 export default function WorkshopMyOffersPage() {
-  useNotificationFocus();
   const router = useRouter();
 
   const [authorized, setAuthorized] = useState(false);
@@ -109,6 +108,7 @@ export default function WorkshopMyOffersPage() {
     useState<RepairOffer | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [focusNavigation, setFocusNavigation] = useState("");
   const [activeCategory, setActiveCategory] =
     useState<RequestCategory>("all");
 
@@ -481,7 +481,7 @@ export default function WorkshopMyOffersPage() {
         void supabase.removeChannel(realtimeChannel);
       }
     };
-  }, [router, capture, complete]);
+  }, [router, capture, complete, focusNavigation]);
 
   const normalizedOffers = useMemo<DerivedOffer[]>(() => {
     return offers
@@ -629,6 +629,24 @@ export default function WorkshopMyOffersPage() {
 
   return (
     <main className="min-h-screen bg-black px-6 pb-10 pt-6 text-white md:py-10">
+      <NotificationFocus
+        onFocusChange={focus => {
+          setFocusedRejectedOffer(null);
+          setLoading(true);
+          setFocusNavigation(focus);
+        }}
+        ready={authorized && !checkingAccess && !loading && !loadError}
+        targets={[...normalizedOffers, ...(focusedRejectedOffer ? [focusedRejectedOffer] : [])]
+          .filter(offer => offer.repair_requests)
+          .map(offer => ({ requestId: offer.repair_requests!.id, offerId: offer.id,
+            appointmentId: offer.repair_appointments?.[0]?.id,
+            category: resolveRepairServiceType(offer.repair_requests!.service_type) }))}
+        select={target => {
+          if (!target.category) return false;
+          if (activeCategory !== target.category) { setActiveCategory(target.category); return false; }
+          return true;
+        }}
+      />
       <div className="mx-auto max-w-6xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
@@ -811,6 +829,7 @@ export default function WorkshopMyOffersPage() {
               return (
                 <article
                   key={offer.id}
+                  data-focus-appointment={appointment?.id}
                   data-focus-offer={offer.id}
                   data-focus-request={request.id}
                   ref={observe({ requestId: request.id, offerId: offer.id, appointmentId: appointment?.id })}

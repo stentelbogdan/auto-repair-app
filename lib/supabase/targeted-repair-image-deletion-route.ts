@@ -6,6 +6,8 @@ import { deleteTargetedRepairImage } from "./targeted-repair-image-deletion.ts";
 import { assertSupabaseProjectUrl, TEST_SUPABASE_PROJECT_REF } from "./project-boundary.ts";
 // @ts-expect-error TS5097: source extension for offline Node tests.
 import { createDeletedPhotoInvalidation } from "../admin/photo-notification.ts";
+// @ts-expect-error TS5097: source extension for offline Node tests.
+import { createCustomerActivityInvalidation } from "../customer/request-activity-notification.ts";
 
 type AdapterInput = Parameters<typeof deleteTargetedRepairImage>[0];
 type AdapterResult = Awaited<ReturnType<typeof deleteTargetedRepairImage>>;
@@ -133,10 +135,14 @@ export async function handleTargetedImageDeletionRequest(
       ![true, false, "unknown"].includes(result.detached)) throw new Error("Invalid adapter result");
     if (result.status === "deleted") {
       if (result.physicalDeletionConfirmed !== true || result.detached !== true) throw new Error("Unconfirmed deletion");
-      if (notification && afterResponse) {
+      if (afterResponse) {
         const confirmedNotification = notification;
         try { afterResponse(async () => {
-          try { await confirmedNotification.confirm(); } catch { /* Isolated after-response failure. */ }
+          // Both best-effort sends are independent; neither alters the response.
+          await Promise.allSettled([
+            Promise.resolve().then(() => confirmedNotification?.confirm()),
+            Promise.resolve().then(() => createCustomerActivityInvalidation({ env: process.env, fetch: globalThis.fetch })(token, result)),
+          ]);
         }); } catch { /* Scheduling failure must preserve the deletion response. No retry. */ }
       }
       return reply(200, { operationId: body.operationId, status: "deleted", detached: true, physicalDeletionConfirmed: true });

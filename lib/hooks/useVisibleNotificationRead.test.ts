@@ -98,6 +98,21 @@ test("loading alone never marks; authorized context must complete and become vis
   f.observers[0].show(); await settle();
   assert.deepEqual(f.events, ["notifications-read-updated", "offers-read-updated"]);
 });
+test("query-only focus change rechecks an already visible card, without acknowledging an unseen card", async () => {
+  const f = fixture(); await loaded(f);
+  f.state.search = `?focusOffer=${user}`;
+  f.current().observe(context, observed)(f.element);
+  f.listeners.get("notification-context-focused")?.(); await settle();
+  assert.equal(f.counts().notificationMarks, 0);
+  f.observers[0].show(); await settle();
+  assert.equal(f.counts().notificationMarks, 0);
+  f.state.search = `?focusOffer=${context.offerId}&focusRequest=${context.requestId}`;
+  f.listeners.get("notification-context-focused")?.(); await settle();
+  assert.equal(f.counts().notificationMarks, 1);
+  f.listeners.get("notification-context-focused")?.(); await settle();
+  assert.equal(f.counts().notificationMarks, 1);
+  f.unmount(); assert.equal(f.listeners.has("notification-context-focused"), false);
+});
 test("hidden page cannot acknowledge, visible observation can", async () => {
   const f = fixture(); await loaded(f); f.state.visibility = "hidden";
   f.current().observe(context, observed)(f.element); f.observers[0].show(); await settle();
@@ -146,7 +161,8 @@ test("observer cleanup disconnects", async () => {
 test("a focused notification cannot mark a neighbouring visible card", async () => {
   const f = fixture(); await loaded(f); f.state.search = `?focusOffer=another-offer`;
   f.current().observe(context, observed)(f.element);
-  assert.equal(f.observers.length, 0); assert.equal(f.counts().notificationMarks, 0);
+  f.observers[0].show(); await settle();
+  assert.equal(f.counts().notificationMarks, 0);
 });
 test("effect cleanup followed by a new observation session captures a fresh batch", async () => {
   const f = fixture(); await loaded(f); f.unmount();
@@ -213,4 +229,16 @@ test("new observation after capability becomes available clears unavailable stat
   f.current().observe(context, observed)(f.element); f.observers[1].show(); await settle();
   assert.equal(f.render().offerReadUnavailable, false);
   assert.equal(f.counts().offerMarks, 1);
+});
+
+test("query-only navigation rechecks exact request/offer/appointment before visible receipt", async () => {
+  const f = fixture(); await loaded(f);
+  const appt = "10000000-0000-4000-8000-000000000099";
+  f.state.search = `?focusOffer=${context.offerId}&focusRequest=${user}`;
+  f.current().observe({ ...context, appointmentId: appt }, observed)(f.element);
+  f.observers[0].show(); await settle(); assert.equal(f.counts().notificationMarks, 0);
+  f.state.search = `?focusOffer=${context.offerId}&focusRequest=${context.requestId}&focusAppointment=${user}`;
+  f.observers[0].show(); await settle(); assert.equal(f.counts().notificationMarks, 0);
+  f.state.search = `?focusOffer=${context.offerId}&focusRequest=${context.requestId}&focusAppointment=${appt}`;
+  f.observers[0].show(); await settle(); assert.equal(f.counts().notificationMarks, 1);
 });

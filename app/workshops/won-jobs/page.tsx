@@ -2,7 +2,7 @@
 
 import { loadWithOfferVersion, offerReadObservation, type OfferReadObservation } from "@/lib/offer-read-version";
 
-import { useNotificationFocus } from "@/lib/hooks/useNotificationFocus";
+import NotificationFocus from "@/app/components/NotificationFocus";
 
 import { loadWorkshopOfferRequests } from "@/lib/supabase/workshop-offer-requests";
 import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
@@ -252,7 +252,6 @@ function getTowingRouteData(request: WonJob["request"]) {
 }
 
 export default function WorkshopWonJobsPage() {
-  useNotificationFocus();
   const router = useRouter();
   const { capture, complete, observe, offerReadUnavailable } = useVisibleNotificationRead("workshop", ["customer_proposed_appointment", "customer_confirmed_appointment"]);
   const startingJobIdsRef = useRef(new Set<string>());
@@ -545,6 +544,7 @@ export default function WorkshopWonJobsPage() {
       const jobState = getJobState(job);
 
       const shouldShowInWonJobs =
+        job.request.status === "matched" ||
         job.request.status === "in_progress" ||
         job.request.status === "completed" ||
         job.appointment?.status === "confirmed";
@@ -855,6 +855,22 @@ export default function WorkshopWonJobsPage() {
 
   return (
     <main className="min-h-screen bg-black px-6 pb-32 pt-4 text-white">
+      <NotificationFocus
+        ready={authorized && !checkingAccess && !loadingJobs && !jobsLoadError}
+        targets={jobs.filter(job => job.request.status === "matched" || job.request.status === "in_progress" || job.request.status === "completed" || job.appointment?.status === "confirmed")
+          .map(job => ({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id,
+            category: resolveRepairServiceType(job.request.serviceType), tab: getJobState(job).stage }))}
+        select={target => {
+          if (!target.category) return false;
+          if (activeTab !== target.tab || activeCategory !== target.category || search !== "") {
+            setActiveTab(target.tab);
+            setActiveCategoryByTab(current => ({ ...current, [target.tab]: target.category! }));
+            setSearch("");
+            return false;
+          }
+          return true;
+        }}
+      />
       <div className="mx-auto max-w-7xl">
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-orange-400">
@@ -1010,7 +1026,7 @@ export default function WorkshopWonJobsPage() {
                 <article
                   key={job.offerId}
                   data-focus-request={job.requestId}
-                  data-focus-offer={job.offerId}
+                  data-focus-appointment={job.appointment?.id} data-focus-offer={job.offerId}
                   ref={observe({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id }, job.readObservation)}
                   className="overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl"
                 >
@@ -1185,7 +1201,7 @@ export default function WorkshopWonJobsPage() {
 
               return (
                 <div key={job.offerId} data-focus-request={job.requestId}
-                  data-focus-offer={job.offerId}
+                  data-focus-appointment={job.appointment?.id} data-focus-offer={job.offerId}
                   ref={observe({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id }, job.readObservation)}>
                 <JobAppointmentCard
                   requestId={job.requestId}
@@ -1297,7 +1313,7 @@ export default function WorkshopWonJobsPage() {
                 <article
                   key={job.offerId}
                   data-focus-request={job.requestId}
-                  data-focus-offer={job.offerId}
+                  data-focus-appointment={job.appointment?.id} data-focus-offer={job.offerId}
                   ref={observe({ requestId: job.requestId, offerId: job.offerId, appointmentId: job.appointment?.id }, job.readObservation)}
                   className="group cursor-pointer overflow-hidden rounded-[28px] bg-white p-5 text-black shadow-lg transition"
                 >

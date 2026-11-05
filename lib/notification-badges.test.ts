@@ -47,7 +47,7 @@ test("late response for another account cannot replace counts", async () => {
   const f = counter("customer"); f.state.active = false; await f.refresh(); assert.deepEqual(f.state.counts, {});
 });
 test("navbar navigation never writes read state or zeroes counts; reconnect and focus refetch non-Chat", () => {
-  const nav = navbar.slice(navbar.indexOf("  const goOffers ="), navbar.indexOf("  const handleLogout"));
+  const nav = navbar.slice(navbar.indexOf("  const goOffers ="), navbar.indexOf("  const openAppointmentToast ="));
   assert.doesNotMatch(nav, /\.update\(|markNotificationsAsRead|set\w+UnreadCount\(0\)/);
   const subscribed = navbar.slice(navbar.indexOf('if (status === "SUBSCRIBED")'), navbar.indexOf("    const refreshAllBadges"));
   for (const scheduler of ["offersScheduler", "wonJobsScheduler", "notificationsScheduler", "progressScheduler"]) assert.ok(subscribed.includes(`${scheduler}.schedule()`));
@@ -72,22 +72,50 @@ test("confirmed appointment totals remain computed independently from receipts",
   assert.doesNotMatch(text, /filter\([^\n]*workshop_read_at[^\n]*\)\s*\.length/);
 });
 
-function focusFixture(search: string, available: boolean) {
-  let effect!: () => void; const ref = { current: "" }; const calls: string[] = [];
-  const exported: Record<string, unknown> = {};
-  const element = { scrollIntoView: () => calls.push("scroll"), classList: { add: (...classes: string[]) => calls.push(classes.join(" ")) } };
-  new Function("require", "exports", "window", "document", compile(read("./hooks/useNotificationFocus.ts")))(
-    () => ({ useRef: () => ref, useEffect: (fn: () => void) => { effect = fn; } }), exported,
-    { location: { search } }, { querySelector: (selector: string) => { calls.push(selector); return available ? element : null; } });
-  (exported.useNotificationFocus as () => void)(); return { run: () => effect(), calls };
+function jobsNavigation(workshop: boolean, overrides: Record<string, unknown>, responses: unknown[]) {
+  let pending: Promise<void> = Promise.resolve(); const urls: string[] = [], filters: unknown[][] = [];
+  const query = { select: () => query, eq: (k: string, v: unknown) => { filters.push([k, v]); return query; },
+    is: (k: string, v: unknown) => { filters.push([k, v]); return query; }, in: () => query,
+    order: () => query, limit: () => query, maybeSingle: async () => responses.shift() };
+  const deps: Record<string, unknown> = {
+    runLocked: (fn: (options: { navigate: (url: string) => void }) => Promise<void>) => {
+      pending = fn({ navigate: url => urls.push(url) }); return pending;
+    }, isWorkshopMode: workshop, userId: "owner", jobStartedUnreadCount: 0, appointmentConfirmedUnreadCount: 0,
+    reviewSubmittedUnreadCount: 0, wonJobsUnreadCount: 0, progressUnreadCount: 0,
+    CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE: "review", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE: "started",
+    supabase: { from: () => query, rpc: async () => responses.shift() }, localStorage: { setItem() {} },
+    console: { error() {} }, alert: () => urls.push("ERROR"), resolveRepairServiceType: (v: unknown) => v,
+    normalizeProgressStatus: (v: unknown) => v, getCustomerJobsTargetUrl: (v: unknown) => v,
+    getWorkshopReviewDestination: async () => "/workshops/profile/reviews", ...overrides,
+  };
+  const body = navbar.slice(navbar.indexOf("  const goJobs ="), navbar.indexOf("  const openAppointmentToast ="));
+  const go = new Function(...Object.keys(deps), compile(body) + "\nreturn goJobs;")(...Object.values(deps)) as () => void;
+  return { urls, filters, run: async () => { go(); await pending; } };
 }
-for (const kind of ["Offer", "Request"]) test(`focus${kind} scrolls/highlights only an authorized rendered card, once`, () => {
-  const id = "10000000-0000-4000-8000-000000000001";
-  const f = focusFixture(`?focus${kind}=${id}`, true); f.run(); f.run();
-  assert.equal(f.calls[0], `[data-focus-${kind.toLowerCase()}="${id}"]`);
-  assert.equal(f.calls.filter(call => call === "scroll").length, 1); assert.ok(f.calls.includes("ring-2 ring-orange-500"));
-  const missing = focusFixture(`?focus${kind}=${id}`, false); missing.run(); assert.ok(!missing.calls.includes("scroll"));
+test("accepted Service badge without a notification navigates to its own exact offer and request", async () => {
+  const f = jobsNavigation(true, { wonJobsUnreadCount: 1 }, [{ data: { id: "offer", request_id: "request" }, error: null }]);
+  await f.run(); assert.deepEqual(f.urls, ["/workshops/won-jobs?tab=appointments&focusOffer=offer&focusRequest=request"]);
+  assert.ok(f.filters.some(([key, value]) => key === "workshop_user_id" && value === "owner"));
 });
-test("invalid focus parameter cannot select arbitrary DOM or mark notifications", () => {
-  const f = focusFixture('?focusOffer=bad%22%5D', true); f.run(); assert.deepEqual(f.calls, []);
+test("unavailable accepted offer query stops navigation without acknowledging anything", async () => {
+  const f = jobsNavigation(true, { wonJobsUnreadCount: 1 }, [{ data: null, error: { code: "42501" } }]);
+  await f.run(); assert.deepEqual(f.urls, ["ERROR"]);
+});
+test("Service appointment notification retains request context without an extra offer query", async () => {
+  const f = jobsNavigation(true, { appointmentConfirmedUnreadCount: 1, wonJobsUnreadCount: 1 }, [{ data: { type: "confirmed", request_id: "request" }, error: null }]);
+  await f.run(); assert.deepEqual(f.urls, ["/workshops/won-jobs?tab=appointments&focusRequest=request"]);
+});
+test("Client started-work notification without a contextual target URL still focuses the exact work", async () => {
+  const f = jobsNavigation(false, { jobStartedUnreadCount: 1 }, [
+    { data: { target_url: null }, error: null }, { data: { request_id: "request" }, error: null },
+    { data: { service_type: "wheels" }, error: null },
+  ]);
+  await f.run(); assert.deepEqual(f.urls, ["/customer/my-jobs?tab=in_progress&focusRequest=request&category=wheels"]);
+});
+test("Client Ready progress focuses completed work, preserving the real request ID", async () => {
+  const f = jobsNavigation(false, { progressUnreadCount: 1 }, [
+    { data: [{ request_id: "request" }], error: null }, { data: { request_id: "request", status: "Ready" }, error: null },
+    { data: { service_type: "mechanical" }, error: null },
+  ]);
+  await f.run(); assert.deepEqual(f.urls, ["/customer/my-jobs?tab=completed&focusRequest=request&category=mechanical"]);
 });
