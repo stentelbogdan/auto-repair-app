@@ -242,3 +242,33 @@ test("query-only navigation rechecks exact request/offer/appointment before visi
   f.state.search = `?focusOffer=${context.offerId}&focusRequest=${context.requestId}&focusAppointment=${appt}`;
   f.observers[0].show(); await settle(); assert.equal(f.counts().notificationMarks, 1);
 });
+
+test("Client explicit next navigation renews the snapshot and cancels the previous observation; default Service capture stays unchanged", async () => {
+  const f = fixture(); await loaded(f);
+  f.current().observe(context, observed)(f.element);
+  f.waits.offer = new Promise<void>(() => {});
+  f.observers[0].show(); await settle();
+  assert.equal(f.counts().offerMarks, 1);
+  await f.current().capture(user, true); f.current().complete(user); f.render();
+  assert.equal(f.offerCalls[0].signal?.aborted, true);
+  assert.equal(f.counts().captures, 2);
+  await f.current().capture(user); assert.equal(f.counts().captures, 2);
+});
+
+test("regression evidence: replacing an inline ref during a receipt aborts it and the same attempted version is not retried", async () => {
+  const f = fixture(); await loaded(f);
+  let finish!: () => void;
+  f.waits.offer = new Promise<void>(resolve => { finish = resolve; });
+  const cleanup = f.current().observe(context, observed)(f.element);
+  f.observers[0].show(); await settle();
+  assert.equal(f.counts().offerMarks, 1);
+  cleanup?.();
+  // This is what an unstable carousel ref did on a state-driven rerender.
+  f.render().observe(context, { ...observed })(f.element);
+  finish(); await settle();
+  assert.equal(f.offerCalls[0].signal?.aborted, true);
+  assert.equal(f.counts().offerMarks, 1);
+  assert.ok(!f.events.includes("offers-read-updated"));
+  // CustomerOfferReadCard.test.ts verifies that identical observations now retain
+  // the callback identity, so this cleanup only happens on a real context change.
+});

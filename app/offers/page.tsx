@@ -1,6 +1,7 @@
 "use client";
 
 import NotificationFocus from "@/app/components/NotificationFocus";
+import CustomerOfferReadCard from "./CustomerOfferReadCard";
 
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
@@ -72,11 +73,13 @@ export default function OffersPage() {
   const [authorized, setAuthorized] = useState(false);
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [loadingOffers, setLoadingOffers] = useState(false);
+  const [offersLoadError, setOffersLoadError] = useState(false);
   const [acceptingOfferId, setAcceptingOfferId] = useState<string | null>(null);
   const [activeOfferIdByRequestId, setActiveOfferIdByRequestId] = useState<
     Record<string, string>
   >({});
   const carouselRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [focusNavigation, setFocusNavigation] = useState("");
 
   useEffect(() => {
     const category = new URLSearchParams(window.location.search).get(
@@ -163,6 +166,10 @@ export default function OffersPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let refreshGeneration = 0;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    let removeRefreshListeners: (() => void) | undefined;
+    let removeAuthListener: (() => void) | undefined;
 
     const checkUserAndLoad = async () => {
       try {
@@ -202,7 +209,7 @@ export default function OffersPage() {
         setAuthorized(true);
         setLoadingOffers(true);
 
-        await capture(authData.user.id);
+        await capture(authData.user.id, true);
         const result = await loadCustomerOffers(authData.user.id);
 
         if (cancelled) {
@@ -210,7 +217,53 @@ export default function OffersPage() {
         }
 
         setItems(result.items);
+        setOffersLoadError(false);
         complete(authData.user.id);
+
+        const userId = authData.user.id;
+        // Refresh displayed versions, never replace an observation just before a
+        // receipt. The existing immutable notification snapshot remains unchanged.
+        const refresh = async () => {
+          if (cancelled) return;
+          const generation = ++refreshGeneration;
+          try {
+            const next = await loadCustomerOffers(userId);
+            const session = await supabase.auth.getUser();
+            if (cancelled || generation !== refreshGeneration) return;
+            if (session.error || session.data.user?.id !== userId) {
+              setItems([]); setAuthorized(false); return;
+            }
+            setItems(next.items);
+            setOffersLoadError(false);
+          } catch {
+            if (!cancelled && generation === refreshGeneration) {
+              setItems([]); setOffersLoadError(true);
+            }
+          }
+        };
+        const foreground = () => { if (document.visibilityState === "visible") void refresh(); };
+        window.addEventListener("focus", foreground);
+        document.addEventListener("visibilitychange", foreground);
+        removeRefreshListeners = () => {
+          window.removeEventListener("focus", foreground);
+          document.removeEventListener("visibilitychange", foreground);
+        };
+        const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (session?.user.id !== userId) {
+            cancelled = true;
+            refreshGeneration++;
+            setItems([]); setAuthorized(false);
+            removeRefreshListeners?.();
+            if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
+            realtimeChannel = null;
+          }
+        });
+        removeAuthListener = () => authListener.subscription.unsubscribe();
+        realtimeChannel = supabase.channel(`customer-offers-visible:${userId}`)
+          .on("postgres_changes", { event: "*", schema: "public", table: "repair_offers" }, () => { void refresh(); })
+          .on("postgres_changes", { event: "*", schema: "public", table: "repair_requests", filter: `user_id=eq.${userId}` }, () => { void refresh(); })
+          .on("postgres_changes", { event: "*", schema: "public", table: "repair_appointments", filter: `customer_id=eq.${userId}` }, () => { void refresh(); })
+          .subscribe(status => { if (status === "SUBSCRIBED") void refresh(); });
 
         if (result.markedOffersAsRead) {
           window.dispatchEvent(new Event("offers-read-updated"));
@@ -227,6 +280,7 @@ export default function OffersPage() {
          * nu trimitem automat utilizatorul la login.
          */
         setItems([]);
+        setOffersLoadError(true);
       } finally {
         if (!cancelled) {
           setLoadingOffers(false);
@@ -239,8 +293,12 @@ export default function OffersPage() {
 
     return () => {
       cancelled = true;
+      refreshGeneration++;
+      removeRefreshListeners?.();
+      removeAuthListener?.();
+      if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
     };
-  }, [router, capture, complete]);
+  }, [router, capture, complete, focusNavigation]);
 
   const openWorkshopProfile = (workshopSlug: string | null) => {
     if (!workshopSlug) {
@@ -366,6 +424,7 @@ export default function OffersPage() {
   return (
     <main className="min-h-screen bg-black px-4 pb-6 pt-4 text-white md:px-6 md:py-10">
       <NotificationFocus
+        onFocusChange={focus => { setLoadingOffers(true); setFocusNavigation(focus); }}
         ready={authorized && !checkingAccess && !loadingOffers}
         targets={items.map(item => ({ requestId: item.request.id, offerId: item.offer.id,
           appointmentId: item.appointment?.id, category: getOfferCategory(item.request.serviceType) }))}
@@ -394,6 +453,10 @@ export default function OffersPage() {
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center text-white/60">
             Se încarcă ofertele...
           </div>
+        ) : offersLoadError ? (
+          <p role="alert" className="rounded-2xl border border-amber-300/30 p-4 text-amber-200">
+            Ofertele nu au putut fi încărcate. Revino în această filă pentru a reîncărca datele.
+          </p>
         ) : items.length === 0 ? (
           <div className="rounded-[28px] border border-white/10 bg-white/[0.04] p-10 text-center">
             <h2 className="text-2xl font-bold">Nu ai oferte în așteptare</h2>
@@ -582,13 +645,13 @@ export default function OffersPage() {
                           : "Așteaptă confirmare";
 
                       return (
-                        <div
+                        <CustomerOfferReadCard
                           key={offer.id}
-                          data-focus-appointment={appointment?.id}
-                          data-focus-offer={offer.id}
-                          data-focus-request={request.id}
-                          ref={observe({ requestId: request.id, offerId: offer.id, appointmentId: appointment?.id }, offer.readObservation)}
-                          className="min-w-full shrink-0 snap-start px-px"
+                          appointmentId={appointment?.id}
+                          offerId={offer.id}
+                          requestId={request.id}
+                          observation={offer.readObservation}
+                          observe={observe}
                         >
                           <div className="mt-4 flex justify-start">
                             <span
@@ -642,7 +705,7 @@ export default function OffersPage() {
                               ? "Așteaptă confirmarea service-ului."
                               : "Confirmă programarea sau modifică data propusă."}
                           </p>
-                        </div>
+                        </CustomerOfferReadCard>
                       );
                     })}
                   </div>

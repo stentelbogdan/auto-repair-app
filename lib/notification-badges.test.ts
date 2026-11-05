@@ -61,7 +61,7 @@ test("all offer-page loads stay read-only; acknowledgment is attached to authori
     const text = read(path);
     assert.doesNotMatch(text, /(?:customer_read_at|workshop_read_at):\s*new Date/);
     assert.doesNotMatch(text, /markNotificationsAsRead/);
-    assert.ok(text.includes("observe({ requestId:")); assert.ok(text.includes("complete("));
+    assert.ok(text.includes("observe({ requestId:") || (path === "../app/offers/page.tsx" && text.includes("<CustomerOfferReadCard"))); assert.ok(text.includes("complete("));
   }
   assert.doesNotMatch(read("./services/offers/customer-offers.service.ts"), /\.update\(/);
 });
@@ -118,4 +118,32 @@ test("Client Ready progress focuses completed work, preserving the real request 
     { data: { service_type: "mechanical" }, error: null },
   ]);
   await f.run(); assert.deepEqual(f.urls, ["/customer/my-jobs?tab=completed&focusRequest=request&category=mechanical"]);
+});
+
+function offersNavigation(workshop: boolean) {
+  let pending: Promise<void> = Promise.resolve(); const urls: string[] = [];
+  const generation = { current: 1 };
+  let clientResolve: (url: string) => void = () => {};
+  const query = { select: () => query, eq: () => query, is: () => query, order: () => query, limit: () => query,
+    maybeSingle: async () => ({ data: { type: "customer_proposed_appointment", request_id: "request", offer_id: "offer", appointment_id: "appointment" }, error: null }) };
+  const deps = {
+    runLocked: (fn: (ctx: { navigate: (url: string) => void }) => Promise<void>) => { pending = fn({ navigate: url => urls.push(url) }); return pending; },
+    isWorkshopMode: workshop, userId: "owner", appointmentProposalUnreadCount: 1, rejectedOfferUnreadCount: 0,
+    customerNavigationGeneration: generation, getCustomerOfferBadgeDestination: () => new Promise<string>(resolve => { clientResolve = resolve; }),
+    supabase: { from: () => query }, getAppointmentProposalDestination: async () => "/workshops/won-jobs?tab=appointments&focusRequest=request",
+    localStorage: { setItem() {} }, alert: () => urls.push("ERROR"), console: { error() {} },
+  };
+  const body = navbar.slice(navbar.indexOf("  const goOffers ="), navbar.indexOf("  const getWorkshopReviewDestination ="));
+  const go = new Function(...Object.keys(deps), compile(body) + "\nreturn goOffers;")(...Object.values(deps)) as () => void;
+  return { urls, generation, start: () => go(), wait: () => pending, resolve: (url: string) => clientResolve(url) };
+}
+test("Service proposal badge keeps its original route and does not enter Client resolution", async () => {
+  const f = offersNavigation(true); f.start(); await f.wait();
+  assert.deepEqual(f.urls, ["/workshops/won-jobs?tab=appointments&focusRequest=request"]);
+});
+test("Client badge follows fresh selective resolution; role/session change cancels delayed navigation", async () => {
+  const f = offersNavigation(false); f.start(); f.resolve("/offers?focusOffer=latest"); await f.wait();
+  assert.deepEqual(f.urls, ["/offers?focusOffer=latest"]);
+  f.start(); f.generation.current++; f.resolve("/offers?focusOffer=obsolete"); await f.wait();
+  assert.equal(f.urls.length, 1);
 });

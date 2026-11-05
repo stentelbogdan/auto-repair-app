@@ -30,8 +30,8 @@ export function useVisibleNotificationRead(role: ReadRole, types: readonly strin
       data.subscription.unsubscribe();
     };
   }, [role]);
-  const capture = useCallback(async (userId: string) => {
-    if (state.current.userId === userId && state.current.pending) return state.current.pending;
+  const capture = useCallback(async (userId: string, renewForNavigation = false) => {
+    if (!renewForNavigation && state.current.userId === userId && state.current.pending) return state.current.pending;
     cleanups.current.forEach(cleanup => cleanup());
     setOfferReadUnavailable(false);
     const generation = state.current.generation + 1;

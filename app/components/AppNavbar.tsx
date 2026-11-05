@@ -1,5 +1,6 @@
 "use client";
 
+import { getCustomerOfferBadgeDestination } from "@/lib/customer-offer-badge-navigation";
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -314,6 +315,12 @@ export default function AppNavbar() {
     (pathname.startsWith("/chat") && activeRole === "workshop");
 
   const isClientMode = !isWorkshopMode;
+  const customerNavigationGeneration = useRef(0);
+  useEffect(() => {
+    const generation = customerNavigationGeneration;
+    generation.current++;
+    return () => { generation.current++; };
+  }, [userId, isWorkshopMode]);
   const isAdminRoute =
     pathname === "/admin" || pathname.startsWith("/admin/");
 
@@ -1496,7 +1503,19 @@ export default function AppNavbar() {
 
   const goOffers = () => {
     void runLocked(async ({ navigate }) => {
-      let customerOffersUrl = "/offers";
+      if (!isWorkshopMode) {
+        if (!userId) return;
+        const generation = customerNavigationGeneration.current;
+        try {
+          const destination = await getCustomerOfferBadgeDestination(userId);
+          if (generation !== customerNavigationGeneration.current) return;
+          localStorage.setItem("activeRole", "customer");
+          navigate(destination);
+        } catch {
+          if (generation === customerNavigationGeneration.current) alert("Noutatea nu este disponibilă momentan. Reîncarcă notificările.");
+        }
+        return;
+      }
       let workshopOffersUrl = "/workshops/my-offers";
       let proposalDestination: string | null = null;
       if (userId && appointmentProposalUnreadCount > 0) {
@@ -1515,59 +1534,6 @@ export default function AppNavbar() {
         } catch {
           alert("Nu am putut verifica destinația programării. Reîncearcă după reîncărcare.");
           return;
-        }
-      }
-
-      if (!isWorkshopMode && userId && !proposalDestination) {
-        try {
-          let requestId: string | null = null;
-
-          if (offerUnreadCount > 0) {
-            const { data: requests, error: requestsError } = await supabase
-              .from("repair_requests")
-              .select("id")
-              .eq("user_id", userId);
-
-            if (requestsError) throw requestsError;
-
-            const requestIds = (requests ?? []).map((request) => request.id);
-
-            if (requestIds.length > 0) {
-              const { data: offer, error: offerError } = await supabase
-                .from("repair_offers")
-                .select("id,request_id")
-                .in("request_id", requestIds)
-                .is("customer_read_at", null)
-                .order("created_at", { ascending: false })
-                .limit(1)
-                .maybeSingle<{ id: string; request_id: string | null }>();
-
-              if (offerError) throw offerError;
-              requestId = offer?.request_id ?? null;
-              if (offer?.id) customerOffersUrl += `?focusOffer=${encodeURIComponent(offer.id)}${requestId ? `&focusRequest=${encodeURIComponent(requestId)}` : ""}`;
-            }
-          }
-
-          if (requestId) {
-            const { data: request, error: requestError } = await supabase
-              .from("repair_requests")
-              .select("service_type")
-              .eq("id", requestId)
-              .eq("user_id", userId)
-              .maybeSingle<{ service_type: string | null }>();
-
-            if (requestError) throw requestError;
-
-            const serviceType = resolveRepairServiceType(
-              request?.service_type,
-            );
-
-            if (serviceType) {
-              customerOffersUrl += `${customerOffersUrl.includes("?") ? "&" : "?"}category=${serviceType}`;
-            }
-          }
-        } catch (error) {
-          console.error("Failed to resolve customer offers category:", error);
         }
       }
 
@@ -1622,7 +1588,7 @@ export default function AppNavbar() {
       }
 
       localStorage.setItem("activeRole", "customer");
-      navigate(customerOffersUrl);
+      navigate("/offers");
     });
   };
 
