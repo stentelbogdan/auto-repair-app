@@ -7,10 +7,16 @@ const read = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
 const compile = (s: string) => ts.transpileModule(s, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
 const request = "11111111-1111-4111-8111-111111111111", offer = "22222222-2222-4222-8222-222222222222", appointment = "33333333-3333-4333-8333-333333333333";
 const target = { requestId: request, offerId: offer, appointmentId: appointment, category: "wheels", tab: "appointments" };
-function fixture() {
+function fixture(wrapped = false) {
   let cursor = 0; const refs: { current: unknown }[] = []; const effects: (() => unknown)[] = [];
   const calls: string[] = []; let displayed = true;
+  const cardClasses = new Set<string>();
+  const card = { classList: {
+    add: (...names: string[]) => { names.forEach(name => cardClasses.add(name)); calls.push("card-highlight"); },
+    remove: (...names: string[]) => { names.forEach(name => cardClasses.delete(name)); calls.push("card-unhighlight"); },
+  } };
   const element = { isConnected: true, getClientRects: () => displayed ? [1] : [], scrollIntoView: () => calls.push("scroll"),
+    closest: (selector: string) => wrapped && selector === `[data-notification-focus-card="${request}"]` ? card : null,
     classList: { add: () => calls.push("highlight"), remove: () => calls.push("unhighlight") } };
   const exported: Record<string, unknown> = {};
   new Function("require", "exports", "document", compile(read("./useNotificationFocus.ts")))(
@@ -19,10 +25,57 @@ function fixture() {
     { dispatchEvent: () => calls.push("focus-event"), querySelector: (selector: string) => { calls.push(selector); return element; } });
   const hook = exported.useNotificationFocus as (o: NotificationFocusOptions<NotificationFocusTarget>, s: string) => void;
   const resolve = exported.resolveNotificationFocus as (s: string, items: NotificationFocusTarget[]) => { target: NotificationFocusTarget; selector: string } | null;
-  return { resolve, calls, element, hide: () => { displayed = false; }, render: (options: NotificationFocusOptions<NotificationFocusTarget>, search: string) => {
+  return { resolve, calls, element, cardClasses, hide: () => { displayed = false; }, render: (options: NotificationFocusOptions<NotificationFocusTarget>, search: string) => {
     cursor = 0; effects.length = 0; hook(options, search); const cleanup = effects[0]() as () => void; effects[1](); return cleanup;
   } };
 }
+test("Client carousel outlines its outer card while scrolling only the exact offer", () => {
+  const f = fixture(true);
+  const cleanup = f.render({ ready: true, targets: [target], select: () => true }, `focusOffer=${offer}`);
+  assert.deepEqual([...f.cardClasses], ["ring-2", "ring-orange-500"]);
+  assert.ok(f.calls.includes(`[data-focus-request="${request}"][data-focus-offer="${offer}"]`));
+  assert.equal(f.calls.filter(call => call === "scroll").length, 1);
+  assert.equal(f.calls.filter(call => call === "focus-event").length, 1);
+  assert.ok(!f.calls.includes("highlight"), "the clipped slide must not receive the ring");
+  cleanup();
+  assert.equal(f.cardClasses.size, 0);
+});
+test("ordinary Client navigation does not highlight cards just because offers exist", () => {
+  const f = fixture(true);
+  f.render({ ready: true, targets: [target], select: () => true }, "category=wheels");
+  assert.equal(f.cardClasses.size, 0);
+  assert.ok(!f.calls.includes("scroll"));
+});
+test("two Client offers in one card retain exact focus and clear the outline on normal navigation", () => {
+  const f = fixture(true);
+  const options = { ready: true, targets: [target, { ...target, offerId: appointment }], select: () => true };
+  f.render(options, `focusOffer=${offer}`);
+  f.render(options, `focusOffer=${appointment}`);
+  assert.ok(f.calls.includes(`[data-focus-request="${request}"][data-focus-offer="${appointment}"]`));
+  assert.equal(f.calls.filter(call => call === "scroll").length, 2);
+  assert.equal(f.cardClasses.size, 2);
+  f.render(options, "");
+  assert.equal(f.cardClasses.size, 0);
+});
+test("Client refetch restores the outer outline without another scroll; account reset clears it", () => {
+  const f = fixture(true);
+  const options = { ready: true, targets: [target], select: () => true };
+  f.render(options, `focusOffer=${offer}`);
+  f.render({ ...options, ready: false }, `focusOffer=${offer}`);
+  assert.equal(f.cardClasses.size, 0);
+  f.render({ ...options, targets: [{ ...target }] }, `focusOffer=${offer}`);
+  assert.equal(f.cardClasses.size, 2);
+  assert.equal(f.calls.filter(call => call === "scroll").length, 1);
+  f.render({ ...options, targets: [] }, `focusOffer=${offer}`);
+  assert.equal(f.cardClasses.size, 0);
+});
+test("only the Client outer request card opts in; exact slide receipt attributes remain intact", () => {
+  assert.match(read("../../app/offers/page.tsx"), /key=\{request.id\}\s+data-notification-focus-card=\{request.id\}\s+className="rounded-\[28px\]/);
+  const slide = read("../../app/offers/CustomerOfferReadCard.tsx");
+  assert.match(slide, /data-focus-request=\{requestId\} data-focus-offer=\{offerId\}/);
+  assert.match(slide, /ref=\{ref\}/);
+  assert.doesNotMatch(slide, /data-notification-focus-card/);
+});
 for (const category of ["bodywork", "mechanical", "wheels", "towing"]) test(`${category}: wait for authorized load, select actual tab/category, then focus once`, () => {
   const f = fixture(); const t = { ...target, category }; const search = `focusOffer=${offer}&category=towing&tab=completed`;
   let selected = false, selections = 0;

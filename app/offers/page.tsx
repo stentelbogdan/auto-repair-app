@@ -523,6 +523,7 @@ export default function OffersPage() {
               return (
                 <div
                   key={request.id}
+                  data-notification-focus-card={request.id}
                   className="rounded-[28px] bg-white p-5 text-black shadow-lg"
                 >
                   <div className="relative pb-20">

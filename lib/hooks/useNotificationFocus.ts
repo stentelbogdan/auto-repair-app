@@ -52,9 +52,12 @@ export function useNotificationFocus<T extends NotificationFocusTarget>(options:
     if (focused.current !== resolved.key && !options.select(resolved.target)) return;
     const element = document.querySelector<HTMLElement>(resolved.selector);
     if (!element || !element.isConnected || element.getClientRects().length === 0) return;
-    if (highlighted.current !== element) {
+    // Client offers live inside a clipping carousel. Outline its request card,
+    // while keeping scrolling and visibility receipts on the exact offer slide.
+    const card = element.closest<HTMLElement>(`[data-notification-focus-card="${resolved.target.requestId}"]`) ?? element;
+    if (highlighted.current !== card) {
       highlighted.current?.classList.remove("ring-2", "ring-orange-500");
-      highlighted.current = element;
+      highlighted.current = card;
     }
     if (focused.current !== resolved.key) {
       element.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
@@ -63,6 +66,6 @@ export function useNotificationFocus<T extends NotificationFocusTarget>(options:
       // an intersecting card and matching current IDs; this is not a read receipt.
       document.dispatchEvent(new Event("notification-context-focused"));
     }
-    element.classList.add("ring-2", "ring-orange-500");
+    card.classList.add("ring-2", "ring-orange-500");
   });
 }
