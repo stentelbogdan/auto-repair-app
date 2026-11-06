@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { loadWithOfferVersion } from "@/lib/offer-read-version";
 
 export type RepairOfferRow = {
   id: string;
@@ -12,6 +13,7 @@ export type RepairOfferRow = {
   available_time: string | null;
   status: string;
   created_at: string;
+  read_state_version?: unknown;
 };
 
 export async function createRepairOffer(input: {
@@ -53,7 +55,7 @@ export async function createRepairOffer(input: {
   return data;
 }
 
-export async function getOffersForCustomerRequests(userId: string) {
+export async function getOffersForCustomerRequests(userId: string, withReadVersion = false) {
   const { data: requests, error: requestsError } = await supabase
     .from("repair_requests")
     .select("id")
@@ -69,17 +71,21 @@ export async function getOffersForCustomerRequests(userId: string) {
     return [];
   }
 
-  const { data: offers, error: offersError } = await supabase
+  const load = (projection: string) => supabase
     .from("repair_offers")
-    .select("*")
+    .select(`*${projection}`)
     .in("request_id", requestIds)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .overrideTypes<RepairOfferRow[], { merge: false }>();
+  const { data: offers, error: offersError } = withReadVersion
+    ? await loadWithOfferVersion(load)
+    : await load("");
 
   if (offersError) {
     throw offersError;
   }
 
-  return (offers ?? []) as RepairOfferRow[];
+  return offers ?? [];
 }
 
 export async function getOffersForWorkshop(userId: string) {

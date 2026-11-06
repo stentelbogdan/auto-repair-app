@@ -73,6 +73,25 @@ for (const category of ["bodywork", "mechanical", "wheels", "towing"]) test(`${c
   assert.deepEqual(counts, [3, 2, 1, 0]); assert.equal(await f.destination(), "/offers");
   assert.equal(f.rpcCalls.length, 3);
 });
+test("two accepted in-progress offers navigate to jobs and receipts reduce the badge 2 → 1 → 0", async () => {
+  const f = fixture();
+  f.tables.repair_offers = f.tables.repair_offers.slice(0, 2);
+  f.tables.repair_requests = f.tables.repair_offers.map((offer, i) => {
+    offer.status = "accepted"; offer.request_id = id(20 + i);
+    return { id: offer.request_id, user_id: user, status: "in_progress", service_type: "bodywork", accepted_offer_id: offer.id };
+  });
+  const counts = [f.unread()];
+  for (const row of [...f.tables.repair_offers].reverse()) {
+    const url = await f.destination();
+    assert.ok(url.startsWith("/customer/my-jobs?tab=in_progress&"));
+    assert.ok(url.includes(`focusOffer=${row.id}`));
+    assert.deepEqual((await f.confirm([f.observation(row)])).confirmedIds, [row.id]);
+    counts.push(f.unread());
+    assert.equal(row.status, "accepted");
+  }
+  assert.deepEqual(counts, [2, 1, 0]);
+  assert.ok(f.tables.repair_requests.every(row => row.status === "in_progress"));
+});
 test("latest timestamp wins across proposal notifications and new offers, not proposal priority", async () => {
   const f = fixture();
   const note = { id: id(8), type: "workshop_proposed_appointment", recipient_id: user, recipient_role: "customer", read_at: null, offer_id: id(3), created_at: "2026-11-05T12:00:05.000001Z" };

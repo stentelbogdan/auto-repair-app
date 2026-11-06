@@ -4,7 +4,8 @@ import NotificationFocus from "@/app/components/NotificationFocus";
 
 import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { offerReadObservation, type OfferReadObservation } from "@/lib/offer-read-version";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
@@ -81,6 +82,23 @@ type RepairAppointment = {
 };
 
 type JobsTab = "scheduled" | "in_progress" | "completed";
+type CustomerJobOffer = RepairOfferRow & { readObservation: OfferReadObservation | null };
+
+// Keep the receipt alive across unrelated renders, for exactly the loaded version.
+function CustomerJobReadCard({ requestId, offerId, appointmentId, observation, observe, onClick, children }: {
+  requestId: string; offerId?: string; appointmentId?: string;
+  observation?: OfferReadObservation | null;
+  observe: ReturnType<typeof useVisibleNotificationRead>["observe"];
+  onClick: () => void; children: ReactNode;
+}) {
+  const ref = useMemo(() => observe({ requestId, offerId, appointmentId }, observation),
+    [observe, requestId, offerId, appointmentId, observation]);
+  return <div data-focus-request={requestId} data-focus-offer={offerId}
+    data-focus-appointment={appointmentId} ref={ref} onClick={onClick}
+    className="cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition">
+    {children}
+  </div>;
+}
 
 type UnreadProgressRow = {
   request_id: string;
@@ -164,11 +182,11 @@ function normalizeSearchValue(value: string | number | null | undefined) {
 }
 
 export default function MyJobsPage() {
-  const { capture, complete, observe } = useVisibleNotificationRead("customer", ["workshop_proposed_appointment", "workshop_confirmed_appointment", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE]);
+  const { capture, complete, observe, offerReadUnavailable } = useVisibleNotificationRead("customer", ["workshop_proposed_appointment", "workshop_confirmed_appointment", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE]);
   const router = useRouter();
 
   const [requests, setRequests] = useState<RepairRequestRow[]>([]);
-  const [offers, setOffers] = useState<RepairOfferRow[]>([]);
+  const [offers, setOffers] = useState<CustomerJobOffer[]>([]);
   const [progressByRequestId, setProgressByRequestId] = useState<
     Record<
       string,
@@ -287,7 +305,7 @@ export default function MyJobsPage() {
 
         const [requestRows, offerRows] = await Promise.all([
           getOwnRepairRequests(userId),
-          getOffersForCustomerRequests(userId),
+          getOffersForCustomerRequests(userId, true),
         ]);
 
         if (!isCurrentLoad(userId)) return;
@@ -523,7 +541,9 @@ export default function MyJobsPage() {
         );
         setRequests(requestRows);
         complete(userId);
-        setOffers(offerRows);
+        setOffers(offerRows.map(offer => ({ ...offer,
+          readObservation: offerReadObservation(userId, "customer", offer.id, offer.read_state_version),
+        })));
         setWorkshopSlugs(slugMap);
         setAppointments((appointmentsData || []) as RepairAppointment[]);
         if (nextUnreadByRequestId !== null) {
@@ -907,6 +927,7 @@ export default function MyJobsPage() {
         }}
       />
       <div className="mx-auto max-w-5xl">
+        {offerReadUnavailable && <p role="status" className="mb-3 text-sm text-amber-300">Confirmarea citirii ofertelor nu este disponibilă momentan. Poți consulta ofertele în continuare.</p>}
         <section className="mb-5 text-center">
           <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">
             {activeCategory === "all"
@@ -1047,14 +1068,14 @@ export default function MyJobsPage() {
                 !appointment || appointment.status === "workshop_proposed";
 
               return (
-                <div
+                <CustomerJobReadCard
                   key={request.id}
-                  data-focus-request={request.id}
-                  data-focus-offer={acceptedOffer?.id}
-                  data-focus-appointment={appointment?.id}
-                  ref={observe({ requestId: request.id, offerId: acceptedOffer?.id, appointmentId: appointment?.id })}
+                  requestId={request.id}
+                  offerId={acceptedOffer?.id}
+                  appointmentId={appointment?.id}
+                  observation={acceptedOffer?.readObservation}
+                  observe={observe}
                   onClick={() => router.push(`/customer/my-jobs/${request.id}`)}
-                  className="cursor-pointer overflow-hidden rounded-[30px] bg-white p-4 text-black shadow-xl transition"
                 >
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
@@ -1341,7 +1362,7 @@ export default function MyJobsPage() {
                       )}
                     </div>
                   )}
-                </div>
+                </CustomerJobReadCard>
               );
             })}
           </div>

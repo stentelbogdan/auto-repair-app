@@ -17,6 +17,10 @@ const source = readFileSync(new URL("./repair-offers.ts", import.meta.url), "utf
 const js = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
+const versionApi: Record<string, unknown> = {};
+new Function("exports", ts.transpileModule(readFileSync(new URL("../offer-read-version.ts", import.meta.url), "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText)(versionApi);
 
 function fixture(reply: () => Promise<Result> = async () => ({ data: offerId, error: null })) {
   const calls: { name: string; args: unknown }[] = [];
@@ -28,11 +32,58 @@ function fixture(reply: () => Promise<Result> = async () => ({ data: offerId, er
   const exported: { createRepairOffer?: Create } = {};
   // Load the actual module with only an offline client. No SDK/network import.
   new Function("require", "exports", js)((name: string) => {
+    if (name === "@/lib/offer-read-version") return versionApi;
     assert.equal(name, "@/lib/supabase/client");
     return { supabase };
   }, exported);
   return { create: exported.createRepairOffer!, calls, tableCalls: () => tableCalls };
 }
+
+function readFixture(error: { code: string; message: string } | null = null) {
+  const selections: string[] = [], owners: unknown[] = [];
+  const row = { id: offerId, request_id: input.requestId, status: "accepted", read_state_version: "9007199254740993" };
+  const supabase = { from: (table: string) => {
+    let projection = "";
+    const query = {
+      select: (value: string) => { projection = value; if (table === "repair_offers") selections.push(value); return query; },
+      eq: (column: string, value: unknown) => { assert.equal(column, "user_id"); owners.push(value); return query; },
+      in: (column: string, values: string[]) => { assert.equal(column, "request_id"); assert.deepEqual(values, [input.requestId]); return query; },
+      order: () => query,
+      overrideTypes: () => query,
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve(table === "repair_requests"
+        ? { data: [{ id: input.requestId }], error: null }
+        : error && projection.includes("::text") ? { data: null, error }
+        : { data: [projection.includes("::text") ? row : { ...row, read_state_version: undefined }], error: null }).then(resolve),
+    }; return query;
+  } };
+  const api: Record<string, unknown> = {};
+  new Function("require", "exports", js)((name: string) => name === "@/lib/offer-read-version" ? versionApi : { supabase }, api);
+  return { selections, owners, load: api.getOffersForCustomerRequests as typeof import("./repair-offers").getOffersForCustomerRequests };
+}
+
+test("accepted customer job offers load an exact bigint version in the same authorized query", async () => {
+  const f = readFixture(); const rows = await f.load("synthetic-owner", true);
+  assert.deepEqual(f.selections, ["*,read_state_version::text"]);
+  assert.deepEqual(f.owners, ["synthetic-owner"]);
+  assert.equal(rows[0].status, "accepted");
+  assert.equal(rows[0].read_state_version, "9007199254740993");
+});
+test("other callers retain their existing offer projection", async () => {
+  const f = readFixture(); await f.load("synthetic-owner");
+  assert.deepEqual(f.selections, ["*"]);
+});
+test("missing version column preserves job loading but cannot produce a read observation", async () => {
+  const f = readFixture({ code: "42703", message: "column read_state_version does not exist" });
+  const rows = await f.load("synthetic-owner", true);
+  assert.deepEqual(f.selections, ["*,read_state_version::text", "*"]);
+  const observe = versionApi.offerReadObservation as typeof import("../offer-read-version").offerReadObservation;
+  assert.equal(observe(input.workshopUserId, "customer", offerId, rows[0].read_state_version), null);
+});
+test("denied versioned job query has no fallback or receipt", async () => {
+  const error = { code: "42501", message: "denied" }; const f = readFixture(error);
+  await assert.rejects(f.load("synthetic-owner", true), value => value === error);
+  assert.deepEqual(f.selections, ["*,read_state_version::text"]);
+});
 
 test("one atomic RPC maps all fields and returns UUID without subsequent SELECT", async () => {
   const f = fixture();
