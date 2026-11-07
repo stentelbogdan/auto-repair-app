@@ -1,6 +1,7 @@
 "use client";
 
 import { getOwnProfile } from "@/lib/supabase/profiles";
+import { getWorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -64,15 +65,7 @@ export default function InWorkshopCarPage() {
           profile?.workshop_name || profile?.full_name || "Service",
         );
 
-        const { data, error } = await supabase
-          .from("repair_requests")
-          .select(
-            "id, car_brand, car_model, car_year, city, license_plate, damage_type, description, images, status, accepted_offer_id",
-          )
-          .eq("id", requestId)
-          .maybeSingle();
-
-        if (error) throw error;
+        const data = await getWorkshopRequestDetail(requestId);
 
         if (!data) {
           setRequest(null);
@@ -92,13 +85,9 @@ export default function InWorkshopCarPage() {
           status: data.status,
           accepted_offer_id: data.accepted_offer_id,
         });
-      } catch (error: any) {
-        console.log(error);
-        console.log(JSON.stringify(error, null, 2));
-
-        alert(error?.message || JSON.stringify(error));
-
-        console.error(error);
+      } catch {
+        // Missing, denied and invalid contexts use the same neutral presentation.
+        setRequest(null);
       } finally {
         setLoading(false);
       }
