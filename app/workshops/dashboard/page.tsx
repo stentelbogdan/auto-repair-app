@@ -1,11 +1,12 @@
 "use client";
 
 import { getOwnProfile } from "@/lib/supabase/profiles";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { fetchWorkshopDiscoveryCounts } from "@/lib/supabase/workshop-discovery";
+import { fetchWorkshopActiveJobsCount } from "@/lib/supabase/workshop-active-jobs";
 
 type DashboardStats = {
   bodyworkRequests: number;
@@ -46,98 +47,13 @@ function WorkshopDashboardContent() {
     string | null
   >(null);
   const [checkingAccess, setCheckingAccess] = useState(true);
-  const [stats, setStats] = useState<DashboardStats>({
-    bodyworkRequests: 0,
-    mechanicalRequests: 0,
-    wheelsRequests: 0,
-    towingRequests: 0,
-    myOffers: 0,
-    wonJobs: 0,
-    directBodyworkUnread: 0,
-    directMechanicalUnread: 0,
-  });
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [statsError, setStatsError] = useState(false);
+  const statsLoadVersion = useRef(0);
 
-  useEffect(() => {
-    localStorage.setItem("activeRole", "workshop");
-    const checkUserAndLoad = async () => {
-      try {
-        const { data: authData } = await supabase.auth.getUser();
-
-        if (!authData.user) {
-          router.push("/login");
-          return;
-        }
-
-        const { data: profile } = await getOwnProfile(supabase);
-
-        const roles = Array.isArray(profile?.role) ? profile.role : [];
-
-        if (!roles.includes("workshop")) {
-          router.push("/");
-          return;
-        }
-
-        setCurrentWorkshopUserId(authData.user.id);
-        setAuthorized(true);
-        await loadStats(authData.user.id);
-      } catch {
-        router.push("/login");
-      } finally {
-        setCheckingAccess(false);
-      }
-    };
-
-    checkUserAndLoad();
-  }, [router]);
-
-  useEffect(() => {
-    if (!authorized || !currentWorkshopUserId) return;
-
-    let active = true;
-
-    const refreshStats = async () => {
-      const { data: authData } = await supabase.auth.getUser();
-
-      if (!active || !authData.user) return;
-
-      await loadStats(authData.user.id);
-    };
-
-    const channel = supabase
-      .channel("workshop-dashboard-live")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "repair_requests",
-        },
-        refreshStats,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "repair_offers",
-          filter: `workshop_user_id=eq.${currentWorkshopUserId}`,
-        },
-        refreshStats,
-      )
-      .subscribe();
-
-    window.addEventListener("direct-requests-read-updated", refreshStats);
-    window.addEventListener("focus", refreshStats);
-
-    return () => {
-      active = false;
-      window.removeEventListener("direct-requests-read-updated", refreshStats);
-      window.removeEventListener("focus", refreshStats);
-      supabase.removeChannel(channel);
-    };
-  }, [authorized, currentWorkshopUserId]);
-
-  const loadStats = async (userId: string) => {
+  const loadStats = useCallback(async (userId: string) => {
+    const version = ++statsLoadVersion.current;
+    const isStale = () => version !== statsLoadVersion.current;
     try {
       const discoveryCounts = await fetchWorkshopDiscoveryCounts();
 
@@ -159,61 +75,150 @@ function WorkshopDashboardContent() {
         .is("target_workshop_read_at", null)
         .eq("request_type", "direct_request");
 
-      const [myOffersResult, wonJobsResult] = await Promise.all([
+      const [myOffersResult, wonCount] = await Promise.all([
         supabase
           .from("repair_offers")
           .select("id", { count: "exact", head: true })
           .eq("workshop_user_id", userId)
           .eq("status", "pending"),
-
-        supabase
-          .from("repair_offers")
-          .select(
-            `
-    id,
-    status,
-    repair_requests!inner (
-      id,
-      status
-    )
-  `,
-          )
-          .eq("workshop_user_id", userId)
-          .eq("status", "accepted"),
+        fetchWorkshopActiveJobsCount(userId),
       ]);
-
-      const wonCount =
-        wonJobsResult.data?.filter((row) => {
-          const request = Array.isArray(row.repair_requests)
-            ? row.repair_requests[0]
-            : row.repair_requests;
-
-          return (request?.status || "matched") !== "completed";
-        }).length || 0;
-
+      for (const result of [directBodyworkUnreadResult, directMechanicalUnreadResult, myOffersResult]) {
+        if (result.error) throw result.error;
+        if (result.count === null || !Number.isSafeInteger(result.count) || result.count < 0) {
+          throw new Error("WORKSHOP_DASHBOARD_COUNTS_UNAVAILABLE");
+        }
+      }
+      if (isStale()) return;
       setStats({
         bodyworkRequests: discoveryCounts.bodywork,
         mechanicalRequests: discoveryCounts.mechanical,
         wheelsRequests: discoveryCounts.wheels,
         towingRequests: discoveryCounts.towing,
-        myOffers: myOffersResult.count || 0,
+        myOffers: myOffersResult.count!,
         wonJobs: wonCount,
-        directBodyworkUnread: directBodyworkUnreadResult.count || 0,
-        directMechanicalUnread: directMechanicalUnreadResult.count || 0,
+        directBodyworkUnread: directBodyworkUnreadResult.count!,
+        directMechanicalUnread: directMechanicalUnreadResult.count!,
       });
+      setStatsError(false);
     } catch {
-      setStats({
-        bodyworkRequests: 0,
-        mechanicalRequests: 0,
-        wheelsRequests: 0,
-        towingRequests: 0,
-        myOffers: 0,
-        wonJobs: 0,
-        directBodyworkUnread: 0,
-        directMechanicalUnread: 0,
-      });
+      if (isStale()) return;
+      setStats(null);
+      setStatsError(true);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    localStorage.setItem("activeRole", "workshop");
+    const checkUserAndLoad = async () => {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+
+        if (!active) return;
+        if (!authData.user) {
+          router.push("/login");
+          return;
+        }
+
+        const { data: profile } = await getOwnProfile(supabase);
+        if (!active) return;
+
+        const roles = Array.isArray(profile?.role) ? profile.role : [];
+
+        if (!roles.includes("workshop")) {
+          router.push("/");
+          return;
+        }
+
+        setCurrentWorkshopUserId(authData.user.id);
+        setAuthorized(true);
+        await loadStats(authData.user.id);
+      } catch {
+        if (active) router.push("/login");
+      } finally {
+        if (active) setCheckingAccess(false);
+      }
+    };
+
+    checkUserAndLoad();
+    return () => {
+      active = false;
+      statsLoadVersion.current += 1;
+    };
+  }, [router, loadStats]);
+
+  useEffect(() => {
+    if (!authorized || !currentWorkshopUserId) return;
+
+    let active = true;
+
+    const refreshStats = async () => {
+      if (!active) return;
+      await loadStats(currentWorkshopUserId);
+    };
+
+    const channel = supabase
+      .channel("workshop-dashboard-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_requests",
+        },
+        refreshStats,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "repair_offers",
+          filter: `workshop_user_id=eq.${currentWorkshopUserId}`,
+        },
+        refreshStats,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "repair_appointments", filter: `workshop_id=eq.${currentWorkshopUserId}` },
+        refreshStats,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "work_progress_updates", filter: `sender_id=eq.${currentWorkshopUserId}` },
+        refreshStats,
+      )
+      .subscribe(status => {
+        if (status === "SUBSCRIBED") void refreshStats();
+      });
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refreshStats();
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user.id === currentWorkshopUserId) return;
+      active = false;
+      statsLoadVersion.current += 1;
+      setStats(null);
+      setAuthorized(false);
+      router.replace("/login");
+    });
+
+    window.addEventListener("direct-requests-read-updated", refreshStats);
+    window.addEventListener("focus", refreshStats);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      active = false;
+      statsLoadVersion.current += 1;
+      window.removeEventListener("direct-requests-read-updated", refreshStats);
+      window.removeEventListener("focus", refreshStats);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      subscription.unsubscribe();
+      supabase.removeChannel(channel);
+    };
+  }, [authorized, currentWorkshopUserId, loadStats, router]);
 
   if (checkingAccess) {
     return (
@@ -245,14 +250,20 @@ function WorkshopDashboardContent() {
           </p>
         </section>
 
+        {statsError && (
+          <p role="alert" className="mt-4 text-center text-sm text-orange-300">
+            Contoarele nu au putut fi actualizate. Reîncearcă la revenirea în pagină.
+          </p>
+        )}
+
         <section className="mt-10 grid grid-cols-2 gap-3 md:mx-auto md:max-w-3xl md:gap-6">
           <DashboardCard
             href="/workshops"
             icon="🚗"
             title="Daune estetice"
             description="Cererile clienților"
-            value={stats.bodyworkRequests}
-            badge={stats.directBodyworkUnread}
+            value={stats?.bodyworkRequests}
+            badge={stats?.directBodyworkUnread}
           />
 
           <DashboardCard
@@ -260,8 +271,8 @@ function WorkshopDashboardContent() {
             icon="⚙️"
             title="Daune mecanice"
             description="Cererile clienților"
-            value={stats.mechanicalRequests}
-            badge={stats.directMechanicalUnread}
+            value={stats?.mechanicalRequests}
+            badge={stats?.directMechanicalUnread}
           />
 
           <DashboardCard
@@ -269,7 +280,7 @@ function WorkshopDashboardContent() {
             icon="🛞"
             title="Roți și anvelope"
             description="Cererile clienților"
-            value={stats.wheelsRequests}
+            value={stats?.wheelsRequests}
           />
 
           <DashboardCard
@@ -277,7 +288,7 @@ function WorkshopDashboardContent() {
             icon="🚚"
             title="Tractări auto"
             description="Cererile clienților"
-            value={stats.towingRequests}
+            value={stats?.towingRequests}
           />
 
           <DashboardCard
@@ -285,7 +296,7 @@ function WorkshopDashboardContent() {
             icon="€"
             title="Ofertele tale"
             description="Oferte trimise"
-            value={stats.myOffers}
+            value={stats?.myOffers}
           />
 
           <DashboardCard
@@ -293,7 +304,7 @@ function WorkshopDashboardContent() {
             icon="📅"
             title="Programări"
             description="Lucrări acceptate"
-            value={stats.wonJobs}
+            value={stats?.wonJobs}
           />
         </section>
       </div>
@@ -313,7 +324,7 @@ function DashboardCard({
   icon: string;
   title: string;
   description: string;
-  value: string | number;
+  value?: number;
   badge?: number;
 }) {
   const card = (
@@ -324,9 +335,11 @@ function DashboardCard({
           : "cursor-default"
       }`}
     >
-        <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
-          {value}
-        </div>
+        {typeof value === "number" && value > 0 && (
+          <div className="absolute right-4 top-4 rounded-full bg-black px-2.5 py-1 text-xs font-semibold text-white shadow-md">
+            {value}
+          </div>
+        )}
 
         {typeof badge === "number" && badge > 0 && (
           <div className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-red-500 px-2 text-xs font-bold text-white shadow-md">
