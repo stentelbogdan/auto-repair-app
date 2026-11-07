@@ -90,7 +90,7 @@ function fixture(page: "photos" | "photos-folder", options: {
     };
     if (name === "next/navigation") return { useParams: () => ({ id: route }), useRouter: () => router };
     if (name === "lucide-react") return { Camera: "Camera", Images: "Images" };
-    if (name === "@/app/components/ImageGallery") return { default: "ImageGallery" };
+    if (name === "@/app/components/ImageGallery" || name === "@/app/components/WorkProgressImageGallery") return { default: "ImageGallery" };
     if (name === "@/lib/images/prepare-image-for-upload") return { prepareImageForUpload: async (file: File, preset: unknown) => {
       prepared.push(preset); return { file, extension: "jpg", contentType: "image/jpeg" };
     } };
@@ -220,6 +220,7 @@ for (const [category, stage] of Object.entries({ bodywork: "Tinichigerie", mecha
     ] } });
     await f.load(); assert.ok(f.text().includes("Synthetic Model")); assert.ok(f.text().includes("Mesaj istoric"));
     assert.deepEqual(f.nodes("ImageGallery")[0].props.images, [{ name: `folder-${offerId}-0`, url: image }]);
+    assert.equal(f.nodes("ImageGallery")[0].props.requestId, requestId);
     assert.deepEqual(f.queries[0].filters, [["id", offerId], ["request_id", requestId], ["workshop_user_id", workshopId], ["status", "accepted"]]);
     assert.equal(f.queries.length, 1);
     assert.deepEqual(f.calls[1], { name: "get_workshop_work_progress_history", args: { p_request_id: requestId } });

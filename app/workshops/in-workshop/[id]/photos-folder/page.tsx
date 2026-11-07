@@ -1,6 +1,6 @@
 "use client";
 
-import ImageGallery from "@/app/components/ImageGallery";
+import WorkProgressImageGallery from "@/app/components/WorkProgressImageGallery";
 import { supabase } from "@/lib/supabase/client";
 import { getWorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
 import { getWorkshopWorkProgressHistory } from "@/lib/supabase/workshop-work-progress-history";
@@ -317,7 +317,8 @@ export default function WorkPhotosFolderPage() {
                       )}
 
                       <div className="mt-4 overflow-hidden rounded-2xl">
-                        <ImageGallery
+                        <WorkProgressImageGallery
+                          requestId={requestId}
                           images={update.images.map((url, imageIndex) => ({
                             name: `folder-${update.id}-${imageIndex}`,
                             url,

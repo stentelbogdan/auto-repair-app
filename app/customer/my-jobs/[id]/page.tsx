@@ -6,7 +6,7 @@ import { Home } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import type { RepairRequestRow } from "@/lib/supabase/repair-requests";
-import ImageGallery from "@/app/components/ImageGallery";
+import WorkProgressImageGallery from "@/app/components/WorkProgressImageGallery";
 import {
   formatProgressStatus,
   normalizeProgressStatus,
@@ -564,7 +564,8 @@ export default function CustomerJobDetailPage() {
                         {Array.isArray(update.images) &&
                           update.images.length > 0 && (
                             <div className="mt-4 overflow-hidden rounded-2xl">
-                              <ImageGallery
+                              <WorkProgressImageGallery
+                                requestId={requestId}
                                 images={update.images.map(
                                   (url, imageIndex) => ({
                                     name: `progress-${update.id}-${imageIndex}`,
