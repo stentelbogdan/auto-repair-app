@@ -2,6 +2,8 @@
 
 import ImageGallery from "@/app/components/ImageGallery";
 import { supabase } from "@/lib/supabase/client";
+import { getWorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
+import { getWorkshopWorkProgressHistory } from "@/lib/supabase/workshop-work-progress-history";
 import {
   formatProgressStatus,
   getProgressWorkflow,
@@ -135,27 +137,26 @@ export default function WorkPhotosFolderPage() {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setRequest(null);
+    setGroups([]);
+    setErrorMessage(null);
 
     const loadPhotosFolder = async () => {
       try {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
 
+        if (!active) return;
         if (authError) throw authError;
         if (!authData.user) {
           router.push("/login");
           return;
         }
 
-        const { data: requestData, error: requestError } = await supabase
-          .from("repair_requests")
-          .select(
-            "id, car_brand, car_model, car_year, city, service_type, accepted_offer_id",
-          )
-          .eq("id", requestId)
-          .maybeSingle();
+        const requestData = await getWorkshopRequestDetail(requestId);
 
-        if (requestError) throw requestError;
+        if (!active) return;
         if (!requestData?.accepted_offer_id) {
           throw new Error(
             "Lucrarea nu a fost găsită sau nu ai acces la dosarul ei foto.",
@@ -172,20 +173,15 @@ export default function WorkPhotosFolderPage() {
           .maybeSingle();
 
         if (offerError) throw offerError;
+        if (!active) return;
         if (!acceptedOffer) {
           throw new Error("Nu ai acces la dosarul foto al acestei lucrări.");
         }
 
-        const { data: progressData, error: progressError } = await supabase
-          .from("work_progress_updates")
-          .select("id, status, message, images, created_at")
-          .eq("request_id", requestId)
-          .order("created_at", { ascending: false });
-
-        if (progressError) throw progressError;
+        const progressData = await getWorkshopWorkProgressHistory(requestId);
         if (!active) return;
 
-        const photoUpdates = ((progressData ?? []) as ProgressUpdateRow[])
+        const photoUpdates = progressData
           .map((update) => ({
             ...update,
             images: sanitizeImageUrls(update.images),

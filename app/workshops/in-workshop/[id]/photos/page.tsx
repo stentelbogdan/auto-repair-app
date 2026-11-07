@@ -7,6 +7,8 @@ import {
 } from "@/lib/images/prepare-image-for-upload";
 import { supabase } from "@/lib/supabase/client";
 import { saveWorkProgressUpdate } from "@/lib/supabase/work-progress";
+import { getWorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
+import { getWorkshopLatestWorkProgress } from "@/lib/supabase/workshop-work-progress";
 import {
   formatProgressStatus,
   isProgressStatusValidForWorkflow,
@@ -41,6 +43,7 @@ export default function WorkProgressPhotosPage() {
   const requestId = params.id;
   const submittingRef = useRef(false);
   const previewUrlsRef = useRef<string[]>([]);
+  const pageVersionRef = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [request, setRequest] = useState<RequestSummary | null>(null);
@@ -59,44 +62,46 @@ export default function WorkProgressPhotosPage() {
 
   useEffect(() => {
     let active = true;
+    pageVersionRef.current += 1;
+    submittingRef.current = false;
+    setSubmitting(false);
+    setLoading(true);
+    setRequest(null);
+    setUserId(null);
+    setCurrentStatus(null);
+    setFeedback(null);
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrlsRef.current = [];
+    setPreviewUrls([]);
+    setProgressImages([]);
+    setMessage("");
 
     const loadPage = async () => {
       try {
         const { data: authData, error: authError } =
           await supabase.auth.getUser();
 
+        if (!active) return;
         if (authError) throw authError;
         if (!authData.user) {
           router.push("/login");
           return;
         }
 
-        const [requestResult, progressResult] = await Promise.all([
-          supabase
-            .from("repair_requests")
-            .select("car_brand, car_model, service_type")
-            .eq("id", requestId)
-            .maybeSingle(),
-          supabase
-            .from("work_progress_updates")
-            .select("status")
-            .eq("request_id", requestId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
+        const [requestData, latestProgress] = await Promise.all([
+          getWorkshopRequestDetail(requestId),
+          getWorkshopLatestWorkProgress(requestId),
         ]);
 
-        if (requestResult.error) throw requestResult.error;
-        if (progressResult.error) throw progressResult.error;
-        if (!requestResult.data) {
+        if (!requestData) {
           throw new Error("Lucrarea nu a fost găsită.");
         }
         if (!active) return;
 
         setUserId(authData.user.id);
-        setRequest(requestResult.data);
+        setRequest(requestData);
         const resolvedServiceType = resolveRepairServiceType(
-          requestResult.data.service_type,
+          requestData.service_type,
         );
 
         if (!resolvedServiceType) {
@@ -108,7 +113,7 @@ export default function WorkProgressPhotosPage() {
           return;
         }
 
-        if (!progressResult.data?.status) {
+        if (!latestProgress?.status) {
           setFeedback({
             type: "error",
             message:
@@ -116,16 +121,16 @@ export default function WorkProgressPhotosPage() {
           });
         } else if (
           !isProgressStatusValidForWorkflow(
-            progressResult.data.status,
+            latestProgress.status,
             resolvedServiceType,
           )
         ) {
           setFeedback({
             type: "error",
-            message: `Statusul curent „${formatProgressStatus(progressResult.data.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : resolvedServiceType === "wheels" ? "de roți și anvelope" : "de caroserie"}. Pozele nu pot fi trimise până la clarificarea datelor.`,
+            message: `Statusul curent „${formatProgressStatus(latestProgress.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : resolvedServiceType === "wheels" ? "de roți și anvelope" : "de caroserie"}. Pozele nu pot fi trimise până la clarificarea datelor.`,
           });
         } else {
-          setCurrentStatus(normalizeProgressStatus(progressResult.data.status));
+          setCurrentStatus(normalizeProgressStatus(latestProgress.status));
         }
       } catch (error) {
         if (!active) return;
@@ -146,6 +151,7 @@ export default function WorkProgressPhotosPage() {
 
     return () => {
       active = false;
+      pageVersionRef.current += 1;
     };
   }, [requestId, router]);
 
@@ -187,7 +193,7 @@ export default function WorkProgressPhotosPage() {
   };
 
   const submitPhotos = async () => {
-    if (submittingRef.current) return;
+    if (submittingRef.current || loading || !request) return;
 
     if (!userId || !currentStatus) {
       setFeedback({
@@ -209,6 +215,9 @@ export default function WorkProgressPhotosPage() {
     submittingRef.current = true;
     setSubmitting(true);
     setFeedback(null);
+    const pageVersion = pageVersionRef.current;
+    const isCurrentPage = () => pageVersionRef.current === pageVersion;
+    const uploadedUrls: string[] = [];
 
     try {
       const preparedImages: PreparedImage[] = [];
@@ -217,14 +226,13 @@ export default function WorkProgressPhotosPage() {
         const preparedImage = await prepareImageForUpload(file, {
           preset: "workProgress",
         });
+        if (!isCurrentPage()) return;
         logPreparedImage(preparedImage);
         preparedImages.push(preparedImage);
       }
 
-      const uploadedUrls: string[] = [];
-
       for (const preparedImage of preparedImages) {
-        const filePath = `${requestId}/${Date.now()}-${Math.random()
+        const filePath = `${requestId}/${userId}/${Date.now()}-${Math.random()
           .toString(36)
           .slice(2)}.${preparedImage.extension}`;
 
@@ -235,6 +243,7 @@ export default function WorkProgressPhotosPage() {
           });
 
         if (uploadError) throw uploadError;
+        if (!isCurrentPage()) return;
 
         const { data } = supabase.storage
           .from("work-progress")
@@ -250,6 +259,7 @@ export default function WorkProgressPhotosPage() {
         message,
         images: uploadedUrls,
       });
+      if (!isCurrentPage()) return;
 
       previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
       previewUrlsRef.current = [];
@@ -261,16 +271,21 @@ export default function WorkProgressPhotosPage() {
         message: "Pozele au fost trimise către client.",
       });
     } catch (error) {
+      if (!isCurrentPage()) return;
+      const reason = error instanceof Error
+        ? error.message
+        : "Pozele nu au putut fi trimise.";
       setFeedback({
         type: "error",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Pozele nu au putut fi trimise.",
+        message: uploadedUrls.length > 0
+          ? `Există fotografii încărcate, dar salvarea lor în progres nu este confirmată. Trimiterea nu este finalizată. ${reason}`
+          : reason,
       });
     } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+      if (isCurrentPage()) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
@@ -403,7 +418,7 @@ export default function WorkProgressPhotosPage() {
             type="button"
             onClick={() => void submitPhotos()}
             disabled={
-              submitting || !currentStatus || progressImages.length === 0
+              submitting || !request || !userId || !currentStatus || progressImages.length === 0
             }
             className="mt-5 w-full rounded-2xl bg-orange-500 px-5 py-4 text-sm font-black text-black hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
