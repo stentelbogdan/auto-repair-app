@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { saveWorkProgressUpdate } from "@/lib/supabase/work-progress";
+import { getWorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
+import { getWorkshopLatestWorkProgress } from "@/lib/supabase/workshop-work-progress";
 import {
   formatProgressStatus,
   getProgressWorkflow,
@@ -49,6 +51,14 @@ export default function WorkStatusPage() {
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setRequest(null);
+    setUserId(null);
+    setServiceType(null);
+    setActiveStatus(null);
+    setAppointmentId(null);
+    setWorkflowBlocked(false);
+    setFeedback(null);
 
     const loadPage = async () => {
       try {
@@ -62,47 +72,33 @@ export default function WorkStatusPage() {
           return;
         }
 
-        const [requestResult, progressResult] = await Promise.all([
-          supabase
-            .from("repair_requests")
-            .select(
-              "car_brand, car_model, status, service_type, accepted_offer_id",
-            )
-            .eq("id", requestId)
-            .maybeSingle(),
-          supabase
-            .from("work_progress_updates")
-            .select("status")
-            .eq("request_id", requestId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
+        const [requestData, latestProgress] = await Promise.all([
+          getWorkshopRequestDetail(requestId),
+          getWorkshopLatestWorkProgress(requestId),
         ]);
 
-        if (requestResult.error) throw requestResult.error;
-        if (progressResult.error) throw progressResult.error;
-        if (!requestResult.data) {
+        if (!requestData) {
           throw new Error("Lucrarea nu a fost găsită.");
         }
 
         if (!active) return;
 
         setUserId(authData.user.id);
-        setRequest(requestResult.data);
+        setRequest(requestData);
         const resolvedServiceType = resolveRepairServiceType(
-          requestResult.data.service_type,
+          requestData.service_type,
         );
 
         if (
           resolvedServiceType === "towing" &&
-          requestResult.data.accepted_offer_id
+          requestData.accepted_offer_id
         ) {
           const [appointmentResult, trackingResult] = await Promise.all([
             supabase
               .from("repair_appointments")
               .select("id")
               .eq("request_id", requestId)
-              .eq("offer_id", requestResult.data.accepted_offer_id)
+              .eq("offer_id", requestData.accepted_offer_id)
               .eq("workshop_id", authData.user.id)
               .eq("status", "confirmed")
               .order("updated_at", { ascending: false })
@@ -126,7 +122,7 @@ export default function WorkStatusPage() {
         }
 
         setServiceType(
-          resolvedServiceType ?? requestResult.data.service_type,
+          resolvedServiceType ?? requestData.service_type,
         );
 
         if (!resolvedServiceType) {
@@ -139,29 +135,30 @@ export default function WorkStatusPage() {
           return;
         }
 
-        if (progressResult.data?.status) {
+        if (latestProgress?.status) {
           if (
             isProgressStatusValidForWorkflow(
-              progressResult.data.status,
+              latestProgress.status,
               resolvedServiceType,
             )
           ) {
             setActiveStatus(
-              normalizeProgressStatus(progressResult.data.status),
+              normalizeProgressStatus(latestProgress.status),
             );
           } else {
             setWorkflowBlocked(true);
             setFeedback({
               type: "error",
-              message: `Statusul curent „${formatProgressStatus(progressResult.data.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : resolvedServiceType === "wheels" ? "de roți și anvelope" : "de caroserie"}. Etapa nu poate fi schimbată până la clarificarea datelor.`,
+              message: `Statusul curent „${formatProgressStatus(latestProgress.status)}” nu este compatibil cu workflow-ul ${resolvedServiceType === "mechanical" ? "mecanic" : resolvedServiceType === "wheels" ? "de roți și anvelope" : "de caroserie"}. Etapa nu poate fi schimbată până la clarificarea datelor.`,
             });
           }
-        } else if (requestResult.data.status === "completed") {
+        } else if (requestData.status === "completed") {
           setActiveStatus("Ready");
         }
       } catch (error) {
         if (!active) return;
 
+        setWorkflowBlocked(true);
         setFeedback({
           type: "error",
           message:
@@ -182,7 +179,7 @@ export default function WorkStatusPage() {
   }, [markTrackingDisconnected, requestId, router]);
 
   const changeStatus = async (status: ProgressStatus) => {
-    if (savingRef.current || workflowBlocked) return;
+    if (savingRef.current || workflowBlocked || loading || !request) return;
 
     if (status === activeStatus) {
       setFeedback({
@@ -291,7 +288,7 @@ export default function WorkStatusPage() {
                 <button
                   key={step.status}
                   type="button"
-                  disabled={savingStatus !== null || workflowBlocked}
+                  disabled={savingStatus !== null || workflowBlocked || !request || !userId}
                   onClick={() => void changeStatus(step.status)}
                   aria-pressed={isActive}
                   className={`flex w-full gap-4 rounded-2xl p-3 text-left transition disabled:cursor-wait ${

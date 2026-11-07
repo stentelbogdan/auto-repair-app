@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { normalizeProgressStatus } from "@/lib/work-progress/workflows";
 
 type SaveWorkProgressUpdateInput = {
   requestId: string;
@@ -10,43 +11,33 @@ type SaveWorkProgressUpdateInput = {
 
 export async function saveWorkProgressUpdate({
   requestId,
-  senderId,
   status,
   message,
   images,
 }: SaveWorkProgressUpdateInput) {
-  const { error: insertError } = await supabase
-    .from("work_progress_updates")
-    .insert({
-      request_id: requestId,
-      sender_id: senderId,
-      sender_role: "workshop",
-      status,
-      message,
-      images,
-    });
-
-  if (insertError) {
-    throw insertError;
+  const stage = typeof status === "string" ? normalizeProgressStatus(status) : null;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)
+    || !stage || typeof message !== "string" || !Array.isArray(images)
+    || !images.every(image => typeof image === "string" && image.trim().length > 0)) {
+    throw new Error("Datele progresului sunt invalide.");
   }
 
-  const requestStatus =
-    status === "Ready" || status === "Gata" ? "completed" : "in_progress";
+  // senderId stays in the caller contract; only auth.uid() authorizes the write.
+  const { data, error } = await supabase.rpc("save_work_progress_update", {
+    p_request_id: requestId,
+    p_status: stage,
+    p_message: message,
+    p_images: images,
+  });
+  if (error) throw error;
 
-  const { data: updatedRequest, error: requestUpdateError } = await supabase
-    .from("repair_requests")
-    .update({ status: requestStatus })
-    .eq("id", requestId)
-    .select("id, status")
-    .maybeSingle();
-
-  if (requestUpdateError) {
-    throw requestUpdateError;
-  }
-
-  if (!updatedRequest) {
+  const requestStatus = stage === "Ready" ? "completed" : "in_progress";
+  const row: unknown = Array.isArray(data) && data.length === 1 ? data[0] : null;
+  if (!row || typeof row !== "object" || !("id" in row) || !("status" in row)
+    || row.id !== requestId.toLowerCase() || row.status !== requestStatus) {
     throw new Error("Starea lucrării nu a putut fi actualizată.");
   }
 
-  return updatedRequest;
+  // No follow-up SELECT: an unreadable response must not retry a committed save.
+  return { id: row.id, status: row.status };
 }
