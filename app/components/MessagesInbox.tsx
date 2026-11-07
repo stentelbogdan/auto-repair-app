@@ -5,6 +5,10 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import {
+  getMessageConversationContext,
+  type MessageConversationContext,
+} from "@/lib/supabase/message-conversation-context";
+import {
   getConversationPeerKey,
   loadConversationPeers,
 } from "@/lib/messages/conversation-peers";
@@ -470,8 +474,25 @@ export default function MessagesInbox({ role }: { role: Role }) {
         const offerRequestIds = [...new Set(offers.map((offer) => offer.request_id))];
 
         let requests: RequestRow[] = [];
+        let workshopContexts = new Map<string, MessageConversationContext | null>();
 
-        if (offerRequestIds.length > 0) {
+        if (role === "workshop") {
+          // Keep authorization scoped to each exact conversation, even when
+          // multiple offers belong to the same request. No direct-read fallback.
+          workshopContexts = new Map(await Promise.all(offers.map(async (offer) => [
+            getConversationKey(offer.request_id, offer.id),
+            await getMessageConversationContext(offer.request_id, offer.id).catch(() => null),
+          ] as const)));
+
+          if (
+            loadConversationsSessionRef.current !== session ||
+            loadConversationsGenerationRef.current !== generation
+          ) {
+            return;
+          }
+        }
+
+        if (role === "customer" && offerRequestIds.length > 0) {
           const requestsStart = performance.now();
           logPerf("query:repair_requests_for_offers:start", {
             requestIds: offerRequestIds.length,
@@ -618,7 +639,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
         );
 
         const mappedOffers: Conversation[] = offers.flatMap((offer) => {
-          const request = requestMap.get(offer.request_id);
+          const request = role === "workshop"
+            ? workshopContexts.get(getConversationKey(offer.request_id, offer.id))
+            : requestMap.get(offer.request_id);
           const conversationMessages =
             messagesByConversation.get(
               getConversationKey(offer.request_id, offer.id),
@@ -671,7 +694,9 @@ export default function MessagesInbox({ role }: { role: Role }) {
                 ? `${request.car_brand || "Lucrare"} ${request.car_model || ""}`
                 : "Conversație ofertă",
               city: request?.city || "-",
-              status: request?.status || offer.status || "pending",
+              status: request?.status || (role === "workshop"
+                ? "context_unavailable"
+                : offer.status || "pending"),
               image,
               peerName,
               lastMessage: getLastMessageText(lastMessage),
@@ -1438,6 +1463,8 @@ export default function MessagesInbox({ role }: { role: Role }) {
 
 function formatStatus(status?: string | null) {
   switch (status) {
+    case "context_unavailable":
+      return "Context indisponibil";
     case "matched":
       return "Acceptată";
     case "in_progress":
