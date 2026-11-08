@@ -5,6 +5,7 @@ import ReviewImagesGallery from "./ReviewImagesGallery";
 import { createClient } from "@supabase/supabase-js";
 import WorkshopProfileActions from "./WorkshopProfileActions";
 import { getPublicWorkshopProfile } from "@/lib/supabase/profiles";
+import { WorkshopReviewReadBoundary, WorkshopReviewReadCard } from "./WorkshopReviewReadReceipt";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,7 +39,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
 
   const { data: reviews } = await supabase
     .from("reviews")
-    .select("id, rating, comment, created_at, request_id, images")
+    .select("id, rating, comment, created_at, request_id, offer_id, images")
     .eq("workshop_user_id", workshop.id)
     .order("created_at", { ascending: false });
 
@@ -204,6 +205,7 @@ export default async function WorkshopProfilePage({ params }: Props) {
               <div className="mt-8 rounded-[2rem] border border-white/10 bg-black/30 p-6">
                 <h2 className="text-2xl font-black">Review-uri clienți</h2>
 
+                <WorkshopReviewReadBoundary workshopId={workshop.id}>
                 <div className="mt-5 grid gap-4">
                   {reviewList.map((review) => {
                     const reviewRequest = requestsByReviewId.get(review.id);
@@ -211,9 +213,11 @@ export default async function WorkshopProfilePage({ params }: Props) {
                       reviewRequest?.customer_display_name?.trim() || "Client";
 
                     return (
-                      <div
+                      <WorkshopReviewReadCard
                         key={review.id}
-                        className="w-full max-w-full overflow-hidden rounded-3xl bg-white p-5 text-black"
+                        reviewId={review.id}
+                        requestId={review.request_id}
+                        offerId={review.offer_id}
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div>
@@ -258,10 +262,11 @@ export default async function WorkshopProfilePage({ params }: Props) {
                               <ReviewImagesGallery images={review.images} />
                             </div>
                           )}
-                      </div>
+                      </WorkshopReviewReadCard>
                     );
                   })}
                 </div>
+                </WorkshopReviewReadBoundary>
               </div>
             )}
 
