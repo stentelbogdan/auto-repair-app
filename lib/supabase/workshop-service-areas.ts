@@ -79,26 +79,45 @@ export async function saveOwnWorkshopServiceArea(input: {
     const location = normalizeGeoLocation(input.location);
     if (!location) throw new Error("Selectează o localitate validă din listă.");
 
+    const values = {
+      location: toPostgisPoint(location),
+      locality: location.locality,
+      postal_code: location.postalCode,
+      country_code: location.countryCode,
+      radius_km: input.radiusKm,
+      geocoded_at: now,
+      updated_at: now,
+    };
+    // An UPSERT also assigns workshop_id on conflict, requiring UPDATE on the
+    // ownership column. Keep it only in the filter (UPDATE) or new row (INSERT).
+    const updateOwnArea = () => supabase
+      .from("workshop_service_areas")
+      .update(values)
+      .eq("workshop_id", workshopId)
+      .select(
+        "workshop_id, locality, postal_code, country_code, radius_km, geocoded_at, updated_at",
+      )
+      .maybeSingle<WorkshopServiceAreaRow>();
+
+    const updated = await updateOwnArea();
+    if (updated.error) throw updated.error;
+    if (updated.data) return mapServiceArea(updated.data);
+
     const { data, error } = await supabase
       .from("workshop_service_areas")
-      .upsert(
-        {
-          workshop_id: workshopId,
-          location: toPostgisPoint(location),
-          locality: location.locality,
-          postal_code: location.postalCode,
-          country_code: location.countryCode,
-          radius_km: input.radiusKm,
-          geocoded_at: now,
-          updated_at: now,
-        },
-        { onConflict: "workshop_id" },
-      )
+      .insert({ workshop_id: workshopId, ...values })
       .select(
         "workshop_id, locality, postal_code, country_code, radius_km, geocoded_at, updated_at",
       )
       .single<WorkshopServiceAreaRow>();
 
+    // Another device may have created the own row after the empty UPDATE.
+    // Retry once, still scoped to auth.getUser(), without assigning its owner.
+    if (error?.code === "23505") {
+      const retried = await updateOwnArea();
+      if (retried.error) throw retried.error;
+      if (retried.data) return mapServiceArea(retried.data);
+    }
     if (error) throw error;
     return mapServiceArea(data);
   }
