@@ -5,6 +5,7 @@ import { loadWithOfferVersion, offerReadObservation, type OfferReadObservation }
 import NotificationFocus from "@/app/components/NotificationFocus";
 
 import { loadWorkshopOfferRequests } from "@/lib/supabase/workshop-offer-requests";
+import { getWorkshopWorkProgressHistory } from "@/lib/supabase/workshop-work-progress-history";
 import { useVisibleNotificationRead } from "@/lib/hooks/useVisibleNotificationRead";
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -356,20 +357,17 @@ export default function WorkshopWonJobsPage() {
         });
       }
 
-      let latestProgressMap = new Map<string, string>();
-      let completionTimestampMap = new Map<string, string>();
+      const latestProgressMap = new Map<string, string | null>();
+      const completionTimestampMap = new Map<string, string>();
 
-      if (requestIds.length > 0) {
-        const { data: progressData } = await supabase
-          .from("work_progress_updates")
-          .select("request_id, status, created_at")
-          .in("request_id", requestIds)
-          .order("created_at", { ascending: false });
+      // Same authorized history as Poze dosar, newest first. A denied/failed
+      // read must reach the load error state, not look like an empty history.
+      for (const requestId of new Set(requestIds)) {
+        if (isStale()) return;
+        const progressData = await getWorkshopWorkProgressHistory(requestId);
+        if (isStale()) return;
 
-        latestProgressMap = new Map();
-        completionTimestampMap = new Map();
-
-        (progressData || []).forEach((item) => {
+        progressData.forEach((item) => {
           if (!latestProgressMap.has(item.request_id)) {
             latestProgressMap.set(item.request_id, item.status);
           }

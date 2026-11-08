@@ -130,7 +130,7 @@ export async function POST(request: Request) {
   }
 
   const requestId = input.requestId.trim();
-  if (!requestId) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) {
     return Response.json({ error: "Request invalid." }, { status: 400 });
   }
 
@@ -174,14 +174,23 @@ export async function POST(request: Request) {
     return Response.json({ error: "Autentificare invalidă." }, { status: 401 });
   }
 
-  const { data: repairRequest, error: requestError } = await supabase
-    .from("repair_requests")
-    .select("id, service_type, accepted_offer_id, pickup_lat, pickup_lng")
-    .eq("id", requestId)
-    .maybeSingle();
+  // Use this request's authenticated client, never the browser singleton or a
+  // privileged server key. Service cannot SELECT the customer's request.
+  const { data: requestRows, error: requestError } = await supabase.rpc(
+    "get_workshop_repair_request_detail", { p_request_id: requestId },
+  );
   if (requestError) {
+    return Response.json({ error: "Cererea nu a putut fi verificată." }, {
+      status: requestError.code === "42501" ? 403 : 500,
+    });
+  }
+  if (!Array.isArray(requestRows) || requestRows.length > 1 ||
+    (requestRows.length === 1 && (!isRecord(requestRows[0]) ||
+      !isRecord(requestRows[0].request_data) ||
+      requestRows[0].request_data.id !== requestId.toLowerCase()))) {
     return Response.json({ error: "Cererea nu a putut fi verificată." }, { status: 500 });
   }
+  const repairRequest = requestRows[0]?.request_data;
   if (!repairRequest || repairRequest.service_type !== "towing") {
     return Response.json({ error: "Cererea Towing nu a fost găsită." }, { status: 404 });
   }
@@ -202,18 +211,27 @@ export async function POST(request: Request) {
     .eq("request_id", requestId)
     .eq("status", "accepted")
     .maybeSingle();
-  if (offerError || !acceptedOffer || acceptedOffer.workshop_user_id !== user.id) {
+  if (offerError || !acceptedOffer || acceptedOffer.workshop_user_id !== user.id ||
+    acceptedOffer.id !== repairRequest.accepted_offer_id ||
+    acceptedOffer.request_id !== requestId.toLowerCase() || acceptedOffer.status !== "accepted") {
     return Response.json({ error: "Acces interzis." }, { status: 403 });
   }
 
-  const { data: latestProgress, error: progressError } = await supabase
-    .from("work_progress_updates")
-    .select("status")
-    .eq("request_id", requestId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (progressError || latestProgress?.status !== "Dispatch") {
+  const { data: progressRows, error: progressError } = await supabase.rpc(
+    "get_workshop_latest_work_progress", { p_request_id: requestId },
+  );
+  if (progressError) {
+    return Response.json({ error: "Stadiul lucrării nu a putut fi verificat." }, {
+      status: progressError.code === "42501" ? 403 : 500,
+    });
+  }
+  if (!Array.isArray(progressRows) || progressRows.length > 1 ||
+    (progressRows.length === 1 && (!isRecord(progressRows[0]) ||
+      progressRows[0].request_id !== requestId.toLowerCase() ||
+      (progressRows[0].status !== null && typeof progressRows[0].status !== "string")))) {
+    return Response.json({ error: "Stadiul lucrării nu a putut fi verificat." }, { status: 500 });
+  }
+  if (progressRows[0]?.status !== "Dispatch") {
     return Response.json(
       { error: "ETA live este disponibil doar în etapa Dispatch." },
       { status: 409 },
