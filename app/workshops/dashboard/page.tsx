@@ -5,14 +5,11 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
-import { fetchWorkshopDiscoveryCounts } from "@/lib/supabase/workshop-discovery";
+import { fetchWorkshopDiscoveryCounts, type WorkshopDiscoveryCounts } from "@/lib/supabase/workshop-discovery";
 import { fetchWorkshopActiveJobsCount } from "@/lib/supabase/workshop-active-jobs";
+import { createWorkshopDiscoveryRefresh, isWorkshopDiscoveryInvalidation, WORKSHOP_DISCOVERY_TOPIC } from "@/lib/supabase/workshop-discovery-live";
 
 type DashboardStats = {
-  bodyworkRequests: number;
-  mechanicalRequests: number;
-  wheelsRequests: number;
-  towingRequests: number;
   myOffers: number;
   wonJobs: number;
   directBodyworkUnread: number;
@@ -50,13 +47,15 @@ function WorkshopDashboardContent() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [statsError, setStatsError] = useState(false);
   const statsLoadVersion = useRef(0);
+  const [discoveryCounts, setDiscoveryCounts] = useState<WorkshopDiscoveryCounts | null>(null);
+  const [discoveryError, setDiscoveryError] = useState(false);
+  const [discoveryLiveError, setDiscoveryLiveError] = useState(false);
+  const discoveryRemoval = useRef<Promise<boolean>>(Promise.resolve(true));
 
   const loadStats = useCallback(async (userId: string) => {
     const version = ++statsLoadVersion.current;
     const isStale = () => version !== statsLoadVersion.current;
     try {
-      const discoveryCounts = await fetchWorkshopDiscoveryCounts();
-
       const directBodyworkUnreadResult = await supabase
         .from("repair_requests")
         .select("id", { count: "exact", head: true })
@@ -91,10 +90,6 @@ function WorkshopDashboardContent() {
       }
       if (isStale()) return;
       setStats({
-        bodyworkRequests: discoveryCounts.bodywork,
-        mechanicalRequests: discoveryCounts.mechanical,
-        wheelsRequests: discoveryCounts.wheels,
-        towingRequests: discoveryCounts.towing,
         myOffers: myOffersResult.count!,
         wonJobs: wonCount,
         directBodyworkUnread: directBodyworkUnreadResult.count!,
@@ -153,8 +148,36 @@ function WorkshopDashboardContent() {
 
     let active = true;
 
+    const discovery = createWorkshopDiscoveryRefresh({
+      read: fetchWorkshopDiscoveryCounts,
+      publish: (counts, error) => { setDiscoveryCounts(counts); setDiscoveryError(error); },
+    });
+    discovery.invalidate();
+    let discoveryChannel: ReturnType<typeof supabase.channel> | null = null;
+    let connection = 0;
+    let reconnecting = false;
+    const connectDiscovery = () => {
+      const generation = ++connection;
+      discoveryChannel = supabase.channel(WORKSHOP_DISCOVERY_TOPIC, { config: { private: true } })
+        .on("broadcast", { event: "invalidate" }, ({ payload }) => {
+          if (active && generation === connection && isWorkshopDiscoveryInvalidation(payload)) discovery.invalidate();
+        })
+        .subscribe(status => {
+          if (!active || generation !== connection) return;
+          if (status === "SUBSCRIBED") { setDiscoveryLiveError(false); discovery.invalidate(); }
+          else if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) setDiscoveryLiveError(true);
+        });
+    };
+    // Supabase reuses a channel with the same topic until removal completes.
+    // Wait for the previous effect/account's channel, including Strict Mode cleanup.
+    void discoveryRemoval.current.then(removed => {
+      if (!active) return;
+      if (removed) connectDiscovery(); else setDiscoveryLiveError(true);
+    });
+
     const refreshStats = async () => {
       if (!active) return;
+      discovery.invalidate();
       await loadStats(currentWorkshopUserId);
     };
 
@@ -193,12 +216,26 @@ function WorkshopDashboardContent() {
         if (status === "SUBSCRIBED") void refreshStats();
       });
 
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refreshStats();
+    const onForeground = () => {
+      if (!active || document.visibilityState !== "visible") return;
+      if (discoveryChannel && !reconnecting &&
+        (discoveryChannel.state === "closed" || discoveryChannel.state === "errored")) {
+        reconnecting = true;
+        const generation = ++connection;
+        discoveryRemoval.current = supabase.removeChannel(discoveryChannel).then(status => status === "ok", () => false);
+        void discoveryRemoval.current.then(removed => {
+          reconnecting = false;
+          if (!active || generation !== connection) return;
+          if (removed) connectDiscovery(); else setDiscoveryLiveError(true);
+        });
+      }
+      void refreshStats();
     };
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user.id === currentWorkshopUserId) return;
+      if (session?.user.id === currentWorkshopUserId) { discovery.invalidate(); return; }
       active = false;
+      discovery.dispose();
+      setDiscoveryCounts(null);
       statsLoadVersion.current += 1;
       setStats(null);
       setAuthorized(false);
@@ -206,17 +243,22 @@ function WorkshopDashboardContent() {
     });
 
     window.addEventListener("direct-requests-read-updated", refreshStats);
-    window.addEventListener("focus", refreshStats);
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onForeground);
+    document.addEventListener("visibilitychange", onForeground);
 
     return () => {
       active = false;
+      discovery.dispose();
+      connection += 1;
       statsLoadVersion.current += 1;
       window.removeEventListener("direct-requests-read-updated", refreshStats);
-      window.removeEventListener("focus", refreshStats);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onForeground);
+      document.removeEventListener("visibilitychange", onForeground);
       subscription.unsubscribe();
       supabase.removeChannel(channel);
+      if (discoveryChannel && !reconnecting) {
+        discoveryRemoval.current = supabase.removeChannel(discoveryChannel).then(status => status === "ok", () => false);
+      }
     };
   }, [authorized, currentWorkshopUserId, loadStats, router]);
 
@@ -250,9 +292,14 @@ function WorkshopDashboardContent() {
           </p>
         </section>
 
-        {statsError && (
+        {(statsError || discoveryError) && (
           <p role="alert" className="mt-4 text-center text-sm text-orange-300">
             Contoarele nu au putut fi actualizate. Reîncearcă la revenirea în pagină.
+          </p>
+        )}
+        {discoveryLiveError && (
+          <p role="status" className="mt-4 text-center text-sm text-orange-300">
+            Actualizarea în timp real a cererilor este temporar indisponibilă.
           </p>
         )}
 
@@ -262,7 +309,7 @@ function WorkshopDashboardContent() {
             icon="🚗"
             title="Daune estetice"
             description="Cererile clienților"
-            value={stats?.bodyworkRequests}
+            value={discoveryCounts?.bodywork}
             badge={stats?.directBodyworkUnread}
           />
 
@@ -271,7 +318,7 @@ function WorkshopDashboardContent() {
             icon="⚙️"
             title="Daune mecanice"
             description="Cererile clienților"
-            value={stats?.mechanicalRequests}
+            value={discoveryCounts?.mechanical}
             badge={stats?.directMechanicalUnread}
           />
 
@@ -280,7 +327,7 @@ function WorkshopDashboardContent() {
             icon="🛞"
             title="Roți și anvelope"
             description="Cererile clienților"
-            value={stats?.wheelsRequests}
+            value={discoveryCounts?.wheels}
           />
 
           <DashboardCard
@@ -288,7 +335,7 @@ function WorkshopDashboardContent() {
             icon="🚚"
             title="Tractări auto"
             description="Cererile clienților"
-            value={stats?.towingRequests}
+            value={discoveryCounts?.towing}
           />
 
           <DashboardCard

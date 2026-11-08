@@ -116,34 +116,43 @@ export async function fetchWorkshopDiscoveryFeed(input: {
   };
 }
 
-export async function fetchWorkshopDiscoveryCounts(): Promise<WorkshopDiscoveryCounts> {
+export async function fetchWorkshopDiscoveryCounts(signal?: AbortSignal): Promise<WorkshopDiscoveryCounts> {
   const counts: WorkshopDiscoveryCounts = {
     bodywork: 0,
     mechanical: 0,
     wheels: 0,
     towing: 0,
   };
-  const { data, error } = await supabase.rpc("get_workshop_discovery_counts", {
+  const query = supabase.rpc("get_workshop_discovery_counts", {
     p_radius_override_mode: "default",
     p_radius_override_km: null,
   });
+  const { data, error } = await (signal ? query.abortSignal(signal) : query);
 
   if (error) throw error;
 
+  if (!Array.isArray(data) || data.length !== SERVICE_TYPES.length) {
+    throw new Error("Invalid workshop discovery counts response.");
+  }
+  const seen = new Set<string>();
+
   for (const row of (data ?? []) as WorkshopDiscoveryCountRow[]) {
     if (
-      typeof row.service_type !== "string" ||
+      !row || typeof row.service_type !== "string" || seen.has(row.service_type) ||
       !SERVICE_TYPES.includes(row.service_type as WorkshopDiscoveryServiceType)
     ) {
       throw new Error("Invalid workshop discovery counts response.");
     }
 
     const count = Number(row.request_count);
-    if (!Number.isFinite(count) || count < 0) {
+    if ((typeof row.request_count !== "number" &&
+        (typeof row.request_count !== "string" || !/^\d+$/.test(row.request_count))) ||
+        !Number.isSafeInteger(count) || count < 0) {
       throw new Error("Invalid workshop discovery count.");
     }
 
-    counts[row.service_type as WorkshopDiscoveryServiceType] = Math.floor(count);
+    seen.add(row.service_type);
+    counts[row.service_type as WorkshopDiscoveryServiceType] = count;
   }
 
   return counts;

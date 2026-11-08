@@ -122,10 +122,9 @@ function dashboardFixture(count: () => Promise<number> = async () => 3) {
   const load = new Function(...Object.keys(dependencies), compile(loadSource) + "\nreturn loadStats;")(...Object.values(dependencies)) as (id: string) => Promise<void>;
   return { state, load: () => load(owner), version: statsLoadVersion, reply: (value: typeof countReply) => { countReply = value; } };
 }
-test("other counters retain discovery, pending offer and direct unread semantics", async () => {
+test("other counters retain pending offer and direct unread semantics independently of discovery", async () => {
   const f = dashboardFixture(); await f.load();
-  assert.deepEqual(f.state.stats, { bodyworkRequests: 4, mechanicalRequests: 3, wheelsRequests: 2, towingRequests: 1,
-    myOffers: 2, wonJobs: 3, directBodyworkUnread: 2, directMechanicalUnread: 2 });
+  assert.deepEqual(f.state.stats, { myOffers: 2, wonJobs: 3, directBodyworkUnread: 2, directMechanicalUnread: 2 });
 });
 for (const reply of [{ count: 0, error: { code: "42501" } }, { count: null, error: null }]) {
   test(`failed/missing count ${JSON.stringify(reply)} clears stale badges and shows error`, async () => {
@@ -166,24 +165,66 @@ test("Realtime/focus/reconnect refresh only the dashboard and unsubscribe on exi
   const handlers = new Map<string, () => Promise<void>>(), windowEvents = new Map<string, () => void>(), documentEvents = new Map<string, () => void>();
   let onSubscribe!: (status: string) => void, onAuth!: (event: string, session: { user: { id: string } } | null) => void;
   let cleanup!: () => void, loads = 0, removed = false, unsubscribed = false;
+  let discoveryLoads = 0, disposed = false;
+  let discoveryConnections = 0, signalRemovals = 0;
+  let finishRemoval: (() => void) | undefined;
+  let delayedRemoval = false;
+  let broadcast!: (event: { payload: unknown }) => void, broadcastStatus!: (status: string) => void;
+  const discoveryChannel = { state: "joined", on(_event: string, filter: { event: string }, handler: typeof broadcast) {
+    assert.equal(filter.event, "invalidate"); broadcast = handler; return discoveryChannel;
+  }, subscribe(handler: typeof broadcastStatus) { broadcastStatus = handler; return discoveryChannel; } };
   const version = { current: 0 };
   const channel = { on(_event: string, filter: { table: string }, handler: () => Promise<void>) { handlers.set(filter.table, handler); return channel; },
     subscribe(handler: typeof onSubscribe) { onSubscribe = handler; return channel; } };
   const dependencies = { useEffect: (fn: () => () => void) => { cleanup = fn(); }, authorized: true, currentWorkshopUserId: owner,
     loadStats: async (id: string) => { assert.equal(id, owner); loads += 1; }, statsLoadVersion: version,
     setStats: () => {}, setAuthorized: () => {}, router: { replace: () => {} },
-    supabase: { channel: () => channel, removeChannel: () => { removed = true; }, auth: { onAuthStateChange: (fn: typeof onAuth) => {
+    fetchWorkshopDiscoveryCounts: () => {}, setDiscoveryCounts: () => {}, setDiscoveryError: () => {}, setDiscoveryLiveError: () => {},
+    discoveryRemoval: { current: Promise.resolve(true) },
+    WORKSHOP_DISCOVERY_TOPIC: "workshop:discovery:v1", isWorkshopDiscoveryInvalidation: (p: { v: number }) => p?.v === 1,
+    createWorkshopDiscoveryRefresh: () => ({ invalidate: () => { discoveryLoads += 1; }, dispose: () => { disposed = true; } }),
+    supabase: { channel: (name: string, config: unknown) => {
+      if (name === "workshop:discovery:v1") {
+        discoveryConnections += 1; discoveryChannel.state = "joined";
+        assert.deepEqual(config, { config: { private: true } }); return discoveryChannel;
+      }
+      return channel;
+    }, removeChannel: async (c: unknown) => {
+      removed = true;
+      if (c === discoveryChannel) {
+        signalRemovals += 1;
+        if (delayedRemoval) await new Promise<void>(done => { finishRemoval = done; });
+      }
+      return "ok";
+    }, auth: { onAuthStateChange: (fn: typeof onAuth) => {
       onAuth = fn; return { data: { subscription: { unsubscribe: () => { unsubscribed = true; } } } };
     } } },
     window: { addEventListener: (name: string, fn: () => void) => windowEvents.set(name, fn), removeEventListener: (name: string) => windowEvents.delete(name) },
     document: { visibilityState: "visible", addEventListener: (name: string, fn: () => void) => documentEvents.set(name, fn),
       removeEventListener: (name: string) => documentEvents.delete(name) } };
   new Function(...Object.keys(dependencies), compile(source))(...Object.values(dependencies));
+  await new Promise<void>(done => setImmediate(done));
   assert.deepEqual([...handlers.keys()], ["repair_requests", "repair_offers", "repair_appointments", "work_progress_updates"]);
   for (const handler of handlers.values()) await handler();
   onSubscribe("SUBSCRIBED"); windowEvents.get("focus")!(); documentEvents.get("visibilitychange")!();
   assert.equal(loads, 7);
-  onAuth("SIGNED_OUT", null); await handlers.get("repair_offers")!(); assert.equal(loads, 7);
+  const before = discoveryLoads;
+  broadcast({ payload: { v: 1 } }); broadcastStatus("SUBSCRIBED");
+  assert.equal(discoveryLoads, before + 2); assert.equal(loads, 7, "private signal only reloads discovery RPC");
+  const oldBroadcast = broadcast;
+  delayedRemoval = true; discoveryChannel.state = "closed";
+  windowEvents.get("focus")!(); windowEvents.get("focus")!(); documentEvents.get("visibilitychange")!();
+  assert.equal(signalRemovals, 1); assert.equal(discoveryConnections, 1, "no duplicate join before removal completes");
+  finishRemoval!(); await new Promise<void>(done => setImmediate(done));
+  assert.equal(discoveryConnections, 2);
+  const reconnected = discoveryLoads; oldBroadcast({ payload: { v: 1 } });
+  assert.equal(discoveryLoads, reconnected, "old connection events ignored after reconnect");
+  delayedRemoval = false;
+  const beforeLogout = loads;
+  onAuth("SIGNED_OUT", null); await handlers.get("repair_offers")!(); assert.equal(loads, beforeLogout);
+  assert.equal(disposed, true);
+  const stopped = discoveryLoads; broadcast({ payload: { v: 1 } }); broadcastStatus("SUBSCRIBED");
+  assert.equal(discoveryLoads, stopped);
   cleanup(); assert.equal(removed, true); assert.equal(unsubscribed, true);
   assert.equal(windowEvents.size, 0); assert.equal(documentEvents.size, 0); assert.ok(version.current > 0);
 });
