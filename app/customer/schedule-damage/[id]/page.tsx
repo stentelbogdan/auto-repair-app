@@ -7,6 +7,7 @@ import AppointmentDateTimePicker, {
   toLocalDateValue,
 } from "@/app/components/AppointmentDateTimePicker";
 import { supabase } from "@/lib/supabase/client";
+import { getWorkshopBookedSlots } from "@/lib/supabase/workshop-booked-slots";
 import {
   customerProposeRepairAppointment,
   workshopProposeRepairAppointment,
@@ -74,6 +75,22 @@ export default function ScheduleDamagePage() {
   const [customerNote, setCustomerNote] = useState("");
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [slotsError, setSlotsError] = useState("");
+  const [loadedSlotsContext, setLoadedSlotsContext] = useState("");
+  const slotsAttemptRef = useRef(0);
+  const slotsContext = JSON.stringify([
+    requestId, appointmentDate, offer?.workshop_user_id, offer?.id, isInitialOfferMode,
+  ]);
+  const slotsUnavailable = loadingSlots || Boolean(slotsError) ||
+    !appointmentDate || !offer?.workshop_user_id || loadedSlotsContext !== slotsContext;
+  const changeAppointmentDate = (date: string) => {
+    if (date !== appointmentDate) {
+      slotsAttemptRef.current += 1;
+      setLoadedSlotsContext("");
+      setAppointmentTime("");
+    }
+    setAppointmentDate(date);
+  };
   const preserveInitialTimeRef = useRef(false);
   const prefilledAppointmentContextRef = useRef<string | null>(null);
 
@@ -348,77 +365,67 @@ export default function ScheduleDamagePage() {
   const loadBookedSlots = async (
     date: string,
     workshopId: string,
-    excludeAppointmentId?: string | null,
-  ) => {
-    if (!date || !workshopId) {
-      setBookedSlots([]);
-      return;
-    }
-
+    excludeAppointmentId: string | null,
+    attempt: number,
+  ): Promise<string[] | null> => {
+    if (attempt !== slotsAttemptRef.current) return null;
+    setLoadingSlots(true);
+    setLoadedSlotsContext("");
+    setSlotsError("");
     try {
-      setLoadingSlots(true);
-
-      const { data, error } = await supabase.rpc("get_workshop_booked_slots", {
-        p_workshop_id: workshopId,
-        p_date: date,
-        p_exclude_appointment_id: excludeAppointmentId ?? null,
-      });
-
-      if (error) {
-        console.error("Failed to load booked slots:", error);
-        setBookedSlots([]);
-        return;
-      }
-
-      const slots: string[] = (data ?? []).flatMap(
-        (row: { slot_time?: string | null }) =>
-          row.slot_time ? [row.slot_time] : [],
-      );
-
+      const slots = await getWorkshopBookedSlots(date, workshopId, excludeAppointmentId);
+      if (attempt !== slotsAttemptRef.current) return null;
       setBookedSlots(slots);
+      setLoadedSlotsContext(slotsContext);
+      return slots;
+    } catch {
+      if (attempt === slotsAttemptRef.current) {
+        setSlotsError("Nu am putut încărca orele ocupate. Reîncearcă verificarea disponibilității.");
+      }
+      return null;
     } finally {
-      setLoadingSlots(false);
+      if (attempt === slotsAttemptRef.current) setLoadingSlots(false);
     }
   };
 
   useEffect(() => {
+    const attempt = ++slotsAttemptRef.current;
+    setLoadedSlotsContext("");
+    setSlotsError("");
     if (!appointmentDate || !offer?.workshop_user_id) {
-      setBookedSlots([]);
+      setLoadingSlots(false);
       return;
     }
-
+    setLoadingSlots(true);
     const loadSlots = async () => {
-      let currentAppointmentId: string | null = null;
-
-      if (!isInitialOfferMode && offer.id) {
-        const { data: currentAppointment, error } = await supabase
-          .from("repair_appointments")
-          .select("id")
-          .eq("offer_id", offer.id)
-          .eq("request_id", requestId)
-          .maybeSingle();
-
-        if (error) {
-          console.error("Failed to load current appointment:", error);
+      try {
+        let currentAppointmentId: string | null = null;
+        if (!isInitialOfferMode && offer.id) {
+          const { data: currentAppointment, error } = await supabase
+            .from("repair_appointments")
+            .select("id")
+            .eq("offer_id", offer.id)
+            .eq("request_id", requestId)
+            .maybeSingle();
+          if (error) throw error;
+          currentAppointmentId = currentAppointment?.id || null;
         }
-
-        currentAppointmentId = currentAppointment?.id || null;
+        if (attempt !== slotsAttemptRef.current) return;
+        if (preserveInitialTimeRef.current) {
+          preserveInitialTimeRef.current = false;
+        } else {
+          setAppointmentTime("");
+        }
+        await loadBookedSlots(appointmentDate, offer.workshop_user_id, currentAppointmentId, attempt);
+      } catch {
+        if (attempt === slotsAttemptRef.current) {
+          setSlotsError("Nu am putut verifica programarea curentă. Reîncarcă pagina pentru a reîncerca.");
+          setLoadingSlots(false);
+        }
       }
-
-      if (preserveInitialTimeRef.current) {
-        preserveInitialTimeRef.current = false;
-      } else {
-        setAppointmentTime("");
-      }
-
-      await loadBookedSlots(
-        appointmentDate,
-        offer.workshop_user_id,
-        currentAppointmentId,
-      );
     };
-
     void loadSlots();
+    return () => { slotsAttemptRef.current += 1; };
   }, [
     appointmentDate,
     offer?.workshop_user_id,
@@ -429,7 +436,12 @@ export default function ScheduleDamagePage() {
   ]);
 
   const submitAppointment = async () => {
-    if (!request || !offer) return;
+    if (!request || !offer || saving) return;
+    if (slotsUnavailable) {
+      alert(slotsError || "Așteaptă verificarea disponibilității pentru data selectată.");
+      return;
+    }
+    const attempt = ++slotsAttemptRef.current;
 
     const towingDetails =
       request.service_type === "towing" &&
@@ -475,56 +487,33 @@ export default function ScheduleDamagePage() {
     }
 
     let currentAppointmentId: string | null = null;
-
-    if (!isInitialOfferMode && offer.id) {
-      const { data: currentAppointment, error: currentAppointmentError } =
-        await supabase
+    setLoadingSlots(true);
+    setLoadedSlotsContext("");
+    try {
+      if (!isInitialOfferMode && offer.id) {
+        const { data: currentAppointment, error } = await supabase
           .from("repair_appointments")
           .select("id")
           .eq("offer_id", offer.id)
           .eq("request_id", request.id)
           .maybeSingle();
-
-      if (currentAppointmentError) {
-        console.error(
-          "Failed to load current appointment:",
-          currentAppointmentError,
-        );
-        alert("Nu am putut verifica programarea curentă.");
-        return;
+        if (error) throw error;
+        currentAppointmentId = currentAppointment?.id || null;
       }
-
-      currentAppointmentId = currentAppointment?.id || null;
-    }
-
-    const { data: bookedSlotsData, error: bookedSlotsError } =
-      await supabase.rpc("get_workshop_booked_slots", {
-        p_workshop_id: offer.workshop_user_id,
-        p_date: appointmentDate,
-        p_exclude_appointment_id: currentAppointmentId,
-      });
-
-    if (bookedSlotsError) {
-      console.error("Failed to verify appointment slot:", bookedSlotsError);
-      alert("Nu am putut verifica disponibilitatea intervalului.");
+    } catch {
+      if (attempt === slotsAttemptRef.current) {
+        setSlotsError("Nu am putut verifica programarea curentă. Reîncarcă pagina pentru a reîncerca.");
+        setLoadingSlots(false);
+      }
       return;
     }
 
-    const slotIsOccupied = (bookedSlotsData ?? []).some(
-      (row: { slot_time?: string | null }) => row.slot_time === appointmentTime,
+    const slots = await loadBookedSlots(
+      appointmentDate, offer.workshop_user_id, currentAppointmentId, attempt,
     );
-
-    if (slotIsOccupied) {
-      alert(
-        "Ora selectată nu mai este disponibilă. Alege o altă dată sau oră.",
-      );
-
-      await loadBookedSlots(
-        appointmentDate,
-        offer.workshop_user_id,
-        currentAppointmentId,
-      );
-
+    if (!slots || attempt !== slotsAttemptRef.current) return;
+    if (slots.includes(appointmentTime)) {
+      alert("Ora selectată nu mai este disponibilă. Alege o altă dată sau oră.");
       setAppointmentTime("");
       return;
     }
@@ -541,6 +530,8 @@ export default function ScheduleDamagePage() {
 
     try {
       const { data: authData } = await supabase.auth.getUser();
+
+      if (attempt !== slotsAttemptRef.current) return;
 
       if (!authData.user) {
         router.push("/login");
@@ -581,6 +572,8 @@ export default function ScheduleDamagePage() {
             .eq("request_id", request.id)
             .eq("workshop_id", authData.user.id)
             .maybeSingle();
+
+        if (attempt !== slotsAttemptRef.current) return;
 
         if (appointmentLoadError) {
           console.error(
@@ -633,6 +626,8 @@ export default function ScheduleDamagePage() {
           .eq("request_id", request.id)
           .eq("customer_id", authData.user.id)
           .maybeSingle();
+
+      if (attempt !== slotsAttemptRef.current) return;
 
       if (appointmentLoadError) {
         console.error(
@@ -754,13 +749,19 @@ export default function ScheduleDamagePage() {
                 request.service_type === "towing" ? "wheel" : "grid"
               }
               disabledTimes={bookedSlots}
-              loadingTimes={loadingSlots}
+              loadingTimes={slotsUnavailable || saving}
               minDate={minDate}
-              onDateChange={setAppointmentDate}
+              onDateChange={changeAppointmentDate}
               onDateInputChange={setDateInput}
               onDateErrorChange={setDateError}
               onTimeChange={setAppointmentTime}
             />
+
+            {slotsError && (
+              <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+                {slotsError} Reîncarcă pagina pentru a reîncerca.
+              </p>
+            )}
 
             {!isWorkshopEditMode && (
               <div className="rounded-[26px] bg-white p-5 text-black">
@@ -838,7 +839,7 @@ export default function ScheduleDamagePage() {
 
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || slotsUnavailable}
               onClick={submitAppointment}
               className="w-full rounded-[22px] bg-orange-500 py-4 text-lg font-black text-black disabled:opacity-50"
             >

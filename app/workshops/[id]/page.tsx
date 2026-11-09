@@ -8,6 +8,7 @@ import CarHeader from "@/app/components/CarHeader";
 import AppointmentSummaryCard from "@/app/components/AppointmentSummaryCard";
 import TowingRouteEstimateCard from "@/app/components/towing/TowingRouteEstimateCard";
 import TowingScheduleCard from "@/app/components/towing/TowingScheduleCard";
+import { assertWorkshopSlotAvailable } from "@/lib/supabase/workshop-booked-slots";
 import { createRepairOffer } from "@/lib/supabase/repair-offers";
 import { getWorkshopRequestDetail, type WorkshopRequestDetail } from "@/lib/supabase/workshop-request-detail";
 import { getAffectedPartLabels, getDamageTypeLabels } from "@/lib/car-damage";
@@ -25,6 +26,7 @@ import {
   formatTowingRouteDuration,
   getTowingDisplaySummary,
 } from "@/lib/towing/towing-display";
+import { towingOfferErrorMessage } from "@/lib/towing/towing-offer-error";
 import { isTowingServiceDetailsV1 } from "@/lib/towing/towing-service-details";
 import { getWheelsDisplaySummary } from "@/lib/wheels/wheels-display";
 
@@ -238,6 +240,10 @@ export default function WorkshopRequestDetailsPage() {
         throw new Error("Adresa de preluare a cererii Towing nu este disponibilă.");
       }
 
+      if (request.service_type === "towing") {
+        await assertWorkshopSlotAvailable(finalAvailableDate, finalAvailableTime, authData.user.id);
+      }
+
       await createRepairOffer({
         requestId: id,
         workshopUserId: authData.user.id,
@@ -261,6 +267,10 @@ export default function WorkshopRequestDetailsPage() {
 
       router.replace("/workshops/dashboard?offerSent=1");
     } catch (error: unknown) {
+      if (request.service_type === "towing") {
+        alert(towingOfferErrorMessage(error));
+        return;
+      }
       alert(
         error instanceof Error
           ? error.message

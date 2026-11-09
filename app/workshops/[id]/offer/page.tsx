@@ -59,6 +59,12 @@ export default function MakeOfferPage() {
           return;
         }
 
+        // Towing must use the shared availability selector and checked offer flow.
+        if (data.service_type === "towing") {
+          router.replace(`/workshops/${id}`);
+          return;
+        }
+
         setRequest(data);
 
         const savedAvailability = sessionStorage.getItem(`availability-${id}`);
@@ -140,7 +146,7 @@ export default function MakeOfferPage() {
     }
   };
 
-  if (!isLoaded) {
+  if (!isLoaded || !request) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         Se încarcă...

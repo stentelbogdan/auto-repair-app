@@ -208,6 +208,8 @@ for(const role of ["customer","workshop"] as const) for(const category of ["body
         offer:{id:offer,status:"accepted",workshop_user_id:workshop},
         isTowingServiceDetailsV1:()=>true,toLocalDateTime:()=>new Date("2099-12-02T12:00:00Z"),
         appointmentDate:"2099-12-02",appointmentTime:"12:00",handoverMethod:"customer_dropoff",pickupAddress:"",customerNote:"Synthetic note",
+        saving:false,slotsUnavailable:false,slotsError:"",slotsAttemptRef:{current:0},
+        setLoadingSlots:()=>{},setLoadedSlotsContext:()=>{},setSlotsError:()=>{},
         isInitialOfferMode:false,isWorkshopMode:role==="workshop",
         supabase:{from:(table:string)=>{assert.equal(table,"repair_appointments");return q;},
           rpc:async(name:string)=>{assert.equal(name,"get_workshop_booked_slots");return {data:[],error:null};},
@@ -216,7 +218,7 @@ for(const role of ["customer","workshop"] as const) for(const category of ["body
         appointmentMutationErrorMessage:f.api.appointmentMutationErrorMessage,
         router:{replace:(url:string)=>events.push(url),push:()=>{throw new Error("Unexpected initial navigation");}},
         setSaving:()=>{},alert:()=>events.push("alert"),console:{error:()=>{}},
-        loadBookedSlots:()=>{throw new Error("Unexpected occupied slot");},setAppointmentTime:()=>{},
+        loadBookedSlots:async()=>[],setAppointmentTime:()=>{},
       });
       await submit();
       assert.equal(parameters.length,1);assert.equal(parameters[0].appointmentId,id);
