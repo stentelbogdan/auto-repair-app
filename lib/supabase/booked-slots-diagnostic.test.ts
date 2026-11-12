@@ -54,7 +54,7 @@ for (const failure of ["permission", "transport", "malformed", "null"]) {
     assert.equal(await f.run(), null);
     assert.deepEqual(f.states, []);
     assert.deepEqual(f.contexts, [""]);
-    assert.match(f.errors.at(-1)!, /Nu am putut încărca/);
+    assert.match(f.errors.at(-1)!, /Nu am putut consulta/);
     assert.deepEqual(f.loading, [true, false]);
   });
 }
@@ -96,14 +96,15 @@ new Function("require", "exports", pickerCode)((name: string) => {
 const wheelSource = ts.createSourceFile("wheel.tsx", readFileSync(new URL("../../app/components/TimeWheelPicker.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const confirmCode = extract(wheelSource, "confirmTime");
 for (const category of ["towing", "bodywork", "mechanical", "wheels"]) {
-  test(`${category}: existing selector blocks a returned occupied time and permits a free one`, () => {
+  test(`${category}: existing selector marks occupied times while permitting occupied and free selections`, () => {
     const tree = (pickerApi.default as (props: Record<string, unknown>) => unknown)({ date: "2099-11-09", dateInput: "09.11.2099", dateError: "", time: "",
       timeSlots: ["10:00", "11:00"], timeSelectionMode: category === "towing" ? "wheel" : "grid",
-      disabledTimes: ["10:00"], minDate: "2099-11-09", onTimeChange() {} });
+      bookedTimes: ["10:00"], minDate: "2099-11-09", onTimeChange() {} });
     if (category !== "towing") {
       for (const time of ["10:00", "11:00"]) {
         const button = flatten(tree).find(n => n.type === "button" && Array.isArray(n.props.children) && n.props.children[0] === time)!;
-        assert.equal(button.props.disabled, time === "10:00");
+        assert.equal(button.props.disabled, false);
+        if (time === "10:00") assert.ok(flatten(button).some(n => n.props.children === "Ocupat"));
       }
     } else {
       const wheel = flatten(tree).find(n => n.type === "Wheel")!;
@@ -114,17 +115,17 @@ for (const category of ["towing", "bodywork", "mechanical", "wheels"]) {
           (v: string) => errors.push(v), (v: string) => changes.push(v), () => {},
         );
         confirm();
-        assert.deepEqual(changes, hour === "10" ? [] : ["11:00"]);
-        assert.equal(errors.length, hour === "10" ? 1 : 0);
+        assert.deepEqual(changes, [`${hour}:00`]);
+        assert.equal(errors.length, 0);
       }
     }
   });
 }
 
-for (const mode of ["wheel", "grid"]) test(`${mode}: loading/unavailable flag blocks even a nominally free time`, () => {
+for (const mode of ["wheel", "grid"]) test(`${mode}: saving flag still prevents duplicate interaction`, () => {
   const tree = (pickerApi.default as (props: Record<string, unknown>) => unknown)({
     date: "2099-11-09", dateInput: "09.11.2099", dateError: "", time: "",
-    timeSlots: ["11:00"], timeSelectionMode: mode, disabledTimes: [], loadingTimes: true,
+    timeSlots: ["11:00"], timeSelectionMode: mode, bookedTimes: [], loadingTimes: true,
     minDate: "2099-11-09", onTimeChange() {},
   });
   if (mode === "grid") {

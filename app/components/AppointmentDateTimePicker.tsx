@@ -9,7 +9,7 @@ type AppointmentDateTimePickerProps = {
   time: string;
   timeSlots?: readonly string[];
   timeSelectionMode?: "grid" | "wheel";
-  disabledTimes?: readonly string[];
+  bookedTimes?: readonly string[];
   loadingTimes?: boolean;
   minDate: string;
   onDateChange: (date: string) => void;
@@ -25,7 +25,7 @@ export default function AppointmentDateTimePicker({
   time,
   timeSlots = [],
   timeSelectionMode = "grid",
-  disabledTimes = [],
+  bookedTimes = [],
   loadingTimes = false,
   minDate,
   onDateChange,
@@ -172,37 +172,37 @@ export default function AppointmentDateTimePicker({
           <TimeWheelPicker
             date={date}
             value={time}
+            bookedTimes={bookedTimes}
             onChange={onTimeChange}
             isTimeDisabled={(candidateTime) =>
               loadingTimes ||
-              disabledTimes.includes(candidateTime) ||
               isPastDateTime(date, candidateTime, new Date())
             }
           />
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {timeSlots.map((slot) => {
-              const isDisabled = disabledTimes.includes(slot);
+              const isBooked = bookedTimes.includes(slot);
               const isPast = isPastDateTime(date, slot, new Date());
 
               return (
                 <button
                   key={slot}
                   type="button"
-                  disabled={!date || isDisabled || isPast || loadingTimes}
+                  disabled={!date || isPast || loadingTimes}
                   onClick={() => onTimeChange(slot)}
                   className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
                     time === slot
                       ? "bg-orange-500 text-black"
-                      : isDisabled
-                        ? "cursor-not-allowed bg-black/10 text-black/30 line-through"
+                      : isBooked
+                        ? "bg-black/10 text-black/60"
                         : !date || isPast || loadingTimes
                           ? "cursor-not-allowed bg-black/[0.04] text-black/30"
                           : "bg-black/[0.05] text-black"
                   }`}
                 >
                   {slot}
-                  {isDisabled && (
+                  {isBooked && (
                     <span className="block text-[10px]">Ocupat</span>
                   )}
                 </button>
@@ -211,6 +211,9 @@ export default function AppointmentDateTimePicker({
           </div>
         )}
       </div>
+      {bookedTimes.includes(time) && (
+        <p role="status" className="mt-2 text-sm text-black/60">Ocupat — există deja o programare la această oră. Poți continua.</p>
+      )}
     </div>
   );
 }

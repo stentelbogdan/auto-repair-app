@@ -122,32 +122,16 @@ test("safe slot collision message remains exact", () => {
     .startsWith("Appointment slot is no longer available (PT409)"));
 });
 
-const slotReaderCode = ts.transpileModule(readFileSync(new URL("../supabase/workshop-booked-slots.ts", import.meta.url), "utf8"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-for (const scenario of ["occupied", "error", "transport", "malformed", "free", "delayed"]) {
-  test(`Service final offer ${scenario}: creation waits for fresh verified availability`, async () => {
+for (const category of ["bodywork", "mechanical", "wheels", "towing"]) {
+  test(`${category}: final offer creation does not depend on an occupancy read`, async () => {
     const events: string[] = [], alerts: string[] = [];
-    let resolve!: (reply: { data: unknown; error: unknown }) => void;
-    const api: Record<string, unknown> = {};
-    new Function("require", "exports", slotReaderCode)((name: string) => {
-      assert.equal(name, "@/lib/supabase/client");
-      return { supabase: { rpc: async (rpc: string, args: unknown) => {
-        assert.equal(rpc, "get_workshop_booked_slots");
-        assert.deepEqual(args, { p_date: "2099-11-09", p_workshop_id: "authenticated-service", p_exclude_appointment_id: null });
-        events.push("read");
-        if (scenario === "transport") throw new Error("synthetic transport failure");
-        if (scenario === "delayed") return new Promise(r => { resolve = r; });
-        return { data: scenario === "occupied" ? [{ slot_time: "10:00:00" }] : scenario === "malformed" ? null : [],
-          error: scenario === "error" ? { code: "42501" } : null };
-      } } };
-    }, api);
     const deps = {
-      towingOfferErrorMessage, assertWorkshopSlotAvailable: api.assertWorkshopSlotAvailable,
+      towingOfferErrorMessage,
+      assertWorkshopSlotAvailable: () => { throw new Error("Occupancy must not gate creation"); },
       isSubmitting: false,
-      request: { service_type: "towing", route_duration_seconds: 5400,
+      request: { service_type: category, route_duration_seconds: 5400,
         service_details: { pickup: { address: "Synthetic", city: "City" } } },
-      availableDate: "2099-11-09", availableTime: "10:00", price: "450", days: "", message: "", id: "synthetic-request",
+      availableDate: "2099-11-09", availableTime: "10:00", price: "450", days: "1 zi", message: "", id: "synthetic-request",
       isNonNegativeFinite: () => true, formatTowingRouteDuration: () => "1 oră 30 minute",
       isTowingServiceDetailsV1: () => true,
       setIsSubmitting: (value: boolean) => events.push(value ? "busy" : "idle"), alert: (s: string) => alerts.push(s),
@@ -159,15 +143,9 @@ for (const scenario of ["occupied", "error", "transport", "malformed", "free", "
     };
     const submit = new Function(...Object.keys(deps), `${handlerJs}; return submit;`)(...Object.values(deps));
     const pending = submit({ preventDefault() {} });
-    if (scenario === "delayed") {
-      await new Promise(r => setImmediate(r));
-      assert.deepEqual(events, ["busy", "read"]);
-      resolve({ data: [], error: null });
-    }
+
     await pending;
-    const success = scenario === "free" || scenario === "delayed";
-    assert.deepEqual(events, success ? ["busy", "read", "create", "remove-draft", "navigate", "idle"] : ["busy", "read", "idle"]);
-    assert.equal(alerts.length, success ? 0 : 1);
-    if (!success) assert.ok(!alerts[0].includes("mascat"), "Preflight error remains clear and safe");
+    assert.deepEqual(events, ["busy", "create", "remove-draft", "navigate", "idle"]);
+    assert.equal(alerts.length, 0);
   });
 }

@@ -380,7 +380,7 @@ export default function ScheduleDamagePage() {
       return slots;
     } catch {
       if (attempt === slotsAttemptRef.current) {
-        setSlotsError("Nu am putut încărca orele ocupate. Reîncearcă verificarea disponibilității.");
+        setSlotsError("Nu am putut consulta orele ocupate. Poți continua; ocuparea nu este verificată.");
       }
       return null;
     } finally {
@@ -419,7 +419,7 @@ export default function ScheduleDamagePage() {
         await loadBookedSlots(appointmentDate, offer.workshop_user_id, currentAppointmentId, attempt);
       } catch {
         if (attempt === slotsAttemptRef.current) {
-          setSlotsError("Nu am putut verifica programarea curentă. Reîncarcă pagina pentru a reîncerca.");
+          setSlotsError("Nu am putut consulta ocuparea pentru programarea curentă. Poți continua; ocuparea nu este verificată.");
           setLoadingSlots(false);
         }
       }
@@ -437,10 +437,6 @@ export default function ScheduleDamagePage() {
 
   const submitAppointment = async () => {
     if (!request || !offer || saving) return;
-    if (slotsUnavailable) {
-      alert(slotsError || "Așteaptă verificarea disponibilității pentru data selectată.");
-      return;
-    }
     const attempt = ++slotsAttemptRef.current;
 
     const towingDetails =
@@ -483,38 +479,6 @@ export default function ScheduleDamagePage() {
 
     if (selectedDateTime.getTime() <= new Date().getTime()) {
       alert("Alege o dată și o oră care nu au trecut.");
-      return;
-    }
-
-    let currentAppointmentId: string | null = null;
-    setLoadingSlots(true);
-    setLoadedSlotsContext("");
-    try {
-      if (!isInitialOfferMode && offer.id) {
-        const { data: currentAppointment, error } = await supabase
-          .from("repair_appointments")
-          .select("id")
-          .eq("offer_id", offer.id)
-          .eq("request_id", request.id)
-          .maybeSingle();
-        if (error) throw error;
-        currentAppointmentId = currentAppointment?.id || null;
-      }
-    } catch {
-      if (attempt === slotsAttemptRef.current) {
-        setSlotsError("Nu am putut verifica programarea curentă. Reîncarcă pagina pentru a reîncerca.");
-        setLoadingSlots(false);
-      }
-      return;
-    }
-
-    const slots = await loadBookedSlots(
-      appointmentDate, offer.workshop_user_id, currentAppointmentId, attempt,
-    );
-    if (!slots || attempt !== slotsAttemptRef.current) return;
-    if (slots.includes(appointmentTime)) {
-      alert("Ora selectată nu mai este disponibilă. Alege o altă dată sau oră.");
-      setAppointmentTime("");
       return;
     }
 
@@ -748,8 +712,8 @@ export default function ScheduleDamagePage() {
               timeSelectionMode={
                 request.service_type === "towing" ? "wheel" : "grid"
               }
-              disabledTimes={bookedSlots}
-              loadingTimes={slotsUnavailable || saving}
+              bookedTimes={slotsUnavailable ? [] : bookedSlots}
+              loadingTimes={saving}
               minDate={minDate}
               onDateChange={changeAppointmentDate}
               onDateInputChange={setDateInput}
@@ -757,9 +721,12 @@ export default function ScheduleDamagePage() {
               onTimeChange={setAppointmentTime}
             />
 
+            {slotsUnavailable && !slotsError && (
+              <p role="status" className="text-sm text-black/60">Ocuparea nu este încă verificată. Poți continua.</p>
+            )}
             {slotsError && (
               <p role="alert" className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
-                {slotsError} Reîncarcă pagina pentru a reîncerca.
+                {slotsError}
               </p>
             )}
 
@@ -839,7 +806,7 @@ export default function ScheduleDamagePage() {
 
             <button
               type="button"
-              disabled={saving || slotsUnavailable}
+              disabled={saving}
               onClick={submitAppointment}
               className="w-full rounded-[22px] bg-orange-500 py-4 text-lg font-black text-black disabled:opacity-50"
             >

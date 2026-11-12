@@ -14,21 +14,6 @@ export async function getWorkshopBookedSlots(
   return parseBookedSlots(data);
 }
 
-// A fresh read before offer creation also covers stale drafts / direct form URLs.
-// This is not a reservation; SQL remains the authority for concurrent collisions.
-export async function assertWorkshopSlotAvailable(date: string, time: string, workshopId: string) {
-  let slots: string[], candidate: string;
-  try {
-    candidate = parseBookedSlots([{ slot_time: time }])[0];
-    slots = await getWorkshopBookedSlots(date, workshopId);
-  } catch {
-    throw new Error("Nu am putut verifica disponibilitatea orei. Oferta nu a fost trimisă. Reîncearcă.");
-  }
-  if (slots.includes(candidate)) {
-    throw new Error("Ora selectată este ocupată. Alege altă oră înainte de a trimite oferta.");
-  }
-}
-
 // Both controls use HH:mm. Accept SQL's equivalent zero-second representation,
 // but never treat malformed/missing availability as an empty successful response.
 export function parseBookedSlots(data: unknown): string[] {

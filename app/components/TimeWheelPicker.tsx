@@ -14,6 +14,7 @@ type TimeWheelPickerProps = {
   date: string;
   value: string;
   onChange: (value: string) => void;
+  bookedTimes?: readonly string[];
   isTimeDisabled?: (value: string) => boolean;
 };
 
@@ -22,6 +23,7 @@ export default function TimeWheelPicker({
   value,
   onChange,
   isTimeDisabled = () => false,
+  bookedTimes = [],
 }: TimeWheelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [draftHour, setDraftHour] = useState("00");
@@ -155,6 +157,9 @@ export default function TimeWheelPicker({
                   />
                 </div>
 
+                {bookedTimes.includes(`${draftHour}:${draftMinute}`) && (
+                  <p role="status" className="text-sm text-black/60">Ocupat — poți continua.</p>
+                )}
                 {error && (
                   <p
                     className="mt-3 text-center text-sm font-semibold text-red-400"

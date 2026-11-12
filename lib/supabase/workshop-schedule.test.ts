@@ -240,7 +240,7 @@ test("form → calendar → form preserves €150, 2 days, message and selection
   assert.deepEqual(JSON.parse(storage.get(key)!), { date, time: "10:00", price: "150", days: "2 zile", message,
     handoverMethod: "customer_dropoff", pickupAddress: "" });
   assert.deepEqual(calendar.tables, []);
-  assert.equal(calendar.calls.filter(c => c.name === "get_workshop_booked_slots").length, 2);
+  assert.equal(calendar.calls.filter(c => c.name === "get_workshop_booked_slots").length, 1);
   const returned = fixture(formPath, { storage }); const returnedTree = await returned.mount();
   assert.equal(find(returnedTree, n => n.type === "input" && n.props.type === "number").props.value, "150");
   assert.equal(find(returnedTree, n => n.type === "select").props.value, "2 zile");
@@ -259,13 +259,13 @@ for (const category of ["bodywork", "mechanical", "wheels", "towing"]) test(`${c
   assert.equal(draft.price, "150"); assert.equal(draft.days, "2 zile"); assert.equal(draft.message, message);
   assert.equal(draft.pickupAddress, category === "towing" ? "Adresă sintetică, City" : "");
 });
-for (const failure of ["occupied", "error"]) test(`slot ${failure}: no navigation or draft update`, async () => {
+for (const failure of ["occupied", "error"]) test(`slot ${failure}: informative occupancy permits continuation`, async () => {
   const original = JSON.stringify({ price: "150", days: "2 zile", message, date, time: "10:00" });
   const f = fixture(calendarPath, { storage: new Map([[key, original]]), occupied: failure === "occupied", slotError: failure === "error" });
   await f.mount(); const loaded = await f.loadSlots();
   invoke(picker(loaded), "onTimeChange", "10:00");
   await invoke(continueButton(f.render()), "onClick");
-  assert.deepEqual(f.navigation, []); assert.equal(f.storage.get(key), original); assert.equal(f.alerts.length, 1);
+  assert.equal(f.navigation.length, 1); assert.equal(f.alerts.length, 0);
 });
 test("Towing requested time/timezone prefill is retained unless draft overrides it", async () => {
   const detail = { ...row("towing"), towing_schedule_type: "scheduled", towing_requested_at: `${date}T09:00:00Z`,
@@ -277,61 +277,38 @@ test("Towing requested time/timezone prefill is retained unless draft overrides 
 });
 
 for (const category of ["bodywork", "mechanical", "wheels", "towing"]) {
-  test(`${category}: date change and delayed availability block wheel/grid confirmation and continue`, async () => {
+  test(`${category}: pending occupancy permits selection and continuation without claiming free slots`, async () => {
     let resolve!: (reply: { data: unknown; error: unknown }) => void;
     const f = fixture(calendarPath, { category, slotReply: () => new Promise(r => { resolve = r; }) });
-    let tree = await f.mount();
-    invoke(picker(tree), "onDateChange", date);
-    tree = f.render(); // Before the date effect runs: old availability is already unusable.
-    assert.equal(picker(tree).props.loadingTimes, true);
-    assert.equal(continueButton(tree).props.disabled, true);
-    const loading = f.loadSlots();
-    await new Promise(r => setImmediate(r));
-    tree = f.render();
-    assert.equal(picker(tree).props.loadingTimes, true);
-    await invoke(continueButton(tree), "onClick");
-    assert.deepEqual(f.navigation, []);
-    resolve({ data: [{ slot_time: "10:00:00" }], error: null });
-    await loading; await new Promise(r => setImmediate(r));
+    let tree = await f.mount(); invoke(picker(tree), "onDateChange", date);
+    const loading = f.loadSlots(); await new Promise(r => setImmediate(r));
     tree = f.render();
     assert.equal(picker(tree).props.loadingTimes, false);
-    assert.deepEqual(picker(tree).props.disabledTimes, ["10:00"]);
-    invoke(picker(tree), "onDateChange", "2099-11-03");
-    assert.equal(picker(f.render()).props.loadingTimes, true);
+    assert.equal(continueButton(tree).props.disabled, false);
+    assert.deepEqual(picker(tree).props.bookedTimes, []);
+    assert.ok(nodes(tree).some(n => n.props.role === "status"));
+    invoke(picker(tree), "onTimeChange", "10:00");
+    await invoke(continueButton(f.render()), "onClick");
+    assert.equal(f.navigation.length, 1);
+    resolve({ data: [{ slot_time: "10:00:00" }], error: null }); await loading;
   });
 }
-test("availability error is visible and blocks continue without writing a draft", async () => {
+test("occupancy error is visible but permits a valid draft", async () => {
   const f = fixture(calendarPath, { category: "towing", slotError: true });
-  const tree = await f.mount(); invoke(picker(tree), "onDateChange", date);
-  await f.loadSlots(); const failed = f.render();
-  assert.equal(picker(failed).props.loadingTimes, true);
-  assert.equal(continueButton(failed).props.disabled, true);
-  assert.ok(nodes(failed).some(n => n.props.role === "alert"));
-  await invoke(continueButton(failed), "onClick");
-  assert.deepEqual(f.navigation, []);
-  assert.equal(f.storage.has(key), false);
-});
-test("date change during the final slot recheck cannot persist the old selection", async () => {
-  let resolve!: (reply: { data: unknown; error: unknown }) => void;
-  let calls = 0;
-  const f = fixture(calendarPath, { category: "towing", slotReply: async () => {
-    if (++calls === 1) return { data: [], error: null };
-    return new Promise(r => { resolve = r; });
-  } });
   let tree = await f.mount(); invoke(picker(tree), "onDateChange", date);
-  tree = await f.loadSlots(); invoke(picker(tree), "onTimeChange", "10:00");
-  const pending = invoke(continueButton(f.render()), "onClick");
-  invoke(picker(f.render()), "onDateChange", "2099-11-03");
-  resolve({ data: [], error: null }); await pending;
-  assert.deepEqual(f.navigation, []);
-  assert.equal(f.storage.has(key), false);
+  tree = await f.loadSlots();
+  assert.equal(picker(tree).props.loadingTimes, false);
+  assert.ok(nodes(tree).some(n => n.props.role === "alert"));
+  invoke(picker(tree), "onTimeChange", "10:00");
+  await invoke(continueButton(f.render()), "onClick");
+  assert.equal(f.navigation.length, 1); assert.equal(f.storage.has(key), true);
 });
 
 for (const slotError of [false, true]) test(`Client uses shared availability; error=${slotError}`, async () => {
   const f = fixture(calendarPath, { mode: "customer", initial: false, slotError });
   let tree = await f.mount(); invoke(picker(tree), "onDateChange", date);
   tree = await f.loadSlots();
-  assert.equal(picker(tree).props.loadingTimes, slotError);
+  assert.equal(picker(tree).props.loadingTimes, false);
   if (slotError) assert.ok(nodes(tree).some(n => n.props.role === "alert"));
 });
 test("legacy towing offer URL cannot render unchecked time input", async () => {
@@ -353,27 +330,27 @@ test("legacy static calendar redirects to the shared checked selector", async ()
   assert.deepEqual(navigation, [`/customer/schedule-damage/${id}?from=workshop&mode=initial-offer`]);
 });
 
-test("Client cannot confirm an occupied time even if a stored selection bypasses the disabled control", async () => {
+test("Client occupied time reaches the existing appointment identity guard", async () => {
   const f = fixture(calendarPath, { mode: "customer", initial: false, occupied: true });
   let tree = await f.mount(); invoke(picker(tree), "onDateChange", date);
   tree = await f.loadSlots();
-  assert.deepEqual(picker(tree).props.disabledTimes, ["10:00"]);
+  assert.deepEqual(picker(tree).props.bookedTimes, ["10:00"]);
   invoke(picker(tree), "onTimeChange", "10:00");
   tree = f.render();
   const submit = find(tree, n => n.props.children === "Trimite programarea");
   await invoke(submit, "onClick");
   assert.deepEqual(f.navigation, []);
-  assert.match(f.alerts[0], /nu mai este disponibilă/);
+  assert.ok(!f.alerts.some(message => /nu mai este disponibilă/.test(message)));
 });
-test("Client confirmation remains blocked until its availability response arrives", async () => {
+test("Client confirmation is not blocked by pending occupancy", async () => {
   let resolve!: (reply: { data: unknown; error: unknown }) => void;
   const f = fixture(calendarPath, { mode: "customer", initial: false, slotReply: () => new Promise(r => { resolve = r; }) });
   let tree = await f.mount(); invoke(picker(tree), "onDateChange", date);
   const pending = f.loadSlots(); await new Promise(r => setImmediate(r));
   tree = f.render();
-  assert.equal(picker(tree).props.loadingTimes, true);
+  assert.equal(picker(tree).props.loadingTimes, false);
   const submit = find(tree, n => n.props.children === "Trimite programarea");
-  assert.equal(submit.props.disabled, true);
+  assert.equal(submit.props.disabled, false);
   await invoke(submit, "onClick");
   assert.deepEqual(f.navigation, []);
   resolve({ data: [], error: null }); await pending;
