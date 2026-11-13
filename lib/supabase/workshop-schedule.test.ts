@@ -106,6 +106,8 @@ function fixture(path = calendarPath, options: Options = {}) {
   });
   new Function("require", "exports", slotsReader.code)(slotsReader.requireMock, slotsReader.exports);
   const requireMock = (name: string): unknown => {
+    if (name === "@/app/components/RomanianDateCalendar") return { default: "Calendar" };
+    if (name === "@/lib/calendar/date-only") return { localToday: () => "2026-11-13", calendarDate: (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) };
     if (name === "@/lib/supabase/workshop-booked-slots") return slotsReader.exports;
     if (name === "react/jsx-runtime") return {
       jsx: (type: unknown, props: Element["props"]) => ({ type, props }),

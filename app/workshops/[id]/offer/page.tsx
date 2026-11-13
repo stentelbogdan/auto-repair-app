@@ -1,5 +1,7 @@
 "use client";
 
+import RomanianDateCalendar from "@/app/components/RomanianDateCalendar";
+import { calendarDate, localToday } from "@/lib/calendar/date-only";
 import { getOwnProfile } from "@/lib/supabase/profiles";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -107,6 +109,11 @@ export default function MakeOfferPage() {
     e.preventDefault();
 
     if (isClosed || hasExistingOffer || isSubmitting) return;
+
+    if (!calendarDate(availableDate) || availableDate < localToday()) {
+      alert("Alege o dată validă, începând de astăzi.");
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -276,13 +283,9 @@ export default function MakeOfferPage() {
             Data aleasă din calendar
           </label>
 
-          <input
-            type="date"
-            value={availableDate}
-            onChange={(event) => setAvailableDate(event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-black/10 bg-gray-50 px-4 py-4 text-black outline-none"
-            required
-          />
+          <div className="mt-2">
+            <RomanianDateCalendar value={availableDate} minDate={localToday()} onChange={setAvailableDate} />
+          </div>
 
           <label className="mt-5 block text-sm font-bold text-black">
             Ora aleasă din calendar

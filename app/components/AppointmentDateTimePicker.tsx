@@ -1,5 +1,6 @@
 "use client";
 
+import RomanianDateCalendar from "@/app/components/RomanianDateCalendar";
 import TimeWheelPicker from "@/app/components/TimeWheelPicker";
 
 type AppointmentDateTimePickerProps = {
@@ -130,6 +131,8 @@ export default function AppointmentDateTimePicker({
 
       <div className="relative mt-2">
         <input
+          aria-label="Data programării, zi.lună.an"
+          aria-invalid={Boolean(dateError)}
           type="text"
           inputMode="numeric"
           placeholder="zz.ll.aaaa"
@@ -142,22 +145,8 @@ export default function AppointmentDateTimePicker({
           }`}
         />
 
-        <div className="absolute right-4 top-1/2 h-8 w-8 -translate-y-1/2">
-          <div
-            className={`pointer-events-none absolute inset-0 flex items-center justify-center text-xl ${
-              dateError ? "text-red-500" : "text-black/60"
-            }`}
-          >
-            📅
-          </div>
-
-          <input
-            type="date"
-            min={minDate}
-            value={date}
-            onChange={(event) => handleCalendarDateChange(event.target.value)}
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <RomanianDateCalendar value={date} minDate={minDate} onChange={handleCalendarDateChange} compact />
         </div>
       </div>
 

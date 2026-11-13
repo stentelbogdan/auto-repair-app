@@ -89,6 +89,7 @@ const pickerCode = ts.transpileModule(readFileSync(new URL("../../app/components
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
 new Function("require", "exports", pickerCode)((name: string) => {
+  if (name === "@/app/components/RomanianDateCalendar") return { default: "Calendar" };
   if (name === "@/app/components/TimeWheelPicker") return { default: "Wheel" };
   assert.equal(name, "react/jsx-runtime");
   return { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) };
