@@ -252,6 +252,29 @@ export async function POST(request: Request) {
     liveLocation.phase !== "to_pickup" ||
     liveLocation.is_active !== true
   ) {
+    // TEMPORARY: opt-in only after the deployment boundary, authenticated
+    // request context, accepted-offer ownership and Dispatch checks above.
+    // The preview boundary already requires the TEST project. Never return
+    // database errors or row values, even when several checks fail together.
+    if (
+      process.env.VERCEL_ENV === "preview" &&
+      process.env.TOWING_ETA_DIAGNOSTIC === "1"
+    ) {
+      const code = liveLocationError
+        ? "TRACKING_READ_ERROR"
+        : !liveLocation
+          ? "TRACKING_ROW_NOT_VISIBLE"
+          : liveLocation.workshop_id !== user.id
+            ? "TRACKING_WORKSHOP_MISMATCH"
+            : liveLocation.phase !== "to_pickup"
+              ? "TRACKING_PHASE_MISMATCH"
+              : "TRACKING_NOT_ACTIVE";
+
+      return Response.json({ code }, {
+        status: 409,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
     return Response.json(
       { error: "Trackingul live activ nu a fost găsit." },
       { status: 409 },

@@ -17,6 +17,7 @@ type Reply = { data: unknown; error: null | { code: string; message?: string } }
 type Options = {
   request?: Reply; progress?: Reply; offer?: Reply; location?: Reply; appointment?: Reply;
   auth?: boolean; updateError?: boolean; routeStatus?: string;
+  env?: Record<string, string | undefined>;
 };
 const ok = (data: unknown): Reply => ({ data, error: null });
 const compile = (source: string) => ts.transpileModule(source, { compilerOptions: {
@@ -76,7 +77,7 @@ function fixture(options: Options = {}) {
     throw new Error(`Unexpected dependency: ${name}`);
   }, exported, { env: { NEXT_PUBLIC_SUPABASE_URL: "https://bstjobvvxxfqqwyjoimx.supabase.co",
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "synthetic-anon", VERCEL_ENV: "preview",
-    NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: "bstjobvvxxfqqwyjoimx" } });
+    NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: "bstjobvvxxfqqwyjoimx", ...options.env } });
   return { rpcCalls, reads, routeCalls, clientCount: () => clientCount,
     call: (id: unknown = requestId, token: string | null = "synthetic-session") => exported.POST!(new Request("https://preview.invalid/api/routing/towing/live-eta", {
       method: "POST", headers: { "Content-Type": "application/json", ...(token === null ? {} : { Authorization: `Bearer ${token}` }) },
@@ -155,4 +156,87 @@ for (const [age, reason] of [[1000, "fresh"], [45000, "not_moved_enough"]] as co
 test("eligibility changed during calculation never reports an updated ETA", async () => {
   const f = fixture({ updateError: true }); const response = await f.call();
   assert.equal(response.status, 409); assert.equal((await response.json()).status, undefined);
+});
+
+const diagnosticEnv = { TOWING_ETA_DIAGNOSTIC: "1" };
+const diagnosticCases: [string, Reply][] = [
+  ["TRACKING_READ_ERROR", { data: { ...location, workshop_id: requestId, phase: "private-phase", is_active: false },
+    error: { code: "private-database-code", message: `private SQL ${requestId} synthetic-session GPS 46,26` } }],
+  ["TRACKING_ROW_NOT_VISIBLE", ok(null)],
+  ["TRACKING_WORKSHOP_MISMATCH", ok({ ...location, workshop_id: requestId, phase: "private-phase", is_active: false })],
+  ["TRACKING_PHASE_MISMATCH", ok({ ...location, phase: "private-phase", is_active: false })],
+  ["TRACKING_NOT_ACTIVE", ok({ ...location, is_active: false })],
+];
+for (const [code, reply] of diagnosticCases) {
+  test(`temporary diagnostic ${code}: only safe constant, original failure precedence, no subsequent work`, async () => {
+    const f = fixture({ env: diagnosticEnv, location: reply });
+    const response = await f.call();
+    assert.equal(response.status, 409);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    // Exact allowlist schema/value rules out all row values, IDs, GPS, JWTs,
+    // database codes/messages, including arbitrary extra diagnostic fields.
+    assert.deepEqual(await response.json(), { code });
+    assert.deepEqual(f.routeCalls, []);
+    assert.deepEqual(f.rpcCalls.map(call => call.name), [
+      "get_workshop_repair_request_detail", "get_workshop_latest_work_progress",
+    ]);
+    assert.ok(!f.reads.some(read => read.table === "repair_appointments"));
+    assert.deepEqual(f.reads.find(read => read.table === "towing_live_locations")?.filters,
+      [["request_id", requestId]]);
+  });
+}
+for (const env of [{}, { TOWING_ETA_DIAGNOSTIC: "0" }, { TOWING_ETA_DIAGNOSTIC: "true" },
+  { ...diagnosticEnv, VERCEL_ENV: "development" }, { ...diagnosticEnv, VERCEL_ENV: undefined }]) {
+  test(`temporary diagnostic disabled outside explicit Preview opt-in: ${JSON.stringify(env)}`, async () => {
+    for (const [, reply] of diagnosticCases) {
+      const response = await fixture({ env, location: reply }).call();
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { error: "Trackingul live activ nu a fost găsit." });
+    }
+  });
+}
+for (const [label, options, status] of [
+  ["invalid session", { auth: false }, 401],
+  ["inaccessible request", { request: ok([]) }, 404],
+  ["request denied", { request: { data: null, error: { code: "42501" } } }, 403],
+  ["other Service", { offer: ok({ ...acceptedOffer, workshop_user_id: requestId }) }, 403],
+  ["other request offer", { offer: ok({ ...acceptedOffer, request_id: offerId }) }, 403],
+  ["progress denied", { progress: { data: null, error: { code: "42501" } } }, 403],
+  ["not Dispatch", { progress: ok([{ request_id: requestId, status: "Ready" }]) }, 409],
+] as [string, Options, number][]) {
+  test(`temporary diagnostic cannot bypass ${label}`, async () => {
+    const f = fixture({ ...options, env: diagnosticEnv, location: ok(null) });
+    const response = await f.call();
+    assert.equal(response.status, status);
+    assert.equal((await response.json()).code, undefined);
+    assert.ok(!f.reads.some(read => read.table === "towing_live_locations"));
+    assert.deepEqual(f.routeCalls, []);
+  });
+}
+test("temporary diagnostic requires bearer and valid identifier", async () => {
+  const f = fixture({ env: diagnosticEnv });
+  for (const response of [await f.call(requestId, null), await f.call("invalid")]) {
+    assert.equal((await response.json()).code, undefined);
+  }
+  assert.equal(f.clientCount(), 0);
+});
+for (const env of [
+  { ...diagnosticEnv, VERCEL_ENV: "production" },
+  { ...diagnosticEnv, NEXT_PUBLIC_SUPABASE_URL: "https://unapproved.invalid" },
+  { ...diagnosticEnv, NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: "wrong-project" },
+]) {
+  test(`temporary diagnostic preserves deployment boundary: ${JSON.stringify(env)}`, async () => {
+    const f = fixture({ env }); const response = await f.call();
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).code, undefined);
+    assert.equal(f.clientCount(), 0);
+  });
+}
+test("temporary diagnostic leaves valid tracking and ETA calculation unchanged", async () => {
+  const f = fixture({ env: diagnosticEnv }); const response = await f.call();
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "updated", distanceMeters: 1000,
+    durationSeconds: 120, calculatedAt: "2026-11-08T12:00:00Z" });
+  assert.equal(f.routeCalls.length, 1);
+  assert.equal(f.rpcCalls.at(-1)?.name, "update_towing_live_eta");
 });
