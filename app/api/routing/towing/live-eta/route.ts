@@ -239,14 +239,12 @@ export async function POST(request: Request) {
   }
 
   const { data: liveLocation, error: liveLocationError } = await supabase
-    .from("towing_live_locations")
-    .select(
-      "request_id, appointment_id, workshop_id, latitude, longitude, phase, is_active, live_distance_to_pickup_meters, live_duration_to_pickup_seconds, live_eta_calculated_at, live_eta_origin_latitude, live_eta_origin_longitude",
-    )
-    .eq("request_id", requestId)
+    .rpc("get_workshop_towing_live_location", { p_request_id: requestId })
     .maybeSingle();
+  const trackingReadFailed = liveLocationError ||
+    (liveLocation && liveLocation.request_id !== requestId.toLowerCase());
   if (
-    liveLocationError ||
+    trackingReadFailed ||
     !liveLocation ||
     liveLocation.workshop_id !== user.id ||
     liveLocation.phase !== "to_pickup" ||
@@ -260,7 +258,7 @@ export async function POST(request: Request) {
       process.env.VERCEL_ENV === "preview" &&
       process.env.TOWING_ETA_DIAGNOSTIC === "1"
     ) {
-      const code = liveLocationError
+      const code = trackingReadFailed
         ? "TRACKING_READ_ERROR"
         : !liveLocation
           ? "TRACKING_ROW_NOT_VISIBLE"
@@ -352,17 +350,26 @@ export async function POST(request: Request) {
   }
 
   const { data: updatedSnapshot, error: snapshotError } = await supabase
-    .from("towing_live_locations")
-    .select("live_eta_calculated_at")
-    .eq("request_id", requestId)
+    .rpc("get_workshop_towing_live_location", { p_request_id: requestId })
     .maybeSingle();
+  // Recheck authorization after the writer; never report success from a
+  // missing, stopped or inaccessible snapshot (e.g. concurrent stop/reassignment).
+  if (snapshotError || !updatedSnapshot ||
+    updatedSnapshot.request_id !== requestId.toLowerCase() ||
+    updatedSnapshot.workshop_id !== user.id ||
+    updatedSnapshot.phase !== "to_pickup" || updatedSnapshot.is_active !== true ||
+    typeof updatedSnapshot.live_eta_calculated_at !== "string" ||
+    !Number.isFinite(Date.parse(updatedSnapshot.live_eta_calculated_at))) {
+    return Response.json(
+      { error: "Eligibilitatea trackingului s-a schimbat." },
+      { status: 409 },
+    );
+  }
 
   return Response.json({
     status: "updated",
     distanceMeters: route.distanceMeters,
     durationSeconds: route.durationSeconds,
-    calculatedAt: snapshotError
-      ? null
-      : (updatedSnapshot?.live_eta_calculated_at ?? null),
+    calculatedAt: updatedSnapshot.live_eta_calculated_at,
   });
 }

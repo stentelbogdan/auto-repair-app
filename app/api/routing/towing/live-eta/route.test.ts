@@ -16,7 +16,7 @@ const location = { request_id: requestId, appointment_id: appointmentId, worksho
 type Reply = { data: unknown; error: null | { code: string; message?: string } };
 type Options = {
   request?: Reply; progress?: Reply; offer?: Reply; location?: Reply; appointment?: Reply;
-  auth?: boolean; updateError?: boolean; routeStatus?: string;
+  auth?: boolean; updateError?: boolean; routeStatus?: string; snapshot?: Reply;
   env?: Record<string, string | undefined>;
 };
 const ok = (data: unknown): Reply => ({ data, error: null });
@@ -30,29 +30,33 @@ function fixture(options: Options = {}) {
   const reads: { table: string; filters: [string, unknown][] }[] = [];
   const routeCalls: unknown[] = [];
   let clientCount = 0;
+  let trackingReadCount = 0;
   const client = {
     auth: { getUser: async (token: string) => {
       assert.equal(token, "synthetic-session");
       return { data: { user: options.auth === false ? null : { id: workshopId } }, error: null };
     } },
-    rpc: async (name: string, args: unknown) => {
+    rpc: (name: string, args: unknown) => {
       rpcCalls.push({ name, args });
       if (name === "get_workshop_repair_request_detail") return options.request ?? ok([{ request_data: context }]);
       if (name === "get_workshop_latest_work_progress") return options.progress ?? ok([{ request_id: requestId, status: "Dispatch" }]);
+      if (name === "get_workshop_towing_live_location") {
+        trackingReadCount += 1;
+        return { maybeSingle: async () => trackingReadCount === 1
+          ? options.location ?? ok(location)
+          : options.snapshot ?? ok({ ...location, live_eta_calculated_at: "2026-11-08T12:00:00Z" }) };
+      }
       assert.equal(name, "update_towing_live_eta");
       return { data: null, error: options.updateError ? { code: "42501" } : null };
     },
     from: (table: string) => {
-      assert.ok(["repair_offers", "towing_live_locations", "repair_appointments"].includes(table), `Unauthorized direct read: ${table}`);
+      assert.ok(["repair_offers", "repair_appointments"].includes(table), `Unauthorized direct read: ${table}`);
       const read = { table, filters: [] as [string, unknown][] }; reads.push(read);
-      let projection = "";
       const query = {
-        select: (fields: string) => { projection = fields; return query; },
+        select: () => query,
         eq: (key: string, value: unknown) => { read.filters.push([key, value]); return query; },
         maybeSingle: async () => table === "repair_offers" ? options.offer ?? ok(acceptedOffer)
-          : table === "repair_appointments" ? options.appointment ?? ok({ id: appointmentId })
-          : projection === "live_eta_calculated_at" ? ok({ live_eta_calculated_at: "2026-11-08T12:00:00Z" })
-          : options.location ?? ok(location),
+          : options.appointment ?? ok({ id: appointmentId }),
       };
       return query;
     },
@@ -93,8 +97,10 @@ test("winning Service uses both authorized RPCs with its own bearer session, the
   assert.deepEqual(f.rpcCalls, [
     { name: "get_workshop_repair_request_detail", args: { p_request_id: requestId } },
     { name: "get_workshop_latest_work_progress", args: { p_request_id: requestId } },
+    { name: "get_workshop_towing_live_location", args: { p_request_id: requestId } },
     { name: "update_towing_live_eta", args: { p_request_id: requestId, p_distance_to_pickup_meters: 1000,
       p_duration_to_pickup_seconds: 120, p_origin_latitude: 46, p_origin_longitude: 26 } },
+    { name: "get_workshop_towing_live_location", args: { p_request_id: requestId } },
   ]);
   assert.deepEqual(f.routeCalls, [{ originLat: 46, originLng: 26, destinationLat: 47, destinationLng: 27, requirePaths: false }]);
   assert.deepEqual(f.reads[0].filters, [["id", offerId], ["request_id", requestId], ["status", "accepted"]]);
@@ -151,7 +157,7 @@ for (const [age, reason] of [[1000, "fresh"], [45000, "not_moved_enough"]] as co
       live_duration_to_pickup_seconds: 120, live_eta_calculated_at: new Date(Date.now() - age).toISOString(),
       live_eta_origin_latitude: 46, live_eta_origin_longitude: 26 }) });
     const response = await f.call(); assert.equal(response.status, 200); assert.equal((await response.json()).reason, reason);
-    assert.deepEqual(f.routeCalls, []); assert.equal(f.rpcCalls.length, 2);
+    assert.deepEqual(f.routeCalls, []); assert.equal(f.rpcCalls.length, 3);
   });
 test("eligibility changed during calculation never reports an updated ETA", async () => {
   const f = fixture({ updateError: true }); const response = await f.call();
@@ -179,10 +185,12 @@ for (const [code, reply] of diagnosticCases) {
     assert.deepEqual(f.routeCalls, []);
     assert.deepEqual(f.rpcCalls.map(call => call.name), [
       "get_workshop_repair_request_detail", "get_workshop_latest_work_progress",
+      "get_workshop_towing_live_location",
     ]);
     assert.ok(!f.reads.some(read => read.table === "repair_appointments"));
-    assert.deepEqual(f.reads.find(read => read.table === "towing_live_locations")?.filters,
-      [["request_id", requestId]]);
+    assert.deepEqual(f.rpcCalls.at(-1), {
+      name: "get_workshop_towing_live_location", args: { p_request_id: requestId },
+    });
   });
 }
 for (const env of [{}, { TOWING_ETA_DIAGNOSTIC: "0" }, { TOWING_ETA_DIAGNOSTIC: "true" },
@@ -209,7 +217,7 @@ for (const [label, options, status] of [
     const response = await f.call();
     assert.equal(response.status, status);
     assert.equal((await response.json()).code, undefined);
-    assert.ok(!f.reads.some(read => read.table === "towing_live_locations"));
+    assert.ok(!f.rpcCalls.some(call => call.name === "get_workshop_towing_live_location"));
     assert.deepEqual(f.routeCalls, []);
   });
 }
@@ -238,5 +246,39 @@ test("temporary diagnostic leaves valid tracking and ETA calculation unchanged",
   assert.deepEqual(await response.json(), { status: "updated", distanceMeters: 1000,
     durationSeconds: 120, calculatedAt: "2026-11-08T12:00:00Z" });
   assert.equal(f.routeCalls.length, 1);
-  assert.equal(f.rpcCalls.at(-1)?.name, "update_towing_live_eta");
+  assert.equal(f.rpcCalls.at(-2)?.name, "update_towing_live_eta");
+  assert.equal(f.rpcCalls.at(-1)?.name, "get_workshop_towing_live_location");
 });
+
+for (const [label, reply] of [
+  ["reader absent", { data: null, error: { code: "PGRST202", message: "private" } }],
+  ["reader unauthorized", { data: null, error: { code: "42501", message: "private" } }],
+  ["wrong request returned", ok({ ...location, request_id: offerId })],
+  ["multiple rows rejected by maybeSingle", { data: null, error: { code: "PGRST116", message: "private" } }],
+] as [string, Reply][]) {
+  test(`${label}: no fallback to direct SELECT or routing`, async () => {
+    const f = fixture({ location: reply, env: diagnosticEnv });
+    const response = await f.call();
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { code: "TRACKING_READ_ERROR" });
+    assert.deepEqual(f.routeCalls, []);
+    assert.ok(!f.rpcCalls.some(call => call.name === "update_towing_live_eta"));
+  });
+}
+for (const [label, reply] of [
+  ["access revoked", { data: null, error: { code: "42501", message: "private" } }],
+  ["row disappeared", ok(null)],
+  ["stop during routing", ok({ ...location, is_active: false })],
+  ["different request", ok({ ...location, request_id: offerId })],
+  ["different owner", ok({ ...location, workshop_id: requestId })],
+  ["different phase", ok({ ...location, phase: "other" })],
+  ["missing timestamp", ok(location)],
+  ["invalid timestamp", ok({ ...location, live_eta_calculated_at: "invalid" })],
+] as [string, Reply][]) {
+  test(`final authorized reread ${label}: fail closed, no misleading ETA success`, async () => {
+    const f = fixture({ snapshot: reply }); const response = await f.call();
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { error: "Eligibilitatea trackingului s-a schimbat." });
+    assert.equal(f.rpcCalls.filter(call => call.name === "get_workshop_towing_live_location").length, 2);
+  });
+}
