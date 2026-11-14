@@ -126,6 +126,7 @@ for (const [label, options, status] of [
   ["authorized empty progress", { progress: ok([]) }, 409],
   ["non-Dispatch progress", { progress: ok([{ request_id: requestId, status: "Ready" }]) }, 409],
   ["missing live location", { location: ok(null) }, 409],
+  ["wrong tracking phase", { location: ok({ ...location, phase: "other" }) }, 409],
   ["inactive location", { location: ok({ ...location, is_active: false }) }, 409],
   ["location owned by another Service", { location: ok({ ...location, workshop_id: requestId }) }, 409],
   ["no confirmed appointment", { appointment: ok(null) }, 409],
@@ -164,91 +165,18 @@ test("eligibility changed during calculation never reports an updated ETA", asyn
   assert.equal(response.status, 409); assert.equal((await response.json()).status, undefined);
 });
 
-const diagnosticEnv = { TOWING_ETA_DIAGNOSTIC: "1" };
-const diagnosticCases: [string, Reply][] = [
-  ["TRACKING_READ_ERROR", { data: { ...location, workshop_id: requestId, phase: "private-phase", is_active: false },
-    error: { code: "private-database-code", message: `private SQL ${requestId} synthetic-session GPS 46,26` } }],
-  ["TRACKING_ROW_NOT_VISIBLE", ok(null)],
-  ["TRACKING_WORKSHOP_MISMATCH", ok({ ...location, workshop_id: requestId, phase: "private-phase", is_active: false })],
-  ["TRACKING_PHASE_MISMATCH", ok({ ...location, phase: "private-phase", is_active: false })],
-  ["TRACKING_NOT_ACTIVE", ok({ ...location, is_active: false })],
-];
-for (const [code, reply] of diagnosticCases) {
-  test(`temporary diagnostic ${code}: only safe constant, original failure precedence, no subsequent work`, async () => {
-    const f = fixture({ env: diagnosticEnv, location: reply });
-    const response = await f.call();
-    assert.equal(response.status, 409);
-    assert.equal(response.headers.get("cache-control"), "no-store");
-    // Exact allowlist schema/value rules out all row values, IDs, GPS, JWTs,
-    // database codes/messages, including arbitrary extra diagnostic fields.
-    assert.deepEqual(await response.json(), { code });
-    assert.deepEqual(f.routeCalls, []);
-    assert.deepEqual(f.rpcCalls.map(call => call.name), [
-      "get_workshop_repair_request_detail", "get_workshop_latest_work_progress",
-      "get_workshop_towing_live_location",
-    ]);
-    assert.ok(!f.reads.some(read => read.table === "repair_appointments"));
-    assert.deepEqual(f.rpcCalls.at(-1), {
-      name: "get_workshop_towing_live_location", args: { p_request_id: requestId },
-    });
-  });
-}
-for (const env of [{}, { TOWING_ETA_DIAGNOSTIC: "0" }, { TOWING_ETA_DIAGNOSTIC: "true" },
-  { ...diagnosticEnv, VERCEL_ENV: "development" }, { ...diagnosticEnv, VERCEL_ENV: undefined }]) {
-  test(`temporary diagnostic disabled outside explicit Preview opt-in: ${JSON.stringify(env)}`, async () => {
-    for (const [, reply] of diagnosticCases) {
-      const response = await fixture({ env, location: reply }).call();
-      assert.equal(response.status, 409);
-      assert.deepEqual(await response.json(), { error: "Trackingul live activ nu a fost găsit." });
-    }
-  });
-}
-for (const [label, options, status] of [
-  ["invalid session", { auth: false }, 401],
-  ["inaccessible request", { request: ok([]) }, 404],
-  ["request denied", { request: { data: null, error: { code: "42501" } } }, 403],
-  ["other Service", { offer: ok({ ...acceptedOffer, workshop_user_id: requestId }) }, 403],
-  ["other request offer", { offer: ok({ ...acceptedOffer, request_id: offerId }) }, 403],
-  ["progress denied", { progress: { data: null, error: { code: "42501" } } }, 403],
-  ["not Dispatch", { progress: ok([{ request_id: requestId, status: "Ready" }]) }, 409],
-] as [string, Options, number][]) {
-  test(`temporary diagnostic cannot bypass ${label}`, async () => {
-    const f = fixture({ ...options, env: diagnosticEnv, location: ok(null) });
-    const response = await f.call();
-    assert.equal(response.status, status);
-    assert.equal((await response.json()).code, undefined);
-    assert.ok(!f.rpcCalls.some(call => call.name === "get_workshop_towing_live_location"));
-    assert.deepEqual(f.routeCalls, []);
-  });
-}
-test("temporary diagnostic requires bearer and valid identifier", async () => {
-  const f = fixture({ env: diagnosticEnv });
-  for (const response of [await f.call(requestId, null), await f.call("invalid")]) {
-    assert.equal((await response.json()).code, undefined);
-  }
-  assert.equal(f.clientCount(), 0);
-});
 for (const env of [
-  { ...diagnosticEnv, VERCEL_ENV: "production" },
-  { ...diagnosticEnv, NEXT_PUBLIC_SUPABASE_URL: "https://unapproved.invalid" },
-  { ...diagnosticEnv, NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: "wrong-project" },
+  { VERCEL_ENV: "production" },
+  { NEXT_PUBLIC_SUPABASE_URL: "https://unapproved.invalid" },
+  { NEXT_PUBLIC_AUTOREPAIR_SUPABASE_PROJECT_REF: "wrong-project" },
 ]) {
-  test(`temporary diagnostic preserves deployment boundary: ${JSON.stringify(env)}`, async () => {
+  test(`deployment boundary rejects invalid configuration: ${JSON.stringify(env)}`, async () => {
     const f = fixture({ env }); const response = await f.call();
     assert.equal(response.status, 503);
-    assert.equal((await response.json()).code, undefined);
+    assert.deepEqual(await response.json(), { error: "Configurația serviciului este invalidă." });
     assert.equal(f.clientCount(), 0);
   });
 }
-test("temporary diagnostic leaves valid tracking and ETA calculation unchanged", async () => {
-  const f = fixture({ env: diagnosticEnv }); const response = await f.call();
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { status: "updated", distanceMeters: 1000,
-    durationSeconds: 120, calculatedAt: "2026-11-08T12:00:00Z" });
-  assert.equal(f.routeCalls.length, 1);
-  assert.equal(f.rpcCalls.at(-2)?.name, "update_towing_live_eta");
-  assert.equal(f.rpcCalls.at(-1)?.name, "get_workshop_towing_live_location");
-});
 
 for (const [label, reply] of [
   ["reader absent", { data: null, error: { code: "PGRST202", message: "private" } }],
@@ -257,10 +185,10 @@ for (const [label, reply] of [
   ["multiple rows rejected by maybeSingle", { data: null, error: { code: "PGRST116", message: "private" } }],
 ] as [string, Reply][]) {
   test(`${label}: no fallback to direct SELECT or routing`, async () => {
-    const f = fixture({ location: reply, env: diagnosticEnv });
+    const f = fixture({ location: reply });
     const response = await f.call();
     assert.equal(response.status, 409);
-    assert.deepEqual(await response.json(), { code: "TRACKING_READ_ERROR" });
+    assert.deepEqual(await response.json(), { error: "Trackingul live activ nu a fost găsit." });
     assert.deepEqual(f.routeCalls, []);
     assert.ok(!f.rpcCalls.some(call => call.name === "update_towing_live_eta"));
   });
@@ -300,11 +228,11 @@ for (const [field, invalid] of Object.entries(malformedFields)) {
       const missing: Record<string, unknown> = { ...completeSnapshot };
       delete missing[field];
       for (const payload of [missing, { ...completeSnapshot, [field]: invalid }]) {
-        const f = fixture({ [read]: ok(payload), env: diagnosticEnv });
+        const f = fixture({ [read]: ok(payload) });
         const response = await f.call();
         assert.equal(response.status, 409);
         assert.deepEqual(await response.json(), read === "location"
-          ? { code: "TRACKING_READ_ERROR" }
+          ? { error: "Trackingul live activ nu a fost găsit." }
           : { error: "Eligibilitatea trackingului s-a schimbat." });
         if (read === "location") {
           assert.deepEqual(f.routeCalls, []);
@@ -319,11 +247,11 @@ for (const read of ["location", "snapshot"] as const) {
     for (const payload of [[], [completeSnapshot], "private", 1, false,
       ...["request_id", "appointment_id", "workshop_id", "phase", "is_active"]
         .map(field => ({ ...completeSnapshot, [field]: null }))]) {
-      const f = fixture({ [read]: ok(payload), env: diagnosticEnv });
+      const f = fixture({ [read]: ok(payload) });
       const response = await f.call();
       assert.equal(response.status, 409);
       assert.deepEqual(await response.json(), read === "location"
-        ? { code: "TRACKING_READ_ERROR" }
+        ? { error: "Trackingul live activ nu a fost găsit." }
         : { error: "Eligibilitatea trackingului s-a schimbat." });
     }
   });
@@ -336,18 +264,18 @@ for (const read of ["location", "snapshot"] as const) {
       ["live_eta_calculated_at", "private-invalid-time"],
     ];
     for (const [field, value] of invalidValues) {
-      const f = fixture({ [read]: ok({ ...completeSnapshot, [field]: value }), env: diagnosticEnv });
+      const f = fixture({ [read]: ok({ ...completeSnapshot, [field]: value }) });
       const response = await f.call();
       assert.equal(response.status, 409);
       assert.deepEqual(await response.json(), read === "location"
-        ? { code: "TRACKING_READ_ERROR" }
+        ? { error: "Trackingul live activ nu a fost găsit." }
         : { error: "Eligibilitatea trackingului s-a schimbat." });
     }
   });
 }
 test("nullable GPS fields are valid contract values but cannot calculate ETA", async () => {
   for (const field of ["latitude", "longitude"]) {
-    const f = fixture({ location: ok({ ...location, [field]: null }), env: diagnosticEnv });
+    const f = fixture({ location: ok({ ...location, [field]: null }) });
     const response = await f.call();
     assert.equal(response.status, 409);
     assert.deepEqual(await response.json(), { error: "Locația live nu este disponibilă." });
