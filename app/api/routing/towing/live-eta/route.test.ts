@@ -282,3 +282,82 @@ for (const [label, reply] of [
     assert.equal(f.rpcCalls.filter(call => call.name === "get_workshop_towing_live_location").length, 2);
   });
 }
+
+const completeSnapshot = {
+  ...location, live_distance_to_pickup_meters: 1000, live_duration_to_pickup_seconds: 120,
+  live_eta_calculated_at: "2026-11-08T12:00:00Z", live_eta_origin_latitude: 46,
+  live_eta_origin_longitude: 26,
+};
+const malformedFields: Record<string, unknown> = {
+  request_id: "not-a-uuid", appointment_id: 123, workshop_id: {}, latitude: "46",
+  longitude: "26", phase: false, is_active: "true", live_distance_to_pickup_meters: "1000",
+  live_duration_to_pickup_seconds: "120", live_eta_calculated_at: 123,
+  live_eta_origin_latitude: "46", live_eta_origin_longitude: "26",
+};
+for (const [field, invalid] of Object.entries(malformedFields)) {
+  for (const read of ["location", "snapshot"] as const) {
+    test(`${read} validates reader field ${field}: missing and wrong type rejected`, async () => {
+      const missing: Record<string, unknown> = { ...completeSnapshot };
+      delete missing[field];
+      for (const payload of [missing, { ...completeSnapshot, [field]: invalid }]) {
+        const f = fixture({ [read]: ok(payload), env: diagnosticEnv });
+        const response = await f.call();
+        assert.equal(response.status, 409);
+        assert.deepEqual(await response.json(), read === "location"
+          ? { code: "TRACKING_READ_ERROR" }
+          : { error: "Eligibilitatea trackingului s-a schimbat." });
+        if (read === "location") {
+          assert.deepEqual(f.routeCalls, []);
+          assert.ok(!f.rpcCalls.some(call => call.name === "update_towing_live_eta"));
+        }
+      }
+    });
+  }
+}
+for (const read of ["location", "snapshot"] as const) {
+  test(`${read} rejects non-object payloads and nulls in non-nullable fields`, async () => {
+    for (const payload of [[], [completeSnapshot], "private", 1, false,
+      ...["request_id", "appointment_id", "workshop_id", "phase", "is_active"]
+        .map(field => ({ ...completeSnapshot, [field]: null }))]) {
+      const f = fixture({ [read]: ok(payload), env: diagnosticEnv });
+      const response = await f.call();
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), read === "location"
+        ? { code: "TRACKING_READ_ERROR" }
+        : { error: "Eligibilitatea trackingului s-a schimbat." });
+    }
+  });
+  test(`${read} rejects nonfinite, out-of-range and invalid timestamp values`, async () => {
+    const invalidValues: [string, unknown][] = [
+      ["latitude", 91], ["longitude", -181], ["latitude", NaN], ["longitude", Infinity],
+      ["live_eta_origin_latitude", -91], ["live_eta_origin_longitude", 181],
+      ["live_distance_to_pickup_meters", -1], ["live_distance_to_pickup_meters", Infinity],
+      ["live_duration_to_pickup_seconds", -1], ["live_duration_to_pickup_seconds", NaN],
+      ["live_eta_calculated_at", "private-invalid-time"],
+    ];
+    for (const [field, value] of invalidValues) {
+      const f = fixture({ [read]: ok({ ...completeSnapshot, [field]: value }), env: diagnosticEnv });
+      const response = await f.call();
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), read === "location"
+        ? { code: "TRACKING_READ_ERROR" }
+        : { error: "Eligibilitatea trackingului s-a schimbat." });
+    }
+  });
+}
+test("nullable GPS fields are valid contract values but cannot calculate ETA", async () => {
+  for (const field of ["latitude", "longitude"]) {
+    const f = fixture({ location: ok({ ...location, [field]: null }), env: diagnosticEnv });
+    const response = await f.call();
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { error: "Locația live nu este disponibilă." });
+    assert.deepEqual(f.routeCalls, []);
+  }
+});
+test("all five nullable ETA fields allow the first calculation; complete reread succeeds", async () => {
+  const f = fixture({ location: ok(location), snapshot: ok(completeSnapshot) });
+  const response = await f.call();
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "updated", distanceMeters: 1000,
+    durationSeconds: 120, calculatedAt: completeSnapshot.live_eta_calculated_at });
+});

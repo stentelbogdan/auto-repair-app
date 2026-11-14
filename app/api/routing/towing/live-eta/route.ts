@@ -16,6 +16,16 @@ type LiveEtaSnapshot = {
   live_eta_origin_longitude: number | null;
 };
 
+type TowingLiveLocation = LiveEtaSnapshot & {
+  request_id: string;
+  appointment_id: string;
+  workshop_id: string;
+  latitude: number | null;
+  longitude: number | null;
+  phase: string;
+  is_active: boolean;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -38,6 +48,35 @@ function getCoordinate(value: unknown, type: "latitude" | "longitude") {
     value <= maximum
     ? value
     : null;
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function isNullableMetric(value: unknown): value is number | null {
+  return value === null ||
+    (typeof value === "number" && Number.isFinite(value) && value >= 0);
+}
+
+// Validate the RPC payload before narrowing it; SDK type overrides alone do not
+// establish the installed reader's runtime contract. Missing fields are invalid.
+function isTowingLiveLocation(value: unknown): value is TowingLiveLocation {
+  return isRecord(value) &&
+    isUuid(value.request_id) && isUuid(value.appointment_id) && isUuid(value.workshop_id) &&
+    (value.latitude === null || getCoordinate(value.latitude, "latitude") !== null) &&
+    (value.longitude === null || getCoordinate(value.longitude, "longitude") !== null) &&
+    typeof value.phase === "string" && typeof value.is_active === "boolean" &&
+    isNullableMetric(value.live_distance_to_pickup_meters) &&
+    isNullableMetric(value.live_duration_to_pickup_seconds) &&
+    (value.live_eta_calculated_at === null ||
+      (typeof value.live_eta_calculated_at === "string" &&
+        Number.isFinite(Date.parse(value.live_eta_calculated_at)))) &&
+    (value.live_eta_origin_latitude === null ||
+      getCoordinate(value.live_eta_origin_latitude, "latitude") !== null) &&
+    (value.live_eta_origin_longitude === null ||
+      getCoordinate(value.live_eta_origin_longitude, "longitude") !== null);
 }
 
 function toRadians(value: number) {
@@ -238,10 +277,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: liveLocation, error: liveLocationError } = await supabase
+  const { data: liveLocationData, error: liveLocationError } = await supabase
     .rpc("get_workshop_towing_live_location", { p_request_id: requestId })
-    .maybeSingle();
+    .maybeSingle<unknown>();
+  const liveLocation = isTowingLiveLocation(liveLocationData) ? liveLocationData : null;
   const trackingReadFailed = liveLocationError ||
+    (liveLocationData !== null && !liveLocation) ||
     (liveLocation && liveLocation.request_id !== requestId.toLowerCase());
   if (
     trackingReadFailed ||
@@ -351,10 +392,10 @@ export async function POST(request: Request) {
 
   const { data: updatedSnapshot, error: snapshotError } = await supabase
     .rpc("get_workshop_towing_live_location", { p_request_id: requestId })
-    .maybeSingle();
+    .maybeSingle<unknown>();
   // Recheck authorization after the writer; never report success from a
   // missing, stopped or inaccessible snapshot (e.g. concurrent stop/reassignment).
-  if (snapshotError || !updatedSnapshot ||
+  if (snapshotError || !isTowingLiveLocation(updatedSnapshot) ||
     updatedSnapshot.request_id !== requestId.toLowerCase() ||
     updatedSnapshot.workshop_id !== user.id ||
     updatedSnapshot.phase !== "to_pickup" || updatedSnapshot.is_active !== true ||
