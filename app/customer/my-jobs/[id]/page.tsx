@@ -12,6 +12,7 @@ import {
   normalizeProgressStatus,
 } from "@/lib/work-progress/workflows";
 import { useTowingLiveLocation } from "@/lib/hooks/useTowingLiveLocation";
+import { useTowingTrackingNotificationRead } from "@/lib/hooks/useTowingTrackingNotificationRead";
 import {
   formatTowingLiveEta,
   isValidTowingCoordinate,
@@ -47,6 +48,7 @@ export default function CustomerJobDetailPage() {
 
   const [request, setRequest] = useState<RepairRequestRow | null>(null);
   const [offer, setOffer] = useState<AcceptedOffer | null>(null);
+  const [notificationAppointmentId, setNotificationAppointmentId] = useState<string>();
   const [progressUpdates, setProgressUpdates] = useState<WorkProgressUpdate[]>(
     [],
   );
@@ -74,6 +76,14 @@ export default function CustomerJobDetailPage() {
     liveTracking.state === "live"
       ? formatTowingLiveEta(liveTracking.row, liveTracking.now)
       : null;
+  const trackingNotificationRef = useTowingTrackingNotificationRead({
+    requestId,
+    ownerId: request?.user_id,
+    offerId: offer?.id,
+    appointmentId: notificationAppointmentId,
+    enabled: !loading && request?.service_type === "towing" && request.id === requestId &&
+      offer?.id === request.accepted_offer_id,
+  });
 
   const getStatusColor = (status?: string | null) => {
     switch (status?.toLowerCase()) {
@@ -101,6 +111,7 @@ export default function CustomerJobDetailPage() {
     const loadJob = async () => {
       try {
         setLoading(true);
+        setNotificationAppointmentId(undefined);
 
         if (!requestId) {
           router.push("/customer/my-jobs");
@@ -136,6 +147,17 @@ export default function CustomerJobDetailPage() {
             .single<AcceptedOffer>();
 
           setOffer(offerData || null);
+
+          // Resolve the displayed notification context without depending on GPS
+          // freshness or Dispatch still being current when the Client opens it.
+          if (requestData.service_type === "towing" && offerData &&
+              requestData.user_id === authData.user.id) {
+            const { data: appointment, error: appointmentError } = await supabase
+              .from("repair_appointments").select("id")
+              .eq("request_id", requestId).eq("offer_id", offerData.id)
+              .eq("status", "confirmed").maybeSingle<{ id: string }>();
+            if (!appointmentError && appointment) setNotificationAppointmentId(appointment.id);
+          }
         }
 
         const { data: progressData, error: progressError } = await supabase
@@ -253,7 +275,7 @@ export default function CustomerJobDetailPage() {
 
   return (
     <main className="min-h-screen bg-[#101010] px-4 py-5 text-white">
-      <div className="mx-auto max-w-4xl">
+      <div ref={trackingNotificationRef} className="mx-auto max-w-4xl">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-orange-400">

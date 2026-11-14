@@ -5,6 +5,9 @@ import ts from "typescript";
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const navbar = read("../app/components/AppNavbar.tsx");
 const compile = (source: string) => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+const notificationExports = {} as typeof import("./notifications");
+new Function("exports", compile(read("./notifications.ts")))(notificationExports);
+const { TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, getTowingTrackingNotificationTarget } = notificationExports;
 const source = navbar.slice(navbar.indexOf("    const loadUnreadAppointmentNotifications ="), navbar.indexOf("    const loadUnreadWonJobs ="));
 function counter(role: "customer" | "workshop") {
   const rows: { type: string; recipient_id: string; recipient_role: string; read_at: string | null }[] = [];
@@ -20,10 +23,11 @@ function counter(role: "customer" | "workshop") {
     }; return query;
   } };
   const deps: Record<string, unknown> = { supabase: client, userId: "owner", isWorkshopMode: role === "workshop",
+    TOWING_TRACKING_STARTED_NOTIFICATION_TYPE,
     isSessionActive: () => state.active, console: { error() {} },
     WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE: "workshop_offer_rejected", WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE: "workshop_request_closed",
     WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE: "workshop_started_job", CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE: "customer_review_submitted" };
-  for (const name of ["AppointmentProposal", "AppointmentConfirmed", "JobStarted", "RejectedOffer", "ReviewSubmitted"]) {
+  for (const name of ["AppointmentProposal", "AppointmentConfirmed", "JobStarted", "TrackingStarted", "RejectedOffer", "ReviewSubmitted"]) {
     deps[`set${name}UnreadCount`] = (value: number) => { state.counts[name] = value; };
   }
   const refresh = new Function(...Object.keys(deps), compile(source) + "\nreturn loadUnreadAppointmentNotifications;")(...Object.values(deps)) as () => Promise<void>;
@@ -61,7 +65,7 @@ test("all offer-page loads stay read-only; acknowledgment is attached to authori
     const text = read(path);
     assert.doesNotMatch(text, /(?:customer_read_at|workshop_read_at):\s*new Date/);
     assert.doesNotMatch(text, /markNotificationsAsRead/);
-    assert.ok(text.includes("observe({ requestId:") || (path === "../app/offers/page.tsx" && text.includes("<CustomerOfferReadCard"))); assert.ok(text.includes("complete("));
+    assert.ok(/observe\(\{ requestId[,:]/.test(text) || (path === "../app/offers/page.tsx" && text.includes("<CustomerOfferReadCard"))); assert.ok(text.includes("complete("));
   }
   assert.doesNotMatch(read("./services/offers/customer-offers.service.ts"), /\.update\(/);
 });
@@ -81,6 +85,7 @@ function jobsNavigation(workshop: boolean, overrides: Record<string, unknown>, r
     runLocked: (fn: (options: { navigate: (url: string) => void }) => Promise<void>) => {
       pending = fn({ navigate: url => urls.push(url) }); return pending;
     }, isWorkshopMode: workshop, userId: "owner", jobStartedUnreadCount: 0, appointmentConfirmedUnreadCount: 0,
+    trackingStartedUnreadCount: 0, TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, getTowingTrackingNotificationTarget,
     reviewSubmittedUnreadCount: 0, wonJobsUnreadCount: 0, progressUnreadCount: 0,
     CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE: "review", WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE: "started",
     supabase: { from: () => query, rpc: async () => responses.shift() }, localStorage: { setItem() {} },
@@ -146,4 +151,49 @@ test("Client badge follows fresh selective resolution; role/session change cance
   assert.deepEqual(f.urls, ["/offers?focusOffer=latest"]);
   f.start(); f.generation.current++; f.resolve("/offers?focusOffer=obsolete"); await f.wait();
   assert.equal(f.urls.length, 1);
+});
+
+const trackingRequest = "10000000-0000-4000-8000-000000000001";
+const trackingTarget = `/customer/my-jobs/${trackingRequest}`;
+test("tracking badge is separate from started-job, scoped to customer and unread owner rows", async () => {
+  const f = counter("customer");
+  f.rows.push(
+    { type: TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, recipient_id: "owner", recipient_role: "customer", read_at: null },
+    { type: TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, recipient_id: "other", recipient_role: "customer", read_at: null },
+    { type: TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, recipient_id: "owner", recipient_role: "workshop", read_at: null },
+    { type: "workshop_started_job", recipient_id: "owner", recipient_role: "customer", read_at: null },
+  );
+  await f.refresh(); assert.equal(f.state.counts.TrackingStarted, 1); assert.equal(f.state.counts.JobStarted, 1);
+  await f.refresh(); assert.equal(f.state.counts.TrackingStarted, 1, "reconnect refresh never increments a local counter");
+  f.rows[0].read_at = "2026-11-14"; await f.refresh(); assert.equal(f.state.counts.TrackingStarted, 0);
+  assert.equal(f.state.counts.JobStarted, 1);
+});
+test("tracking badge navigates directly and filters by recipient/type, without marking read", async () => {
+  const f = jobsNavigation(false, { trackingStartedUnreadCount: 1 }, [{ data: {
+    type: TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, request_id: trackingRequest, target_url: trackingTarget,
+  }, error: null }]);
+  await f.run(); assert.deepEqual(f.urls, [trackingTarget]);
+  for (const pair of [["recipient_id", "owner"], ["recipient_role", "customer"], ["type", TOWING_TRACKING_STARTED_NOTIFICATION_TYPE]]) {
+    assert.ok(f.filters.some(filter => JSON.stringify(filter) === JSON.stringify(pair)));
+  }
+});
+for (const target of ["https://outside.example", "/customer/my-jobs", `${trackingTarget}?other=1`, "/customer/my-jobs/other"]) {
+  test(`tracking rejects mismatched target ${target}`, () => {
+    assert.equal(getTowingTrackingNotificationTarget({ type: TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, request_id: trackingRequest, target_url: target }), null);
+  });
+}
+test("tracking bad/denied destination stops badge navigation", async () => {
+  for (const response of [{ data: null, error: { code: "42501" } }, { data: { type: TOWING_TRACKING_STARTED_NOTIFICATION_TYPE, request_id: trackingRequest, target_url: "/wrong" }, error: null }]) {
+    const f = jobsNavigation(false, { trackingStartedUnreadCount: 1 }, [response]);
+    await f.run(); assert.deepEqual(f.urls, ["ERROR"]);
+  }
+});
+test("tracking toast uses the validated contextual destination on the existing notification channel", () => {
+  assert.match(navbar, /notification.type === TOWING_TRACKING_STARTED_NOTIFICATION_TYPE\s*\? getTowingTrackingNotificationTarget\(notification\)/);
+  const detail = read("../app/customer/my-jobs/[id]/page.tsx");
+  assert.match(detail, /ref=\{trackingNotificationRef\}/);
+  assert.match(detail, /request.id === requestId/);
+  assert.match(detail, /\.eq\("request_id", requestId\)\.eq\("offer_id", offerData.id\)/);
+  assert.match(detail, /\.eq\("status", "confirmed"\)/);
+  assert.match(detail, /ownerId: request\?\.user_id/);
 });

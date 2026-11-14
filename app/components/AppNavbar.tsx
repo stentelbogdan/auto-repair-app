@@ -20,6 +20,8 @@ import {
 import { BadgeEuro } from "lucide-react";
 import {
   CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
+  TOWING_TRACKING_STARTED_NOTIFICATION_TYPE,
+  getTowingTrackingNotificationTarget,
   WORKSHOP_OFFER_REJECTED_NOTIFICATION_TYPE,
   WORKSHOP_REQUEST_CLOSED_NOTIFICATION_TYPE,
   WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
@@ -190,6 +192,7 @@ export default function AppNavbar() {
   const [appointmentConfirmedUnreadCount, setAppointmentConfirmedUnreadCount] =
     useState(0);
   const [jobStartedUnreadCount, setJobStartedUnreadCount] = useState(0);
+  const [trackingStartedUnreadCount, setTrackingStartedUnreadCount] = useState(0);
   const [reviewSubmittedUnreadCount, setReviewSubmittedUnreadCount] =
     useState(0);
   const [appointmentToast, setAppointmentToast] = useState<{
@@ -443,6 +446,7 @@ export default function AppNavbar() {
     setAppointmentProposalUnreadCount(0);
     setAppointmentConfirmedUnreadCount(0);
     setJobStartedUnreadCount(0);
+    setTrackingStartedUnreadCount(0);
     setRejectedOfferUnreadCount(0);
     setAppointmentToast(null);
 
@@ -893,6 +897,7 @@ export default function AppNavbar() {
         ...proposalTypes,
         ...confirmedTypes,
         WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE,
+        TOWING_TRACKING_STARTED_NOTIFICATION_TYPE,
         CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE,
         ...rejectedOfferTypes,
       ];
@@ -918,6 +923,7 @@ export default function AppNavbar() {
       let proposalCount = 0;
       let confirmedCount = 0;
       let jobStartedCount = 0;
+      let trackingStartedCount = 0;
       let rejectedOfferCount = 0;
       let reviewSubmittedCount = 0;
 
@@ -928,6 +934,11 @@ export default function AppNavbar() {
 
         if (confirmedTypes.has(notification.type)) {
           confirmedCount += 1;
+        }
+
+        if (notification.recipient_role === "customer" &&
+            notification.type === TOWING_TRACKING_STARTED_NOTIFICATION_TYPE) {
+          trackingStartedCount += 1;
         }
 
         if (notification.type === WORKSHOP_STARTED_JOB_NOTIFICATION_TYPE) {
@@ -952,6 +963,7 @@ export default function AppNavbar() {
       setAppointmentProposalUnreadCount(proposalCount);
       setAppointmentConfirmedUnreadCount(confirmedCount);
       setJobStartedUnreadCount(jobStartedCount);
+      setTrackingStartedUnreadCount(trackingStartedCount);
       setRejectedOfferUnreadCount(rejectedOfferCount);
       setReviewSubmittedUnreadCount(reviewSubmittedCount);
     };
@@ -1163,7 +1175,9 @@ export default function AppNavbar() {
               notification.message ||
               "Ai primit o nouă actualizare de programare.",
             targetUrl:
-              notification.type ===
+              notification.type === TOWING_TRACKING_STARTED_NOTIFICATION_TYPE
+                ? getTowingTrackingNotificationTarget(notification)
+                : notification.type ===
               CUSTOMER_REVIEW_SUBMITTED_NOTIFICATION_TYPE
                 ? getWorkshopReviewTargetUrl(
                     notification.target_url || null,
@@ -1614,6 +1628,23 @@ export default function AppNavbar() {
 
   const goJobs = () => {
     void runLocked(async ({ navigate }) => {
+      // Tracking has a direct detail destination; it never acknowledges on click.
+      if (!isWorkshopMode && userId && trackingStartedUnreadCount > 0) {
+        const { data: notification, error } = await supabase.from("notifications")
+          .select("type,request_id,target_url")
+          .eq("recipient_id", userId).eq("recipient_role", "customer")
+          .eq("type", TOWING_TRACKING_STARTED_NOTIFICATION_TYPE).is("read_at", null)
+          .order("created_at", { ascending: false }).limit(1)
+          .maybeSingle<{ type: string; request_id: string | null; target_url: string | null }>();
+        const target = notification && getTowingTrackingNotificationTarget(notification);
+        if (error || !target) {
+          alert("Nu am putut verifica notificarea de tracking. Reîncearcă după reîncărcare.");
+          return;
+        }
+        localStorage.setItem("activeRole", "customer");
+        navigate(target);
+        return;
+      }
       const hasUnreadJobStarted = jobStartedUnreadCount > 0;
       let workshopJobsUrl = "/workshops/won-jobs?tab=appointments";
       let customerStartedJobCategory: ReturnType<
@@ -2006,7 +2037,8 @@ export default function AppNavbar() {
 
               {isClientMode && progressUnreadCount > 0 && (
                 <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold text-white">
-                  {progressUnreadCount > 9 ? "9+" : progressUnreadCount}
+                  {progressUnreadCount + trackingStartedUnreadCount > 9
+                    ? "9+" : progressUnreadCount + trackingStartedUnreadCount}
                 </span>
               )}
 
@@ -2020,6 +2052,7 @@ export default function AppNavbar() {
 
               {appointmentConfirmedUnreadCount +
                 jobStartedUnreadCount +
+                trackingStartedUnreadCount +
                 workshopReviewUnreadCount >
                 0 &&
                 !(isClientMode && progressUnreadCount > 0) &&
@@ -2027,11 +2060,13 @@ export default function AppNavbar() {
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-500 px-1 text-[10px] font-bold text-white">
                     {appointmentConfirmedUnreadCount +
                       jobStartedUnreadCount +
+                      trackingStartedUnreadCount +
                       workshopReviewUnreadCount >
                     9
                       ? "9+"
                       : appointmentConfirmedUnreadCount +
                         jobStartedUnreadCount +
+                        trackingStartedUnreadCount +
                         workshopReviewUnreadCount}
                   </span>
                 )}

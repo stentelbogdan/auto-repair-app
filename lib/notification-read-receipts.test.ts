@@ -251,3 +251,18 @@ test("invalidation during authentication stops before dispatch", async () => {
   await assert.rejects(f.api.confirmOfferRead("customer", user, [observed()], { isCurrent: () => ++checks < 2 }), /CANCELLED/);
   assert.equal(f.rpcCalls.length, 0);
 });
+
+test("tracking read acknowledges only its displayed tuple and preserves workshop_started_job", async () => {
+  const f = fixture(); f.rows.splice(0, f.rows.length,
+    notification(5, { type: "towing_tracking_started" }),
+    notification(6, { type: "workshop_started_job" }),
+    notification(7, { type: "towing_tracking_started", appointment_id: id(20) }),
+    notification(8, { type: "towing_tracking_started", offer_id: id(21) }),
+    notification(9, { type: "towing_tracking_started", request_id: id(22) }),
+  );
+  const snapshot = await f.api.captureNotificationSnapshot(user, "customer");
+  const ids = f.api.displayedNotificationIds(snapshot, { requestId: request, offerId: offer, appointmentId: appointment }, ["towing_tracking_started"]);
+  assert.deepEqual(ids, [id(5)]);
+  assert.deepEqual(await f.api.confirmNotificationRead(snapshot, ids), [id(5)]);
+  for (const row of f.rows.slice(1)) assert.equal(row.read_at, null);
+});
