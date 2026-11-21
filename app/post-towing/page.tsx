@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ImageGallery from "@/app/components/ImageGallery";
-import TowingRequestForm, { validateTowingRequestFormValues, type TowingRequestFormValues } from "@/app/components/towing/TowingRequestForm";
+import TowingRequestForm, { hasCurrentTowingRoute, validateTowingRequestFormValues, type TowingRequestFormValues, type TowingRouteStatus } from "@/app/components/towing/TowingRequestForm";
 import { prepareImageForUpload, type PreparedImage } from "@/lib/images/prepare-image-for-upload";
 import { uploadPreparedRepairImages } from "@/lib/supabase/repair-request-images";
 import { createRepairRequest } from "@/lib/supabase/repair-requests";
@@ -23,6 +23,12 @@ function PostTowingContent() {
   const router = useRouter();
   const targetWorkshopId = useSearchParams().get("targetWorkshopId");
   const [towingValues, setTowingValues] = useState<TowingRequestFormValues | null>(null);
+  const towingValuesRef = useRef<TowingRequestFormValues | null>(null);
+  const [routeStatus, setRouteStatus] = useState<TowingRouteStatus>("idle");
+  const handleValuesChange = useCallback((values: TowingRequestFormValues) => {
+    towingValuesRef.current = values;
+    setTowingValues(values);
+  }, []);
   const [files, setFiles] = useState<File[]>([]);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,15 +45,31 @@ function PostTowingContent() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isSubmittingRef.current || !towingValues) return;
-    const validation = validateTowingRequestFormValues(towingValues);
+    if (isSubmittingRef.current) return;
+    const submittedValues = towingValuesRef.current;
+    if (!hasCurrentTowingRoute(submittedValues)) {
+      alert("Așteaptă calcularea unui traseu valid înainte de publicare.");
+      return;
+    }
+    const validation = validateTowingRequestFormValues(submittedValues);
     if (!validation.valid) {
       alert(validation.message);
       return;
     }
+    if (!validation.values.pickupDiscoveryLocation) {
+      alert("Locația de preluare nu a putut fi validată.");
+      return;
+    }
+    const values = { ...validation.values,
+      pickupCoordinates: submittedValues.pickupCoordinates,
+      destinationCoordinates: submittedValues.destinationCoordinates,
+      route: submittedValues.route,
+      pickupDiscoveryLocation: validation.values.pickupDiscoveryLocation,
+    };
 
     isSubmittingRef.current = true;
     setIsSubmitting(true);
+    let published = false;
     try {
       const { data } = await supabase.auth.getUser();
       if (!data.user) {
@@ -63,9 +85,8 @@ function PostTowingContent() {
         prepared.push({ originalName: file.name, preparedImage });
       }
       const storedImages = await uploadPreparedRepairImages(prepared, data.user.id);
-      const values = validation.values;
-      if (!values.pickupDiscoveryLocation) {
-        throw new Error("Locația de preluare nu a putut fi validată.");
+      if (towingValuesRef.current !== submittedValues) {
+        throw new Error("Datele tractării s-au schimbat. Verifică traseul și publică din nou.");
       }
 
       await createRepairRequest({
@@ -74,13 +95,13 @@ function PostTowingContent() {
         carModel: values.carModel,
         carYear: values.carYear,
         city: values.city,
-        pickupLat: values.pickupCoordinates?.lat ?? null,
-        pickupLng: values.pickupCoordinates?.lng ?? null,
-        destinationLat: values.destinationCoordinates?.lat ?? null,
-        destinationLng: values.destinationCoordinates?.lng ?? null,
-        routeDistanceMeters: values.route?.distanceMeters ?? null,
-        routeDurationSeconds: values.route?.durationSeconds ?? null,
-        routePaths: values.route?.paths ?? null,
+        pickupLat: values.pickupCoordinates.lat,
+        pickupLng: values.pickupCoordinates.lng,
+        destinationLat: values.destinationCoordinates.lat,
+        destinationLng: values.destinationCoordinates.lng,
+        routeDistanceMeters: values.route.distanceMeters,
+        routeDurationSeconds: values.route.durationSeconds,
+        routePaths: values.route.paths,
         towingScheduleType: values.scheduleType,
         towingRequestedAt: values.requestedAt,
         towingRequestedTimezone: values.requestedTimezone,
@@ -97,14 +118,17 @@ function PostTowingContent() {
           source: "towing_pickup",
         },
       });
+      published = true;
       sessionStorage.setItem("job-posted-success", "true");
       router.replace("/customer/dashboard?success=posted");
     } catch (error) {
       console.error("Submit failed:", error);
       alert(error instanceof Error ? error.message : "A apărut o problemă la salvarea cererii.");
     } finally {
-      isSubmittingRef.current = false;
-      setIsSubmitting(false);
+      if (!published) {
+        isSubmittingRef.current = false;
+        setIsSubmitting(false);
+      }
     }
   }
 
@@ -114,8 +138,9 @@ function PostTowingContent() {
         <h1 className="text-[28px] font-bold leading-tight tracking-tight text-white md:text-[30px]">Tractări auto</h1>
         <p className="mx-auto mt-2.5 max-w-2xl text-sm leading-5 text-white/60">Setează preluarea și destinația și primește oferte pentru transportul mașinii tale.</p>
       </header>
-      <form onSubmit={handleSubmit} noValidate>
-        <TowingRequestForm onValuesChange={setTowingValues} />
+      <form onSubmit={handleSubmit} noValidate aria-busy={isSubmitting}>
+        <fieldset disabled={isSubmitting} className="contents">
+        <TowingRequestForm onValuesChange={handleValuesChange} onRouteStatusChange={setRouteStatus} />
         <section className={sectionClassName}>
           <label className="mb-2 block text-sm font-medium text-white/70">
             Poze (opțional)
@@ -191,7 +216,15 @@ function PostTowingContent() {
           <label className="mb-2 block text-sm font-medium text-white/70">Observații (opțional)</label>
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Ex: acces dificil, vehicul într-o parcare subterană..." rows={4} className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-white outline-none placeholder:text-white/30 focus:border-orange-400" />
         </section>
-        <button type="submit" disabled={isSubmitting} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 font-semibold text-black disabled:opacity-60">{isSubmitting ? "Se postează..." : "Postează cererea"}</button>
+        {!hasCurrentTowingRoute(towingValues) && (
+          <p id="towing-publication-status" role="status" className="mt-4 text-sm text-white/70">
+            {routeStatus === "loading" ? "Se calculează traseul. Așteaptă înainte de publicare."
+              : routeStatus === "error" ? "Traseul nu este disponibil. Folosește «Reîncearcă traseul»."
+              : "Completează și validează locațiile pentru calcularea traseului."}
+          </p>
+        )}
+        <button type="submit" disabled={isSubmitting || !hasCurrentTowingRoute(towingValues)} aria-describedby={!hasCurrentTowingRoute(towingValues) ? "towing-publication-status" : undefined} className="mt-6 w-full rounded-2xl bg-orange-500 px-6 py-4 font-semibold text-black disabled:opacity-60">{isSubmitting ? "Se postează..." : routeStatus === "loading" ? "Se calculează traseul..." : "Postează cererea"}</button>
+        </fieldset>
       </form>
     </div>
   </main>;

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { CheckCircle2, MapPin, XCircle } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -56,6 +57,8 @@ export type TowingRouteSnapshot = {
   distanceMeters: number;
   durationSeconds: number;
   paths: TowingRoutePaths;
+  // Local provenance only; not part of the persisted route geometry.
+  coordinatesKey?: string;
 };
 
 export type TowingRequestFormValues = {
@@ -104,7 +107,7 @@ type ValidationResult =
   | { valid: true; values: ValidatedTowingRequestValues };
 
 type LocationFeedback = { type: "success" | "error"; message: string };
-type RouteStatus = "idle" | "loading" | "success" | "error";
+export type TowingRouteStatus = "idle" | "loading" | "success" | "error";
 type RouteResponse = {
   route: TowingRouteSnapshot & { distanceKm: number; durationMinutes: number };
 };
@@ -156,9 +159,27 @@ function getCoordinatesKey(
   pickup: TowingCoordinates | null,
   destination: TowingCoordinates | null,
 ) {
-  return pickup && destination
+  return pickup && destination &&
+    isFiniteCoordinate(pickup.lat, -90, 90) &&
+    isFiniteCoordinate(pickup.lng, -180, 180) &&
+    isFiniteCoordinate(destination.lat, -90, 90) &&
+    isFiniteCoordinate(destination.lng, -180, 180)
     ? `${pickup.lat},${pickup.lng}|${destination.lat},${destination.lng}`
     : null;
+}
+
+export function hasCurrentTowingRoute(values: TowingRequestFormValues | null): values is TowingRequestFormValues & {
+  pickupCoordinates: TowingCoordinates;
+  destinationCoordinates: TowingCoordinates;
+  route: TowingRouteSnapshot;
+} {
+  if (!values) return false;
+  const key = getCoordinatesKey(values.pickupCoordinates, values.destinationCoordinates);
+  const route = values.route;
+  return key !== null && route !== null && route.coordinatesKey === key &&
+    Number.isFinite(route.distanceMeters) && route.distanceMeters >= 0 &&
+    Number.isFinite(route.durationSeconds) && route.durationSeconds >= 0 &&
+    isValidTowingRoutePaths(route.paths);
 }
 
 function getBrowserTimezone() {
@@ -304,21 +325,39 @@ export function validateTowingRequestFormValues(
 type TowingRequestFormProps = {
   initialValues?: TowingRequestFormInitialValues;
   onValuesChange: (values: TowingRequestFormValues) => void;
+  onRouteStatusChange?: (status: TowingRouteStatus) => void;
 };
 
 export default function TowingRequestForm({
   initialValues,
   onValuesChange,
+  onRouteStatusChange,
 }: TowingRequestFormProps) {
   const [values, setValues] = useState<TowingRequestFormValues>(
-    () => initialValues ?? emptyValues,
+    () => {
+      if (!initialValues) return emptyValues;
+      const key = getCoordinatesKey(initialValues.pickupCoordinates, initialValues.destinationCoordinates);
+      // Existing editor snapshots came from these same stored coordinates.
+      return { ...initialValues, route: initialValues.route && key
+        ? { ...initialValues.route, coordinatesKey: initialValues.route.coordinatesKey ?? key } : null };
+    },
   );
+  const valuesRef = useRef(values);
+  const commitValues = useCallback((next: TowingRequestFormValues) => {
+    valuesRef.current = next;
+    setValues(next);
+    // Notify immediately, including invalidation before the next React effect.
+    onValuesChange(next);
+  }, [onValuesChange]);
   const [pickupFeedback, setPickupFeedback] = useState<LocationFeedback | null>(null);
   const [destinationFeedback, setDestinationFeedback] = useState<LocationFeedback | null>(null);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
-  const [routeStatus, setRouteStatus] = useState<RouteStatus>(
-    () => (initialValues?.route ? "success" : "idle"),
+  const [routeStatus, setRouteStatus] = useState<TowingRouteStatus>(
+    () => (hasCurrentTowingRoute(values) ? "success" : "idle"),
   );
+  const [routingRevision, setRoutingRevision] = useState(0);
+  const routingRevisionRef = useRef(0);
+  const locationRevision = useRef({ pickup: 0, destination: 0 });
   const [scheduleDateInput, setScheduleDateInput] = useState(
     () => initialValues?.requestedDate.split("-").reverse().join(".") ?? "",
   );
@@ -329,13 +368,6 @@ export default function TowingRequestForm({
   const destinationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routingController = useRef<AbortController | null>(null);
   const routingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const preserveInitialRouteRef = useRef(
-    Boolean(
-      initialValues?.route &&
-        initialValues.pickupCoordinates &&
-        initialValues.destinationCoordinates,
-    ),
-  );
   const availableModels = carModelsByBrand[values.carBrand] || [];
   const years = Array.from(
     { length: new Date().getFullYear() - 1989 },
@@ -356,7 +388,8 @@ export default function TowingRequestForm({
         )?.date
       : null) ?? toLocalDateValue(new Date());
 
-  useEffect(() => onValuesChange(values), [onValuesChange, values]);
+  useEffect(() => { onValuesChange(valuesRef.current); }, [onValuesChange]);
+  useEffect(() => { onRouteStatusChange?.(routeStatus); }, [onRouteStatusChange, routeStatus]);
 
   useEffect(() => {
     const pickupControllerRef = pickupController;
@@ -365,11 +398,17 @@ export default function TowingRequestForm({
     const pickupTimerRef = pickupTimer;
     const destinationTimerRef = destinationTimer;
     const routingTimerRef = routingTimer;
+    const locationRevisionRef = locationRevision;
 
     return () => {
       pickupControllerRef.current?.abort();
       destinationControllerRef.current?.abort();
       routingControllerRef.current?.abort();
+      pickupControllerRef.current = null;
+      destinationControllerRef.current = null;
+      routingControllerRef.current = null;
+      locationRevisionRef.current.pickup += 1;
+      locationRevisionRef.current.destination += 1;
       if (pickupTimerRef.current) clearTimeout(pickupTimerRef.current);
       if (destinationTimerRef.current) clearTimeout(destinationTimerRef.current);
       if (routingTimerRef.current) clearTimeout(routingTimerRef.current);
@@ -380,17 +419,13 @@ export default function TowingRequestForm({
     if (routingTimer.current) clearTimeout(routingTimer.current);
     routingController.current?.abort();
 
-    if (preserveInitialRouteRef.current) {
-      preserveInitialRouteRef.current = false;
+    if (hasCurrentTowingRoute(valuesRef.current)) {
       setRouteStatus("success");
       return;
     }
 
     if (!coordinatesKey) {
       setRouteStatus("idle");
-      setValues((current) =>
-        current.route ? { ...current, route: null } : current,
-      );
       return;
     }
 
@@ -401,10 +436,21 @@ export default function TowingRequestForm({
       .map(Number);
 
     setRouteStatus("loading");
-    setValues((current) => ({ ...current, route: null }));
+    const controller = new AbortController();
+    routingController.current = controller;
+    const revision = routingRevisionRef.current;
+    let active = true;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const isCurrent = () => active && routingController.current === controller &&
+      routingRevisionRef.current === revision &&
+      getCoordinatesKey(valuesRef.current.pickupCoordinates, valuesRef.current.destinationCoordinates) === coordinatesKey;
     routingTimer.current = setTimeout(async () => {
-      const controller = new AbortController();
-      routingController.current = controller;
+      timeout = setTimeout(() => {
+        if (!isCurrent()) return;
+        active = false;
+        controller.abort();
+        setRouteStatus("error");
+      }, 15_000);
       try {
         const response = await fetch("/api/routing/towing", {
           method: "POST",
@@ -419,7 +465,7 @@ export default function TowingRequestForm({
         });
         if (!response.ok) throw new Error("Routing failed.");
         const result = (await response.json()) as RouteResponse;
-        if (routingController.current !== controller) return;
+        if (!isCurrent()) return;
         const route = result.route;
         if (
           !route ||
@@ -431,27 +477,18 @@ export default function TowingRequestForm({
         ) {
           throw new Error("Invalid route.");
         }
-        setValues((current) =>
-          getCoordinatesKey(
-            current.pickupCoordinates,
-            current.destinationCoordinates,
-          ) === coordinatesKey
-            ? {
-                ...current,
-                route: {
-                  distanceMeters: route.distanceMeters,
-                  durationSeconds: route.durationSeconds,
-                  paths: route.paths,
-                },
-              }
-            : current,
-        );
+        commitValues({ ...valuesRef.current, route: {
+          distanceMeters: route.distanceMeters,
+          durationSeconds: route.durationSeconds,
+          paths: route.paths,
+          coordinatesKey,
+        } });
         setRouteStatus("success");
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        if (routingController.current !== controller) return;
+      } catch {
+        if (!isCurrent()) return;
         setRouteStatus("error");
       } finally {
+        clearTimeout(timeout);
         if (routingController.current === controller) {
           routingController.current = null;
         }
@@ -459,13 +496,35 @@ export default function TowingRequestForm({
     }, 700);
 
     return () => {
+      active = false;
+      clearTimeout(timeout);
       if (routingTimer.current) clearTimeout(routingTimer.current);
-      routingController.current?.abort();
+      controller.abort();
     };
-  }, [coordinatesKey]);
+  }, [coordinatesKey, routingRevision, commitValues]);
 
   function update(patch: Partial<TowingRequestFormValues>) {
-    setValues((current) => ({ ...current, ...patch }));
+    const next = { ...valuesRef.current, ...patch };
+    if ("pickupCoordinates" in patch || "destinationCoordinates" in patch || patch.route === null) {
+      routingController.current?.abort();
+      routingController.current = null;
+      if (routingTimer.current) clearTimeout(routingTimer.current);
+      next.route = null;
+      setRoutingRevision(++routingRevisionRef.current);
+      setRouteStatus(getCoordinatesKey(next.pickupCoordinates, next.destinationCoordinates) ? "loading" : "idle");
+    }
+    commitValues(next);
+  }
+
+  function cancelLocation(kind: "pickup" | "destination") {
+    const controller = kind === "pickup" ? pickupController : destinationController;
+    const timer = kind === "pickup" ? pickupTimer : destinationTimer;
+    controller.current?.abort();
+    controller.current = null;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    locationRevision.current[kind] += 1;
+    if (kind === "pickup") setIsLocatingPickup(false);
   }
 
   async function reverseGeocode(
@@ -473,6 +532,11 @@ export default function TowingRequestForm({
     coordinates: TowingCoordinates,
     source: "gps" | "drag",
   ) {
+    cancelLocation(kind);
+    update(kind === "pickup"
+      ? { pickupCoordinates: null, pickupDiscoveryLocation: null }
+      : { destinationCoordinates: null });
+    if (source === "gps") setIsLocatingPickup(true);
     const ref = kind === "pickup" ? pickupController : destinationController;
     ref.current?.abort();
     const controller = new AbortController();
@@ -537,8 +601,10 @@ export default function TowingRequestForm({
       if (kind === "pickup") setPickupFeedback(feedback);
       else setDestinationFeedback(feedback);
     } finally {
-      if (ref.current === controller) ref.current = null;
-      if (source === "gps") setIsLocatingPickup(false);
+      if (ref.current === controller) {
+        ref.current = null;
+        if (source === "gps") setIsLocatingPickup(false);
+      }
     }
   }
 
@@ -617,27 +683,22 @@ export default function TowingRequestForm({
     field: "address" | "city",
     value: string,
   ) {
+    const current = valuesRef.current;
     const previousCoordinates =
       kind === "pickup"
-        ? values.pickupCoordinates
-        : values.destinationCoordinates;
-    if (kind === "pickup") {
-      pickupController.current?.abort();
-      pickupController.current = null;
-    } else {
-      destinationController.current?.abort();
-      destinationController.current = null;
-    }
+        ? current.pickupCoordinates
+        : current.destinationCoordinates;
+    cancelLocation(kind);
     const address = field === "address"
       ? value
       : kind === "pickup"
-        ? values.pickupAddress
-        : values.destinationAddress;
+        ? current.pickupAddress
+        : current.destinationAddress;
     const city = field === "city"
       ? value
       : kind === "pickup"
-        ? values.pickupCity
-        : values.destinationCity;
+        ? current.pickupCity
+        : current.destinationCity;
     update(
       kind === "pickup"
         ? {
@@ -671,14 +732,7 @@ export default function TowingRequestForm({
   ) {
     if (!suggestion.location) return;
 
-    const controller = kind === "pickup" ? pickupController : destinationController;
-    const timer = kind === "pickup" ? pickupTimer : destinationTimer;
-    controller.current?.abort();
-    controller.current = null;
-    if (timer.current) {
-      clearTimeout(timer.current);
-      timer.current = null;
-    }
+    cancelLocation(kind);
 
     const location = suggestion.location;
     const coordinates = { lat: location.lat, lng: location.lng };
@@ -703,9 +757,13 @@ export default function TowingRequestForm({
       setPickupFeedback({ type: "error", message: "Localizarea nu este disponibilă." });
       return;
     }
+    cancelLocation("pickup");
+    update({ pickupCoordinates: null, pickupDiscoveryLocation: null });
+    const revision = locationRevision.current.pickup;
     setIsLocatingPickup(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (locationRevision.current.pickup !== revision) return;
         void reverseGeocode(
           "pickup",
           { lat: position.coords.latitude, lng: position.coords.longitude },
@@ -713,6 +771,7 @@ export default function TowingRequestForm({
         );
       },
       () => {
+        if (locationRevision.current.pickup !== revision) return;
         setIsLocatingPickup(false);
         setPickupFeedback({ type: "error", message: "Locația nu a putut fi detectată." });
       },
@@ -809,12 +868,17 @@ export default function TowingRequestForm({
       {values.pickupCoordinates && values.destinationCoordinates && (
         <section className={darkSectionClassName}>
           <h2 className="text-base font-black">Traseu estimat</h2>
-          {routeStatus === "success" && values.route ? (
+          {hasCurrentTowingRoute(values) ? (
             <>
               <p className="mt-2 text-lg font-bold text-orange-300">{formatTowingRouteDistance(values.route.distanceMeters)} · {formatTowingRouteDuration(values.route.durationSeconds)}</p>
               <TowingRouteMap pickup={values.pickupCoordinates} destination={values.destinationCoordinates} paths={values.route.paths} />
             </>
-          ) : <p className="mt-2 text-sm text-white/55">{routeStatus === "error" ? "Traseul nu este disponibil momentan." : "Se calculează traseul..."}</p>}
+          ) : routeStatus === "error" ? (
+            <div>
+              <p role="alert" className="mt-2 text-sm text-red-300">Traseul nu a putut fi calculat. Reîncearcă înainte de publicare.</p>
+              <button type="button" onClick={() => update({ route: null })} className="mt-3 min-h-11 rounded-xl border border-orange-400 px-4 py-2 font-semibold text-orange-300">Reîncearcă traseul</button>
+            </div>
+          ) : <p role="status" className="mt-2 text-sm text-white/55">Se calculează traseul. Publicarea va fi disponibilă după calcul.</p>}
         </section>
       )}
 
