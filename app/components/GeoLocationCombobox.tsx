@@ -274,7 +274,7 @@ export default function GeoLocationCombobox({
               type="button"
               role="option"
               aria-selected={activeIndex === index}
-              onPointerDown={(event) => event.preventDefault()}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => selectSuggestion(suggestion)}
               onMouseEnter={() => setActiveIndex(index)}
               className={`flex min-h-11 w-full flex-col justify-center rounded-xl px-3 py-2 text-left transition ${activeIndex === index ? "bg-orange-500/15 text-orange-200" : "text-white hover:bg-white/10"}`}
